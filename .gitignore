@@ -9,7 +9,6 @@
 
 # Node modules and dependency files
 /node_modules/
-/package-lock.json
 /yarn.lock
 
 # Environment files
@@ -26,3 +25,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Skills locales (symlinks a ~/Documents/AgentesIA/) — no se suben al repo
+/.claude/skills/slim-readme
+/.claude/skills/seo-aeo-best-practices
+/.claude/skills/firebase-auth-basics
+/.claude/skills/firebase-basics
+/.claude/skills/angular-new-app
