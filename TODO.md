@@ -2,7 +2,7 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Prioridad de selección aplicada:** no hay gaps de seguridad activos en producción. La tarea de autenticación con Google (SDK cliente, `AuthService`, `AuthGuard`) se completó (ver `MEMORY.md` §2 y §9, PR #5). Se reemplazó por la siguiente pieza fundacional del roadmap **Alta** (`PRD.md` §6), independiente de los modelos/DynamoDB: la pantalla visual de login, ya que sin ella el `AuthGuard` recién implementado redirige a una ruta (`/login`) que todavía no existe.
+**Prioridad de selección aplicada:** no hay gaps de seguridad activos en producción. La tarea de `LoginComponent` + `NoAuthGuard` se completó y se probó con un deploy real a `staging` (ver `MEMORY.md` §2, §7 y §9, PR #6) — en el proceso se encontró y corrigió un bug real de `RenderMode.Prerender` que dejaba los guards sin efecto en producción. Se reemplazó por la siguiente pieza de seguridad **Alta** prioridad (`CLAUDE.md` A01/A07, `tech-specs.md` §8): la verificación real del ID Token de Firebase en el backend, independiente del cliente genérico de DynamoDB (usa una lectura directa a `babel-usuarios`, sin esperar la abstracción reutilizable de la Tarea 1).
 
 ---
 
@@ -27,23 +27,22 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 ---
 
-## Tarea 2 — [FEATURE]: `LoginComponent` — pantalla de ingreso con Google
+## Tarea 2 — [FEATURE]: Verificación real del ID Token de Firebase en el backend + resolución de rol
 
-**Origen:** `PRD.md` §5.1 (roadmap, prioridad Alta) — `tech-specs.md` §4.2 define la ruta `/login` con guard `NoAuthGuard`. El `AuthService`/`AuthGuard` ya existen (PR #5), pero no hay ninguna pantalla ni ruta que los use todavía: hoy `AuthGuard` redirige a `/login` y esa ruta no existe, dejando el flujo de login incompleto de punta a punta.
+**Origen:** `CLAUDE.md` A01/A07 y `tech-specs.md` §8 (prioridad Alta, seguridad) — hoy `AuthGuard`/`NoAuthGuard` son 100% cliente (PR #5, PR #6); ninguna Lambda verifica todavía el ID Token ni resuelve el rol contra `babel-usuarios`. Sin esto, cualquier ruta de negocio que se agregue después (catalogación, ventas, admin) no tendría ninguna autorización real del lado servidor — solo la experiencia de usuario del guard, que `CLAUDE.md` A01 prohíbe explícitamente usar como control de acceso real.
 
-**Archivos:** `src/app/core/auth/no-auth.guard.ts` (nuevo, `NoAuthGuard`), `src/app/features/login/login.component.ts` (+ `.html`/`.css` si excede el límite de componente inline de `CLAUDE.md` §4), `src/app/app.routes.ts` (registrar `/login` y aplicar `AuthGuard` a al menos una ruta de prueba para verificar el flujo de punta a punta).
+**Archivos:** `server/api/lib/verificar-token.ts` (nuevo), `server/api/handlers/usuarios-me.ts` (nuevo, `GET /api/usuarios/me`), `serverless.yml` (nueva ruta + variable de entorno `FIREBASE_SERVICE_ACCOUNT_BABEL` ya declarada, ahora sí consumida).
 
 **Qué hacer:**
-1. Implementar `src/app/core/auth/no-auth.guard.ts` (`NoAuthGuard` funcional, `CanActivateFn`): si ya hay sesión activa (`AuthService.usuario()`), redirige fuera de `/login` (p. ej. a `/`); si no hay sesión, permite el acceso. Es el guard inverso de `AuthGuard` (ver `tech-specs.md` §4.2).
-2. Implementar `LoginComponent` (standalone, `features/login/`): botón "Ingresar con Google" que invoca `AuthService.iniciarSesionConGoogle()`; mientras la promesa está pendiente, mostrar un estado de carga simple; si falla (p. ej. el usuario cierra el popup), mostrar un mensaje de error legible, sin exponer detalles internos del error (`CLAUDE.md` A05). Tras un login exitoso, navegar a `/` (o a la ruta que corresponda — por ahora `/`, ya que no hay resolución de rol en el cliente todavía).
-3. Registrar la ruta `/login` → `LoginComponent` con `canActivate: [NoAuthGuard]` en `app.routes.ts`.
-4. Registrar temporalmente `AuthGuard` en al menos una ruta de prueba (o una ruta placeholder ya prevista del roadmap, si prefieres adelantar el andamiaje de `tech-specs.md` §4.2 con un componente vacío) para poder verificar el flujo completo: sin sesión → `AuthGuard` redirige a `/login` → login exitoso → navega fuera de `/login`.
-5. Estilos con Tailwind (ya configurado), siguiendo la paleta de marca de `CLAUDE.md` §4 (`primary #230C00`, `secondary #E8630A`, etc.) de forma básica — no es necesario un `DESIGN.md` completo todavía, solo que la pantalla no se vea sin estilo alguno.
+1. Instalar `firebase-admin` como dependencia del backend.
+2. Implementar `server/api/lib/verificar-token.ts`: función que recibe el header `Authorization: Bearer <token>`, inicializa `firebase-admin` con `projectId: 'comandante-letiende'` (ver `MEMORY.md` ADR-007 y `tech-specs.md` §8.1 — nunca otro `projectId`) y la cuenta de servicio de `FIREBASE_SERVICE_ACCOUNT_BABEL`, y llama `verifyIdToken`. Debe rechazar (lanzar/retornar error tipado) si el header falta, el token es inválido o expiró — nunca asumir un token válido.
+3. Implementar `server/api/handlers/usuarios-me.ts`: `GET /api/usuarios/me` — verifica el token con lo del punto 2, busca el email verificado en `babel-usuarios` (lectura directa con `@aws-sdk/client-dynamodb`, sin esperar el cliente genérico de la Tarea 1 — es una única consulta puntual), y responde `403` si el correo no existe en la tabla (`CLAUDE.md` A01/A07: estar autenticado en el proyecto Firebase compartido no implica autorización en Babel). Si existe, responde el `Usuario` (`tech-specs.md` §4.3) con su `rol`.
+4. Registrar la ruta en `serverless.yml` bajo la función `api` (ya tiene permisos de lectura sobre `babel-usuarios` desde la tarea de Serverless — confirmar que el nombre de tabla se resuelve por variable de entorno, nunca hardcodeado).
+5. No implementar todavía `RoleGuard` en el frontend (depende de que el cliente consuma este endpoint, puede ser una tarea posterior) — el alcance es exclusivamente la verificación y resolución de rol en el backend.
 
 **Definition of done:**
-- [ ] `npm run build` compila sin errores
-- [ ] `npm run start` sirve `/login` y el botón "Ingresar con Google" invoca `iniciarSesionConGoogle()` (verificar manualmente con una cuenta de Google real, ya que esto requiere el popup real del navegador)
-- [ ] Tras un login exitoso, la app navega fuera de `/login`
-- [ ] `NoAuthGuard` redirige fuera de `/login` si ya hay sesión activa
-- [ ] La ruta de prueba protegida con `AuthGuard` redirige correctamente a `/login` sin sesión
-- [ ] Ningún detalle interno de error (stack trace, mensaje crudo del SDK de Firebase) se muestra al usuario final
+- [ ] `npm run build:api` compila sin errores con `firebase-admin` instalado
+- [ ] `GET /api/usuarios/me` sin header `Authorization` responde `401` (o equivalente), nunca `200`
+- [ ] `GET /api/usuarios/me` con un ID Token real pero de un correo que NO existe en `babel-usuarios` responde `403`
+- [ ] `GET /api/usuarios/me` con un ID Token real de un correo que SÍ existe en `babel-usuarios` (crear un registro de prueba en `staging` y limpiarlo después) responde `200` con el `rol` correcto
+- [ ] Ningún secreto (`FIREBASE_SERVICE_ACCOUNT_BABEL`) queda hardcodeado — se lee siempre de la variable de entorno ya declarada en `serverless.yml`
