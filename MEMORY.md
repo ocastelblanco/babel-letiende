@@ -8,18 +8,19 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 
 | Campo | Valor |
 |---|---|
-| Versión | Sin release — proyecto en fase de arranque (solo documentación) |
+| Versión | Sin release — scaffold de frontend recién creado, sin desplegar |
 | URL producción | https://babel.letiende.co (aún no desplegada) |
 | Rama principal | `main` |
-| Rama de trabajo actual | `claude/babel-project-bootstrap-k7bhww` |
-| Última sesión | 2026-07-17 — Bootstrap de documentación inicial (2026-07-16) + precisión del modelo de descuento editorial vs. descuento de venta + Firebase Authentication compartido con Comandante (2026-07-17) |
+| Rama de trabajo actual | `feature/scaffold-angular-ssr` (PR #2, sin fusionar) |
+| Última sesión | 2026-07-17 — Scaffold del proyecto Angular 22 SSR + Tailwind 4 (Tarea 1 de `TODO.md` completada) |
 
 ---
 
 ## 2. Funcionalidades completadas vs. pendientes
 
-- [ ] Scaffold del proyecto (Angular 22 + SSR + Serverless Framework)
-- [ ] Autenticación con Google (Firebase Auth) + resolución de rol
+- [x] Scaffold del proyecto Angular 22 + SSR + Tailwind CSS 4 (PR #2, rama `feature/scaffold-angular-ssr`) — ver detalle en §9
+- [ ] Esqueleto de Serverless Framework + tablas DynamoDB (`TODO.md` Tarea 1)
+- [ ] Autenticación con Google (Firebase Auth) + resolución de rol (`TODO.md` Tarea 2 — SDK cliente/`AuthService`/`AuthGuard` primero, `RoleGuard` y verificación de rol en backend después)
 - [ ] Flujo de catalogación (escaneo → metadatos → PVP → estante)
 - [ ] Registro de venta
 - [ ] Catálogo público de consulta (SSR)
@@ -30,7 +31,7 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 - [ ] Reportes de ventas + exportación XLSX (admin)
 - [ ] `DESIGN.md` propio de Babel
 
-Ningún ítem está implementado todavía; el repositorio solo contiene `README.md`, `LICENSE`, `.gitignore` y los documentos de este bootstrap.
+El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`, `src/theme/`, `angular.json`, `package.json`, etc.) además de `README.md`, `LICENSE`, `.gitignore` y los documentos de este bootstrap. Ningún flujo de negocio está implementado todavía.
 
 ---
 
@@ -96,7 +97,11 @@ Ningún ítem está implementado todavía; el repositorio solo contiene `README.
 
 ## 4. Dependencias instaladas
 
-Ninguna todavía — el `package.json` se crea en la Tarea 1 de `TODO.md`. Dependencias previstas según `tech-specs.md` §2: Angular 22.x, Tailwind CSS 4.x, `firebase` (SDK cliente) + `firebase-admin` (backend), `xlsx`, `@zxing/browser`, `cheerio`, Serverless Framework 4.x, `aws-sdk`/`@aws-sdk/client-dynamodb`.
+**Ya instaladas** (scaffold Angular, Tarea 1 completada):
+- Runtime: `@angular/{common,compiler,core,forms,platform-browser,platform-server,router,ssr}` 22.x, `express` 5.x (servidor SSR), `rxjs` 7.8, `tslib`
+- Dev: `@angular/{build,cli,compiler-cli}` 22.x, `tailwindcss` 4.x + `@tailwindcss/postcss` 4.x, `postcss`, `prettier` 3.x, `typescript` 6.x, `vitest` (test runner que usa `ng test` en Angular 22), `@types/{express,node}`, `jsdom`
+
+**Pendientes** (previstas en `tech-specs.md` §2, aún no instaladas): `firebase` (SDK cliente — próxima tarea), `firebase-admin` (backend), `xlsx`, `@zxing/browser`, `cheerio`, Serverless Framework 4.x, `aws-sdk`/`@aws-sdk/client-dynamodb`.
 
 ---
 
@@ -123,8 +128,11 @@ Aún no hay código. Los patrones previstos (a validar en la primera implementac
 | Acceso a cámara para código de barras no funciona | Verificar HTTPS y que la solicitud se dispare desde un gesto directo del usuario (tap), no automáticamente al cargar la página — ver `CLAUDE.md` §7 |
 | Avatar de Google devuelve 429 | Agregar `referrerpolicy="no-referrer"` en el `<img>` — mismo hallazgo que en Comandante |
 | Cold start alto en la Lambda SSR | Esperado en el nivel gratuito; no usar concurrencia aprovisionada salvo que el costo lo justifique |
+| **(Verificado 2026-07-17)** Con `@angular/build:application` (builder de Angular 22 con SSR), Tailwind 4 vía `postcss.config.js` (`module.exports`) no siempre se detecta de forma confiable | Usar `.postcssrc.json` en JSON puro: `{ "plugins": { "@tailwindcss/postcss": {} } }`. Confirmado funcionando en el scaffold real (PR #2): las utilidades de Tailwind se generan correctamente en el CSS de salida. |
+| **(Verificado 2026-07-17)** El `.gitignore` original del bootstrap (`b4a2bc4`) traía `/package-lock.json` ignorado — pasó inadvertido mientras no existía `package.json` | Corregido en PR #2: se quitó esa línea del `.gitignore`. Recordar para cualquier proyecto bootstrapeado con una plantilla genérica de `.gitignore` antes de tener `package.json`: revisar que no ignore el lockfile, ya que `CLAUDE.md` A08 exige `npm ci` reproducible en CI. |
+| **(Verificado 2026-07-17)** `tsconfig.json` de Angular 22 usa TypeScript 6.x, que deprecó `baseUrl` — los path aliases (`paths`) deben usar valores con prefijo `./` explícito y no depender de `baseUrl` | Confirmado con un import de prueba (`@core/models/...`) que compiló correctamente sin `baseUrl`, solo con `paths` apuntando a `./src/...`. |
 
-Se irán agregando hallazgos reales durante la implementación (actualmente son anticipados por analogía con Comandante y con el stack elegido, no verificados en código real).
+Los primeros tres hallazgos de esta tabla siguen siendo anticipados por analogía con Comandante (no verificados en código real de Babel); los tres marcados "(Verificado 2026-07-17)" ya se confirmaron en el scaffold real.
 
 ---
 
@@ -150,4 +158,6 @@ Adicionalmente, el usuario pidió compartir el mismo proyecto Firebase Authentic
 
 **Qué se hizo también el 2026-07-17 (continuación):** el usuario confirmó el `projectId` de Firebase a reutilizar: `comandante-letiende`. Se resolvió el pendiente de ADR-007 y se actualizaron `tech-specs.md` §6/§8.1 y este documento (§1, §5, ADR-007) con el valor exacto.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (scaffold del proyecto Angular) y Tarea 2 (esqueleto de Serverless Framework + tablas DynamoDB). Ya no hay pendientes de confirmación para implementar la autenticación compartida.
+**Qué se hizo el 2026-07-17 (Tarea 1 de `TODO.md` — scaffold Angular):** se generó el proyecto Angular 22 SSR (standalone components) en la raíz del repo con `ng new`, configurado Tailwind CSS 4 vía `@tailwindcss/postcss` (`.postcssrc.json` en JSON puro — ver gotcha verificado en §7), creada la estructura de carpetas exacta de `tech-specs.md` §3 (`src/app/{core,features,shared}`, `src/theme/`), configurados los path aliases (`@core`, `@shared`, `@features`, `@theme`) en `tsconfig.json`, y Prettier con la config generada por Angular CLI. Se corrigió además `.gitignore` para dejar de ignorar `package-lock.json` (requerido por `CLAUDE.md` A08). Build (`npm run build`) y servidor de desarrollo (`npm run start`, HTTP 200) verificados de forma independiente antes de commitear. Cambios enviados en la rama `feature/scaffold-angular-ssr` (PR #2, sin fusionar), en dos commits separados: uno de documentación pendiente (README completo + symlinks de skills) y otro del scaffold en sí.
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (esqueleto de Serverless Framework + tablas DynamoDB) y Tarea 2 (autenticación con Google: SDK cliente, `AuthService`, `AuthGuard`). Ya no hay pendientes de confirmación para implementar la autenticación compartida (ver ADR-007); la Tarea 2 puede avanzar en paralelo a la Tarea 1 ya que ambas son independientes entre sí.
