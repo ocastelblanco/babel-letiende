@@ -12,8 +12,8 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 | URL producción | https://babel.letiende.co (aún no desplegada) |
 | URL staging (real) | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (API Gateway HTTP API, stage `staging`) |
 | Rama principal | `main` |
-| Rama de trabajo actual | `feat/pwa-icons-manifest` (sin PR aún) |
-| Última sesión | 2026-07-17 — `LoginComponent` fusionado (PR #6); alineación visual con Comandante; fix de `auth/unauthorized-domain` en `staging` |
+| Rama de trabajo actual | `main` — sin feature branch activa; próxima tarea aún no iniciada (ver `TODO.md`) |
+| Última sesión | 2026-07-17 — PRs #7–#10 fusionados: fix de dominio Firebase, deploy automático a `staging` en cada PR, identidad visual igualada a Comandante (sin Ionic), íconos PWA + `manifest.webmanifest` |
 
 ---
 
@@ -22,7 +22,9 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 - [x] Scaffold del proyecto Angular 22 + SSR + Tailwind CSS 4 (PR #2, rama `feature/scaffold-angular-ssr`) — ver detalle en §9
 - [x] Esqueleto de Serverless Framework + tablas DynamoDB, desplegado a `staging` (PR #3, rama `feature/serverless-skeleton-dynamodb`) — ver detalle en §5 y §9
 - [x] Autenticación con Google (Firebase Auth) — SDK cliente, `AuthService` (Signals), `AuthGuard` (PR #5) — ver detalle en §9.
-- [x] `LoginComponent` + `NoAuthGuard` — probado con deploy real a `staging`, identidad visual alineada con Comandante (PR #6, fusionado) — ver detalle en §7 y §9. Pendiente: `RoleGuard` y verificación de rol en backend.
+- [x] `LoginComponent` + `NoAuthGuard` — probado con deploy real a `staging`, identidad visual igualada a Comandante por medición de píxeles (sin Ionic, PR #6/#9 fusionados) — ver detalle en §7 y §9. Pendiente: `RoleGuard` y verificación de rol en backend.
+- [x] Deploy automático a `staging` en cada PR (CI, PR #8 fusionado) — ver §5 y §9
+- [x] Íconos PWA + `manifest.webmanifest` (PR #10 fusionado) — ver §7 y §9. Pendiente sin urgencia: fuente Angellya como `@font-face`.
 - [ ] Verificación real del ID Token de Firebase en el backend + resolución de rol (`TODO.md` Tarea 2)
 - [ ] Modelos de datos compartidos + cliente DynamoDB base (`TODO.md` Tarea 1)
 - [ ] Flujo de catalogación (escaneo → metadatos → PVP → estante)
@@ -205,6 +207,10 @@ Adicionalmente, el usuario pidió compartir el mismo proyecto Firebase Authentic
 
 **Qué se hizo el 2026-07-17 (fix de `signInWithPopup` en `staging` — bug #1 post-merge del PR #6):** el usuario reportó que el popup de Google se abría y cerraba de inmediato, mostrando el mensaje genérico de error. Se confirmó la causa raíz consultando la config real de Identity Platform (`identitytoolkit.googleapis.com/v2/projects/comandante-letiende/config`, usando un access token obtenido a partir del refresh token ya almacenado por `firebase-tools` en esta máquina — sin nueva autorización interactiva): `oyzau0c910.execute-api.us-east-1.amazonaws.com` no estaba en `authorizedDomains`. Con permiso explícito del usuario, se hizo `PATCH` a esa misma API agregando el dominio a la lista existente (14 → 15, sin quitar ninguno de Comandante — ver §5 y §7). No fue necesario ningún cambio de código; el fix es de configuración del proyecto Firebase compartido, no del repo. **Confirmado por el usuario: el login ya funciona en `staging`.** Reportó además el warning benigno de COOP (ver §7, sin acción tomada por decisión del usuario).
 
-**Segundo problema reportado por el usuario (pendiente, sin diagnosticar todavía):** el usuario mencionó un segundo bug a resolver en un PR separado, después de este primero — no se ha investigado todavía en esta sesión.
+**Segundo problema reportado por el usuario — RESUELTO:** el segundo bug era que `LoginComponent` se veía muy distinto al de Comandante, porque Comandante usa Ionic y Babel no. Se investigó, se descartó instalar Ionic (Comandante no usa SSR en absoluto y Ionic + Angular standalone + SSR tiene fricción conocida — riesgo real de romper el SSR ya desplegado en Babel) y en su lugar se replicó el resultado visual exacto con Tailwind puro, midiendo por píxel la app real (`https://comandante.letiende.co`) — ver "identidad visual de Comandante" arriba y el fix de colores reales del botón (PR #9, fusionado a `main`). Confirmado por el usuario como resuelto en todos lados.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (modelos de datos compartidos + cliente DynamoDB base) y Tarea 2 (verificación real del ID Token de Firebase en el backend + resolución de rol vía `GET /api/usuarios/me`, prerrequisito de seguridad para cualquier `RoleGuard`/ruta de admin futura). Ambas son independientes entre sí y pueden avanzar en paralelo. Cuando el usuario provea los assets pendientes de arriba, agregar una tarea para el `manifest.webmanifest` + set completo de íconos PWA.
+**Qué se hizo el 2026-07-17 (CI: deploy automático a `staging` en cada PR):** para que el usuario pueda continuar el desarrollo desde Claude Code en Android sin depender de esta Mac ni de credenciales de AWS locales, se agregó el job `desplegar-staging` en `.github/workflows/deploy.yml` (dispara en todo `pull_request`, usa los secrets ya existentes, comenta la URL de `staging` en el PR). Verificado real en los PR #8, #9 y #10 — funciona de punta a punta. PR #8 fusionado a `main`.
+
+**Qué se hizo el 2026-07-17 (íconos PWA + `manifest.webmanifest`, PR #10 fusionado):** ver detalle arriba — usó el set ya generado en `favicon_io/` en vez de regenerar desde el SVG. Verificado con auto-deploy real a `staging`.
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (modelos de datos compartidos + cliente DynamoDB base) y Tarea 2 (verificación real del ID Token de Firebase en el backend + resolución de rol vía `GET /api/usuarios/me`, prerrequisito de seguridad para cualquier `RoleGuard`/ruta de admin futura). Ambas son independientes entre sí y pueden avanzar en paralelo. Pendiente sin urgencia: integrar la fuente Angellya (ya localizada, ver §7) como `@font-face`.
