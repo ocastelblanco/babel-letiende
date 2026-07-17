@@ -39,12 +39,12 @@ jobs:
       - name: Verificar sintaxis de infraestructura (serverless package)
         run: npx serverless package --stage staging
         env:
-          # Access Key de la organización de Serverless Framework (dashboard),
-          # necesaria para que la CLI v4 opere en CI sin login interactivo.
+          # License Key de Serverless Framework v4 (sin depender del dashboard),
+          # necesaria para que la CLI opere en CI sin login interactivo.
           # No listada en tech-specs.md §9 (se agrega aquí por requerimiento
-          # de la propia CLI, no del dominio de Babel) — configurar como
-          # GitHub Secret antes de habilitar este workflow.
-          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+          # de la propia CLI, no del dominio de Babel). Configurada como
+          # GitHub Secret por el usuario el 2026-07-17.
+          SERVERLESS_LICENSE_KEY: ${{ secrets.SERVERLESS_LICENSE_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
@@ -75,7 +75,7 @@ jobs:
       - name: Desplegar con Serverless Framework (stage production)
         run: npx serverless deploy --stage production
         env:
-          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+          SERVERLESS_LICENSE_KEY: ${{ secrets.SERVERLESS_LICENSE_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           FIREBASE_SERVICE_ACCOUNT_BABEL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BABEL }}
