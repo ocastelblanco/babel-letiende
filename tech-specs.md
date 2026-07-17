@@ -56,7 +56,7 @@ Arquitectura serverless en AWS para el cómputo y almacenamiento (objetivo de co
                     | Google Sign-In (SDK cliente)
                     v
 +------------------------------------------------------------------------------------+
-|                    Google Firebase Authentication (solo Auth, sin Firestore)       |
+|      Google Firebase Authentication (proyecto compartido con Comandante; solo Auth) |
 +------------------------------------------------------------------------------------+
 ```
 
@@ -78,7 +78,7 @@ Decisiones clave derivadas de esta visión (detalladas más abajo):
 | **Cómputo** | AWS Lambda | Node.js 24.x runtime | Ejecuta tanto el SSR de Angular como los endpoints de la API, dentro de la capa siempre gratuita (1M solicitudes/mes). | [AWS Lambda](https://aws.amazon.com/lambda) |
 | **Base de datos** | AWS DynamoDB | — | Almacenamiento NoSQL de libros, ventas, estantes, usuarios y descuentos; modo de capacidad aprovisionada (25 RCU/25 WCU) para permanecer en la capa siempre gratuita. | [DynamoDB](https://aws.amazon.com/dynamodb) |
 | **Gateway HTTP** | Amazon API Gateway (HTTP API) | — | Expone los Lambdas bajo el dominio `babel.letiende.co`. | [API Gateway](https://aws.amazon.com/api-gateway) |
-| **Autenticación** | Firebase Authentication | SDK v10+ | Login con Google (Sign-In) en el cliente; verificación de ID token en el backend con `firebase-admin`. | [Firebase Auth](https://firebase.google.com/docs/auth) |
+| **Autenticación** | Firebase Authentication | SDK v10+ | Login con Google (Sign-In) en el cliente, sobre el **mismo proyecto Firebase que usa Comandante** (identidad compartida); verificación de ID token en el backend con `firebase-admin`, con una cuenta de servicio propia de Babel sobre ese mismo proyecto. Los roles no se comparten — ver §8. | [Firebase Auth](https://firebase.google.com/docs/auth) |
 | **Metadatos de libros** | API externa `api.letiende.co` | — | Servicio ya existente y compartido de Le Tiende; resuelve ISBN → título/autor/portada/editorial vía Google Books API. | (interno Le Tiende) |
 | **Scraping de PVP** | `fetch`/`undici` + `cheerio` | — | Consulta sitios de la lista blanca sin navegador headless (más liviano, más barato en Lambda). | [cheerio](https://cheerio.js.org) |
 | **Búsqueda de respaldo de precio** | Google Custom Search JSON API | — | Fallback cuando la lista blanca no encuentra el libro; excluye dominios de la lista negra. Cuota gratuita limitada (ver §6). | [Custom Search JSON API](https://developers.google.com/custom-search/v1/overview) |
@@ -282,7 +282,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | Servicio | Estado | Uso actual/futuro |
 |---|---|---|
 | `api.letiende.co` | Ya existente, compartido | Resolver metadatos de libro (título, autor, portada, editorial) a partir de ISBN u otros datos, vía Google Books API. |
-| Firebase Authentication | Por configurar (proyecto Firebase nuevo o compartido — confirmar con el administrador) | Login con Google y emisión de ID Token verificado en el backend. |
+| Firebase Authentication | Ya existente, compartido con Comandante (mismo proyecto Firebase — `comandante-letiende` en `.firebaserc`, a confirmar con el administrador el `projectId` exacto a reutilizar) | Login con Google; Babel no crea un proyecto Firebase propio, reutiliza el de Comandante solo para autenticación. Los roles (administrador/vendedor) son independientes por app — ver §8. |
 | Sitios de la lista blanca (scraping) | Por definir | Fuente primaria de PVP por nombre del libro. Lista mantenida como configuración estática en el repo (no editable desde la UI de administración en el alcance actual). |
 | Google Custom Search JSON API | Por habilitar | Fallback de búsqueda de PVP cuando la lista blanca no encuentra el libro, excluyendo la lista negra. **Cuota gratuita limitada (100 consultas/día)** — riesgo de costo si el volumen de catalogación la supera; ver §9 y PRD §9. |
 
@@ -320,14 +320,25 @@ Ver diagrama de §1. Componentes gestionados por Serverless Framework: 2 funcion
 - El rol (`administrador`/`vendedor`) se resuelve consultando `babel-usuarios` por el email del token verificado; si el correo no existe en la tabla, la solicitud se rechaza con 403.
 - Los guards de Angular (`AuthGuard`, `RoleGuard`) son solo experiencia de usuario — la autorización real ocurre siempre en la Lambda `api`.
 
+### 8.1 Identidad compartida con Comandante — modelo y riesgos
+
+Babel **no crea un proyecto Firebase propio**: reutiliza el mismo proyecto Firebase que ya usa Comandante para Google Sign-In (mismo `apiKey`/`authDomain`/`projectId` en `src/environments/`). Esto es identidad compartida (equivalente a un SSO entre ambas apps de Le Tiende); la autorización sigue siendo exclusiva de cada una.
+
+- **`firebase-admin` de Babel debe inicializarse con el mismo `projectId`** que usa Comandante — `verifyIdToken()` valida el claim `aud` del token contra ese `projectId`; si se apuntara a un proyecto distinto, la verificación simplemente fallaría (modo seguro por defecto, nunca "abierto" por error de configuración).
+- **Cuenta de servicio propia:** aunque el proyecto Firebase es el mismo, Babel usa su propia cuenta de servicio (`FIREBASE_SERVICE_ACCOUNT_BABEL`, distinta de `FIREBASE_SERVICE_ACCOUNT_COMANDANTE_LETIENDE`) para poder rotar o revocar credenciales de un backend sin afectar al otro.
+- **Estar autenticado no implica autorización en ninguna app:** cualquier cuenta de Google puede obtener un ID Token válido del proyecto compartido (Firebase Auth no restringe el inicio de sesión por sí solo); el control de acceso real sigue siendo exclusivamente la existencia del correo en `babel-usuarios` (Babel) o en `users` de Firestore (Comandante). Esto no cambia respecto a tener proyectos separados.
+- **Blast radius:** si la cuenta de servicio o la configuración del proyecto Firebase compartido se ven comprometidas, el riesgo potencial cubre ambas apps a la vez, no una sola. Mitigación: cuentas de servicio separadas por app (punto anterior) y restringir el proveedor de Firebase Auth solo a Google Sign-In (sin email/password ni proveedores adicionales).
+- **Revocación en dos pasos, documentar para el administrador:** quitar/desactivar a un usuario en `babel-usuarios` le revoca el acceso **solo a Babel**; deshabilitar la cuenta en la consola de Firebase le revoca el acceso a **ambas** apps de una vez. Si una persona deja de trabajar con Le Tiende por completo, debe deshabilitarse su cuenta en Firebase, no solo quitarle el rol en una app.
+- **Cuota de usuarios activos mensuales (MAU)** de Firebase Authentication se comparte entre Comandante y Babel — sin impacto esperado dado el volumen (equipo pequeño), pero relevante para el objetivo de costo $0.
+
 ---
 
 ## 9. Gestión de secretos
 
 | Variable | Propósito | Contexto |
 |---|---|---|
-| `FIREBASE_PROJECT_ID` / config cliente Firebase | Inicializar el SDK cliente de Firebase Authentication | Frontend (`src/environments/`), no sensible (config pública de Firebase) |
-| `FIREBASE_SERVICE_ACCOUNT_BABEL` | Credenciales de servicio para `firebase-admin` (verificar ID tokens) | Backend Lambda `api` — GitHub Secret, nunca en el repo |
+| `FIREBASE_PROJECT_ID` / config cliente Firebase | Inicializar el SDK cliente de Firebase Authentication — **mismo proyecto que Comandante**, copiado de su configuración pública | Frontend (`src/environments/`), no sensible (config pública de Firebase) |
+| `FIREBASE_SERVICE_ACCOUNT_BABEL` | Credenciales de una cuenta de servicio **propia de Babel** (distinta de `FIREBASE_SERVICE_ACCOUNT_COMANDANTE_LETIENDE`) sobre el proyecto Firebase compartido, para `firebase-admin` (verificar ID tokens) — ver §8.1 | Backend Lambda `api` — GitHub Secret, nunca en el repo |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (o rol OIDC) | Despliegue con Serverless Framework desde GitHub Actions | GitHub Secrets / OIDC federado |
 | `GOOGLE_CUSTOM_SEARCH_API_KEY` / `GOOGLE_CUSTOM_SEARCH_CX` | Fallback de búsqueda de PVP en Google | GitHub Secrets → variable de entorno de la Lambda `api` |
 | `API_LETIENDE_BASE_URL` | URL base de la API externa de metadatos | Variable de entorno por stage (no secreta) |

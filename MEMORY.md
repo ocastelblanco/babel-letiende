@@ -12,7 +12,7 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 | URL producción | https://babel.letiende.co (aún no desplegada) |
 | Rama principal | `main` |
 | Rama de trabajo actual | `claude/babel-project-bootstrap-k7bhww` |
-| Última sesión | 2026-07-17 — Bootstrap de documentación inicial (2026-07-16) + precisión del modelo de descuento editorial vs. descuento de venta (2026-07-17) |
+| Última sesión | 2026-07-17 — Bootstrap de documentación inicial (2026-07-16) + precisión del modelo de descuento editorial vs. descuento de venta + Firebase Authentication compartido con Comandante (2026-07-17) |
 
 ---
 
@@ -80,6 +80,18 @@ Ningún ítem está implementado todavía; el repositorio solo contiene `README.
 - **Razón:** precisión de negocio aportada por el usuario tras la primera versión de la documentación — el modelo original no distinguía estos dos conceptos con claridad, lo que habría llevado a un cálculo incorrecto de costo/utilidad en los reportes.
 - **Consecuencias:** `Venta` ahora incluye un snapshot (`costoLibro`, `utilidad`, `pvp`) tomado al momento de la venta, para que cambios posteriores en la configuración de descuentos de editorial no alteren el costo/utilidad de ventas ya registradas. `POST /api/ventas` debe calcular y persistir ese snapshot, no solo referenciar el libro. Ver `tech-specs.md` §4.3 y §5.1, y `PRD.md` §5.2/§5.4/§10.
 
+### ADR-007 — Firebase Authentication compartido con Comandante; autorización independiente por app
+- **Fecha:** 2026-07-17
+- **Estado:** Aceptado
+- **Decisión:** Babel no crea un proyecto Firebase propio. Reutiliza el mismo proyecto Firebase que usa Comandante para Google Sign-In (misma identidad de usuario en ambas apps), pero cada app resuelve la autorización (rol `administrador`/`vendedor`) de forma completamente independiente en su propia base de datos: `babel-usuarios` en DynamoDB para Babel, la colección `users` de Firestore para Comandante. Babel usa su propia cuenta de servicio (`FIREBASE_SERVICE_ACCOUNT_BABEL`) sobre ese proyecto compartido, distinta de la de Comandante.
+- **Razón:** pedido explícito del usuario — los mismos usuarios de Google de Comandante deben poder autenticarse en Babel sin crear cuenta nueva, evaluando primero si esto introducía algún problema de seguridad.
+- **Consecuencias:**
+  - Estar autenticado en el proyecto compartido no otorga ningún permiso por sí solo en ninguna de las dos apps — el correo debe existir explícitamente en la tabla/colección de usuarios de esa app específica (ya era así, se refuerza en `CLAUDE.md` A01/A07).
+  - Mayor "blast radius" si el proyecto Firebase o una cuenta de servicio se ven comprometidos (afecta potencialmente a ambas apps) — mitigado con cuentas de servicio separadas por app.
+  - Revocación en dos pasos: quitar el rol en `babel-usuarios` revoca solo Babel; deshabilitar la cuenta en la consola de Firebase revoca ambas apps. El administrador debe saber cuál usar según el caso.
+  - Cuota de usuarios activos mensuales (MAU) de Firebase se comparte entre ambas apps (sin impacto esperado dado el volumen).
+  - Pendiente: confirmar con el administrador el `projectId` exacto del proyecto Firebase de Comandante a reutilizar (visto en `comandante-letiende/.firebaserc` como `comandante-letiende`) antes de configurar el SDK cliente y `firebase-admin` de Babel.
+
 ---
 
 ## 4. Dependencias instaladas
@@ -90,7 +102,7 @@ Ninguna todavía — el `package.json` se crea en la Tarea 1 de `TODO.md`. Depen
 
 ## 5. Configuraciones vigentes
 
-Ninguna todavía (sin cuentas AWS/Firebase/dominio configuradas en esta sesión). Pendiente registrar aquí, a medida que se creen: ID de proyecto Firebase, ARNs de recursos AWS, nombres exactos de tablas DynamoDB desplegadas, IDs de distribución si aplica CDN, y la configuración de dominio `babel.letiende.co` en Route53/API Gateway.
+Ninguna todavía (sin cuentas AWS/Firebase/dominio configuradas en esta sesión). Pendiente registrar aquí, a medida que se creen: ID de proyecto Firebase **(reutilizar el de Comandante — ADR-007, confirmar `projectId` exacto con el administrador)**, ARNs de recursos AWS, nombres exactos de tablas DynamoDB desplegadas, IDs de distribución si aplica CDN, y la configuración de dominio `babel.letiende.co` en Route53/API Gateway.
 
 ---
 
@@ -128,6 +140,8 @@ Se irán agregando hallazgos reales durante la implementación (actualmente son 
 
 **Qué se hizo el 2026-07-16:** bootstrap completo de documentación del proyecto Babel usando la skill `project-docs-bootstrap` (repo `ocastelblanco/ia-orchestration-skills`). Se inspeccionó el repositorio hermano `comandante-letiende` (stack, `CLAUDE.md`, `DESIGN.md`, `tech-specs.md`, workflow de GitHub Actions) para mantener consistencia de filosofía visual y de CI/CD. Se resolvieron con el usuario las ambigüedades de arquitectura: `api.letiende.co` como servicio externo ya existente (solo metadatos), app como PWA responsive (no nativa), y código/documentación en español.
 
-**Qué se hizo el 2026-07-17:** el usuario precisó que existen dos descuentos distintos e independientes — descuento editorial (margen de consignación, 100% si el libro es propio de Le Tiende) y descuento de venta (discrecional del vendedor). Se ajustaron `PRD.md` (§5.2, §5.4, §5.6, §7, §10), `tech-specs.md` (§4.3 modelos de datos con snapshot de costo/utilidad en `Venta`, §5 endpoints, §5.1 decisión de diseño) y este documento (ADR-006) para reflejarlo con precisión. Cambios enviados a la misma rama/PR (`claude/babel-project-bootstrap-k7bhww`) para aprobación conjunta.
+**Qué se hizo el 2026-07-17:** el usuario precisó que existen dos descuentos distintos e independientes — descuento editorial (margen de consignación, 100% si el libro es propio de Le Tiende) y descuento de venta (discrecional del vendedor). Se ajustaron `PRD.md` (§5.2, §5.4, §5.6, §7, §10), `tech-specs.md` (§4.3 modelos de datos con snapshot de costo/utilidad en `Venta`, §5 endpoints, §5.1 decisión de diseño) y este documento (ADR-006) para reflejarlo con precisión.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (scaffold del proyecto Angular) y Tarea 2 (esqueleto de Serverless Framework + tablas DynamoDB).
+Adicionalmente, el usuario pidió compartir el mismo proyecto Firebase Authentication de Comandante (misma cuenta de Google en ambas apps), manteniendo roles independientes por app en su propia base de datos. Se evaluaron los riesgos de seguridad (blast radius compartido, revocación en dos pasos, necesidad de cuenta de servicio propia por app) y se documentaron en `tech-specs.md` §8.1 (nueva), `CLAUDE.md` (OWASP A01/A07 y tabla de prohibiciones), `PRD.md` (§5.1, §9) y este documento (ADR-007). Todos los cambios se enviaron a la misma rama/PR (`claude/babel-project-bootstrap-k7bhww`, PR #1) para aprobación conjunta.
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (scaffold del proyecto Angular) y Tarea 2 (esqueleto de Serverless Framework + tablas DynamoDB). Antes de implementar autenticación, confirmar con el administrador el `projectId` exacto del proyecto Firebase de Comandante a reutilizar (ADR-007).

@@ -20,7 +20,7 @@ El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000
 - **Runtime backend:** Node.js 24.x
 - **Despliegue/Infraestructura:** AWS Lambda + API Gateway, gestionados con Serverless Framework (IaC)
 - **Base de datos:** AWS DynamoDB (on-demand/provisioned dentro de la capa gratuita)
-- **Autenticación:** Google Firebase Authentication (SDK v10+, Google Sign-In) — únicamente autenticación, no se usa Firestore
+- **Autenticación:** Google Firebase Authentication (SDK v10+, Google Sign-In) — únicamente autenticación, no se usa Firestore. **Proyecto Firebase compartido con Comandante** (misma identidad de Google para ambas apps); los roles (`administrador`/`vendedor`) son independientes por app y viven en la base de datos de cada una (DynamoDB en Babel, Firestore en Comandante) — ver `tech-specs.md` §8.1
 - **Metadatos de libros:** API externa ya existente y compartida en `https://api.letiende.co` (proxy sobre Google Books API)
 - **Generación de reportes:** librería `xlsx` (mismo paquete que usa Comandante)
 - **Lectura de código de barras:** librería web basada en `getUserMedia` (p. ej. `@zxing/browser` o `html5-qrcode`) — ver decisión final en tech-specs.md
@@ -60,8 +60,8 @@ Esta sección define las reglas de seguridad obligatorias basadas en los riesgos
 ### Riesgos identificados y reglas de código
 
 #### A01:2021 — Control de acceso roto
-*   **Riesgo:** un vendedor podría intentar llamar directamente a un endpoint de administrador (`/api/usuarios`, `/api/ventas/exportar`, etc.) o manipular su rol enviándolo desde el cliente.
-*   **Regla:** los guardias de Angular (`AuthGuard`, `RoleGuard`) son solo experiencia de usuario. La autorización real ocurre SIEMPRE en la Lambda `api`: cada endpoint protegido verifica el Firebase ID Token y resuelve el rol consultando `babel-usuarios` por el email del token — nunca confiar en un rol enviado en el payload de la petición.
+*   **Riesgo:** un vendedor podría intentar llamar directamente a un endpoint de administrador (`/api/usuarios`, `/api/ventas/exportar`, etc.) o manipular su rol enviándolo desde el cliente. Riesgo adicional propio de Babel: al compartir el proyecto Firebase con Comandante, alguien podría asumir (incorrectamente) que tener cuenta/rol en Comandante otorga algún acceso en Babel.
+*   **Regla:** los guardias de Angular (`AuthGuard`, `RoleGuard`) son solo experiencia de usuario. La autorización real ocurre SIEMPRE en la Lambda `api`: cada endpoint protegido verifica el Firebase ID Token y resuelve el rol consultando `babel-usuarios` por el email del token — nunca confiar en un rol enviado en el payload de la petición, y nunca asumir o heredar el rol/acceso que ese usuario tenga en Comandante. Estar autenticado en el proyecto Firebase compartido NO implica ninguna autorización en Babel; el correo debe existir explícitamente en `babel-usuarios`.
 
 #### A02:2021 — Fallas criptográficas (fuga de secretos)
 *   **Riesgo:** exponer la cuenta de servicio de Firebase (`firebase-admin`), las credenciales de AWS o las llaves de Google Custom Search en el repositorio.
@@ -76,8 +76,8 @@ Esta sección define las reglas de seguridad obligatorias basadas en los riesgos
 *   **Regla:** el rol IAM de ejecución de cada Lambda sigue el principio de mínimo privilegio (solo acceso a las tablas DynamoDB que usa). Las respuestas de error en producción nunca incluyen stack traces ni detalles internos — solo un mensaje genérico y un código HTTP apropiado.
 
 #### A07:2021 — Fallas de identificación y autenticación
-*   **Riesgo:** sesiones que no expiran, tokens revocados que se siguen aceptando, o cierre de sesión incompleto.
-*   **Regla:** cada solicitud protegida a `/api/*` verifica el ID Token de Firebase con `verifyIdToken` (que valida expiración y revocación). Al cerrar sesión, se invoca `signOut(auth)` y se limpia todo el estado reactivo (Signals) del cliente antes de redirigir a `/login`.
+*   **Riesgo:** sesiones que no expiran, tokens revocados que se siguen aceptando, o cierre de sesión incompleto. Riesgo adicional propio de Babel: al ser un proyecto Firebase compartido con Comandante, revocar el rol de un usuario en `babel-usuarios` NO revoca su cuenta de Google ni su acceso a Comandante — son dos apagados distintos.
+*   **Regla:** cada solicitud protegida a `/api/*` verifica el ID Token de Firebase con `verifyIdToken` (que valida expiración y revocación). Al cerrar sesión, se invoca `signOut(auth)` y se limpia todo el estado reactivo (Signals) del cliente antes de redirigir a `/login`. Si un usuario debe perder acceso a Le Tiende por completo (no solo a Babel), el administrador debe deshabilitar su cuenta en la consola de Firebase, no solo eliminar su fila en `babel-usuarios`.
 
 #### A08:2021 — Fallas de integridad de software y datos
 *   **Riesgo:** aceptar sin validación un precio (PVP) obtenido automáticamente por scraping o por la búsqueda de respaldo en Google, que podría ser incorrecto, manipulado o corresponder a un producto distinto.
@@ -92,6 +92,8 @@ Esta sección define las reglas de seguridad obligatorias basadas en los riesgos
 | Acción prohibida | Por qué |
 |---|---|
 | Confiar en un campo `rol` enviado desde el cliente | Permite escalar privilegios a administrador |
+| Asumir/heredar el rol o acceso que un usuario tenga en Comandante | El proyecto Firebase es compartido, pero la autorización de cada app es independiente |
+| Reutilizar la cuenta de servicio de Firebase de Comandante (`FIREBASE_SERVICE_ACCOUNT_COMANDANTE_LETIENDE`) en el backend de Babel | Impide rotar/revocar credenciales de una app sin afectar la otra |
 | Hacer `fetch`/scraping a un dominio fuera de la lista blanca sin pasar por el filtro de lista negra + validación de host | Abre la puerta a SSRF |
 | Renderizar HTML crudo obtenido de un tercero (`innerHTML`, `bypassSecurityTrustHtml` sin sanitizar) | Vector de XSS |
 | Commitear `firebase-service-account*.json`, `.env`, credenciales de AWS | Exposición de secretos |

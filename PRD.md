@@ -69,6 +69,8 @@ Usuario → Botón "Ingresar con Google"
    → Correo no registrado → Acceso denegado, mensaje de contacto con el administrador
 ```
 
+**Sobre la cuenta de Google:** Babel reutiliza el mismo inicio de sesión con Google que ya usan los usuarios de Comandante — no es necesario crear una cuenta nueva. Sin embargo, tener acceso a Comandante no otorga automáticamente ningún permiso en Babel (ni viceversa): el rol de administrador o vendedor se administra por separado en cada aplicación, y un correo debe estar registrado explícitamente en Babel para poder usarla.
+
 ### 5.2 Catalogación de un libro
 
 Flujo crítico del sistema — debe ser lo más rápido posible dado el volumen de 3.000+ libros a catalogar.
@@ -189,6 +191,7 @@ Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, a
 - La API en `https://api.letiende.co` ya existe y es compartida entre aplicaciones de Le Tiende; Babel la consume para resolver metadatos de libros a partir del ISBN, pero no la construye ni la mantiene dentro de este repositorio.
 - La búsqueda de precio en sitios web usa una lista blanca de sitios autorizados como primera fuente, y excluye una lista negra de sitios prohibidos al buscar en Google como respaldo.
 - La filosofía visual (UX/UI) y el flujo de CI/CD (GitHub Actions) deben ser consistentes con los del proyecto Comandante.
+- Babel comparte el inicio de sesión de Google con Comandante (mismo proyecto de autenticación): un usuario puede tener cuenta en ambas aplicaciones sin registrarse dos veces, pero el rol (administrador/vendedor) se define de forma independiente en cada aplicación y en su propia base de datos — administrar usuarios en una no afecta a la otra.
 
 ---
 
