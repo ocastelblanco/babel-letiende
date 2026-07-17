@@ -89,11 +89,13 @@ Vendedor → Escanea código de barras con la cámara
    ├─ No encontrado en sitios autorizados → busca en Google (excluyendo sitios prohibidos), precio en pesos colombianos
    └─ No encontrado por ningún medio → el vendedor ingresa el valor manualmente
 
-→ Vendedor confirma/ajusta el % de descuento de la editorial (si aplica uno distinto al de por defecto, lo elige de una lista)
+→ Vendedor confirma/ajusta el % de descuento editorial (si aplica uno distinto al de por defecto de esa editorial, lo elige de una lista; si el libro es propiedad de Le Tiende y no está en consignación, el descuento editorial es 100%)
 → Vendedor indica el número de ejemplares disponibles
 → Vendedor selecciona el estante físico de una lista
 → Sistema guarda el libro catalogado
 ```
+
+**Sobre el descuento editorial:** es el porcentaje que la editorial reconoce a Le Tiende sobre el PVP en los libros que deja en consignación — no es un descuento al público, sino el margen que le queda a la librería. El valor típico en el contexto colombiano es 35% (PVP $100.000 → la editorial cobra $65.000, Le Tiende retiene $35.000 de utilidad); el administrador puede configurar modelos distintos para editoriales independientes (ver §5.6). Cuando el libro es propiedad de Le Tiende (no está en consignación con ninguna editorial), el descuento editorial es 100%: no hay costo asociado y toda la venta es utilidad de la librería. Este porcentaje es independiente del descuento que el vendedor pueda aplicar al momento de la venta (ver §5.4).
 
 ### 5.3 Cambio de estante de un libro
 
@@ -110,12 +112,14 @@ Vendedor → Escanea ISBN o busca el libro en la lista de catalogados
 Vendedor → Escanea ISBN del libro a vender
    ├─ Código no disponible/ilegible → busca el libro por nombre en el catálogo
 
-→ Vendedor ajusta el % de descuento (0% por defecto)
+→ Vendedor ajusta el % de descuento de venta (0% por defecto)
 → Vendedor selecciona forma de pago: Efectivo / Tarjeta / Transferencia / Nequi / Daviplata
 → Vendedor presiona "Registrar venta"
 → Sistema marca el libro como vendido, guarda forma de pago y fecha/hora de venta
 → El libro deja de estar disponible para la venta
 ```
+
+**Sobre el descuento de venta:** es un descuento discrecional, distinto e independiente del descuento editorial (§5.2), que el vendedor acuerda con el comprador al momento de la venta — típicamente para rotar catálogo o al negociar libros que son propiedad de Le Tiende (sin descuento editorial de por medio). Reduce el precio final que paga el cliente; no modifica el costo del libro ni el descuento editorial ya definido al catalogarlo.
 
 ### 5.5 Reportes de ventas (solo administrador)
 
@@ -124,7 +128,7 @@ El administrador visualiza y descarga en formato XLSX los libros vendidos, filtr
 ### 5.6 Configuración de la aplicación (solo administrador)
 
 - Gestión de usuarios: crear, editar, borrar vendedores y administradores.
-- Gestión de descuentos por editorial: definir porcentajes y marcar uno por defecto (afecta el cálculo de costo y utilidad).
+- Gestión de descuentos por editorial: definir, por editorial, el porcentaje por defecto y una lista de porcentajes alternativos disponibles (afecta el cálculo de costo y utilidad de cada libro catalogado con esa editorial). El valor 100% (libro propio de Le Tiende, sin consignación) está siempre disponible como opción para cualquier libro, independientemente de su editorial.
 - Gestión de estantes: crear, editar, borrar. Un estante se compone de: espacio dentro de la librería, mueble y ubicación precisa.
 
 ### 5.7 Catálogo público (sin autenticación)
@@ -157,9 +161,10 @@ Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, a
 |---|---|---|
 | Vendedor | Escanea un libro con código de barras legible | El sistema pre-completa autor, portada, editorial y PVP; el vendedor solo confirma estante y cantidad |
 | Vendedor | Escanea un libro sin metadatos disponibles en ninguna fuente | El sistema le permite ingresar todos los datos manualmente sin bloquear el flujo |
-| Vendedor | Escanea el ISBN de un libro para venderlo | El sistema encuentra el libro, permite ajustar descuento y forma de pago, y lo marca como vendido |
+| Vendedor | Escanea el ISBN de un libro para venderlo | El sistema encuentra el libro, permite ajustar el descuento de venta y la forma de pago, y lo marca como vendido |
+| Vendedor | Cataloga un libro propiedad de Le Tiende, sin consignación | El sistema permite marcar el descuento editorial en 100%, sin costo asociado |
 | Vendedor | Cambia el estante de un libro ya catalogado | La nueva ubicación queda reflejada de inmediato en el catálogo público |
-| Administrador | Cambia el descuento por defecto de una editorial | Los libros nuevos catalogados de esa editorial usan el nuevo % para calcular costo/utilidad |
+| Administrador | Cambia el descuento por defecto de una editorial | Los libros nuevos catalogados de esa editorial usan el nuevo % para calcular costo/utilidad; los ya vendidos conservan el costo/utilidad que tenían al momento de la venta |
 | Administrador | Descarga el reporte de ventas del último mes filtrado por forma de pago | Recibe un archivo XLSX con los libros vendidos que cumplen el filtro |
 | Administrador | Crea un nuevo usuario vendedor | El nuevo usuario puede iniciar sesión con su cuenta Google y acceder al panel operativo |
 | Visitante público | Busca un libro por nombre desde su celular, sin cuenta | Ve el PVP y la ubicación física dentro de la librería, si está disponible |
@@ -197,6 +202,8 @@ Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, a
 | **Estante** | Ubicación física de un libro dentro de la librería, compuesta por espacio, mueble y posición precisa. |
 | **Lista blanca (sitios autorizados)** | Conjunto de sitios web de confianza donde el sistema busca primero el PVP de un libro. |
 | **Lista negra (sitios prohibidos)** | Conjunto de sitios excluidos al hacer la búsqueda de respaldo del PVP en Google. |
-| **Descuento editorial** | Porcentaje que la editorial otorga sobre el PVP, usado para calcular el costo y la utilidad de cada libro. |
+| **Descuento editorial** | Porcentaje del PVP que la editorial reconoce a Le Tiende como margen en los libros que deja en consignación (típicamente 35%). Determina el costo (`PVP × (1 − % descuento editorial)`) y la utilidad de catalogación (`PVP × % descuento editorial`) de cada libro. Es 100% cuando el libro es propiedad de Le Tiende y no está en consignación con ninguna editorial. No debe confundirse con el descuento de venta. |
+| **Descuento de venta** | Descuento discrecional que el vendedor aplica al precio final al momento de vender un libro, acordado con el comprador (0% por defecto). Es independiente del descuento editorial: reduce lo que paga el cliente, no el costo del libro. |
+| **Consignación** | Modalidad en la que una editorial deja libros en Le Tiende para la venta sin transferir su propiedad; al venderse, Le Tiende paga a la editorial según el descuento editorial pactado. Un libro sin consignación es propiedad directa de Le Tiende. |
 | **Vendedor** | Usuario con permisos para catalogar, ubicar y vender libros. |
 | **Administrador** | Usuario con todos los permisos del vendedor, más configuración del sistema y reportes. |

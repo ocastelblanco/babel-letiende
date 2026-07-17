@@ -12,7 +12,7 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 | URL producción | https://babel.letiende.co (aún no desplegada) |
 | Rama principal | `main` |
 | Rama de trabajo actual | `claude/babel-project-bootstrap-k7bhww` |
-| Última sesión | 2026-07-16 — Bootstrap de documentación inicial (CLAUDE.md, PRD.md, tech-specs.md, MEMORY.md, TODO.md) |
+| Última sesión | 2026-07-17 — Bootstrap de documentación inicial (2026-07-16) + precisión del modelo de descuento editorial vs. descuento de venta (2026-07-17) |
 
 ---
 
@@ -71,6 +71,15 @@ Ningún ítem está implementado todavía; el repositorio solo contiene `README.
 - **Razón:** decisión explícita del usuario en la sesión de bootstrap (a diferencia de Comandante, que usa código en inglés con comentarios/UI en español).
 - **Consecuencias:** revisar que las librerías de terceros no impongan convenciones en inglés dentro del propio código de Babel (los nombres de paquetes npm y sus APIs siguen en inglés, eso es aceptado).
 
+### ADR-006 — Dos descuentos distintos: editorial (margen/consignación) vs. venta (discrecional)
+- **Fecha:** 2026-07-17
+- **Estado:** Aceptado
+- **Decisión:** el sistema modela dos porcentajes de descuento completamente independientes:
+  1. **Descuento editorial** (`Libro.porcentajeDescuentoEditorial`): margen que Le Tiende retiene sobre el PVP en libros que la editorial deja en consignación (típico 35% en el contexto colombiano: PVP $100.000 → editorial cobra $65.000, Le Tiende retiene $35.000 de utilidad). El administrador puede configurar modelos distintos por editorial (`babel-editoriales-descuentos`). Cuando el libro es propiedad de Le Tiende y no está en consignación, este porcentaje es 100% (sin costo, toda la venta es utilidad). Se fija al catalogar y determina `Libro.costo`.
+  2. **Descuento de venta** (`Venta.porcentajeDescuentoVenta`): descuento discrecional que el vendedor acuerda con el comprador al momento de vender (0% por defecto), usado para rotar catálogo o al negociar libros propios de Le Tiende. Determina `Venta.precioFinal`, no afecta el costo del libro.
+- **Razón:** precisión de negocio aportada por el usuario tras la primera versión de la documentación — el modelo original no distinguía estos dos conceptos con claridad, lo que habría llevado a un cálculo incorrecto de costo/utilidad en los reportes.
+- **Consecuencias:** `Venta` ahora incluye un snapshot (`costoLibro`, `utilidad`, `pvp`) tomado al momento de la venta, para que cambios posteriores en la configuración de descuentos de editorial no alteren el costo/utilidad de ventas ya registradas. `POST /api/ventas` debe calcular y persistir ese snapshot, no solo referenciar el libro. Ver `tech-specs.md` §4.3 y §5.1, y `PRD.md` §5.2/§5.4/§10.
+
 ---
 
 ## 4. Dependencias instaladas
@@ -117,6 +126,8 @@ Se irán agregando hallazgos reales durante la implementación (actualmente son 
 
 ## 9. Contexto de la sesión actual
 
-**Qué se hizo hoy (2026-07-16):** bootstrap completo de documentación del proyecto Babel usando la skill `project-docs-bootstrap` (repo `ocastelblanco/ia-orchestration-skills`). Se inspeccionó el repositorio hermano `comandante-letiende` (stack, `CLAUDE.md`, `DESIGN.md`, `tech-specs.md`, workflow de GitHub Actions) para mantener consistencia de filosofía visual y de CI/CD. Se resolvieron con el usuario las ambigüedades de arquitectura: `api.letiende.co` como servicio externo ya existente (solo metadatos), app como PWA responsive (no nativa), y código/documentación en español.
+**Qué se hizo el 2026-07-16:** bootstrap completo de documentación del proyecto Babel usando la skill `project-docs-bootstrap` (repo `ocastelblanco/ia-orchestration-skills`). Se inspeccionó el repositorio hermano `comandante-letiende` (stack, `CLAUDE.md`, `DESIGN.md`, `tech-specs.md`, workflow de GitHub Actions) para mantener consistencia de filosofía visual y de CI/CD. Se resolvieron con el usuario las ambigüedades de arquitectura: `api.letiende.co` como servicio externo ya existente (solo metadatos), app como PWA responsive (no nativa), y código/documentación en español.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (scaffold del proyecto) y Tarea 2 (autenticación Firebase + resolución de rol).
+**Qué se hizo el 2026-07-17:** el usuario precisó que existen dos descuentos distintos e independientes — descuento editorial (margen de consignación, 100% si el libro es propio de Le Tiende) y descuento de venta (discrecional del vendedor). Se ajustaron `PRD.md` (§5.2, §5.4, §5.6, §7, §10), `tech-specs.md` (§4.3 modelos de datos con snapshot de costo/utilidad en `Venta`, §5 endpoints, §5.1 decisión de diseño) y este documento (ADR-006) para reflejarlo con precisión. Cambios enviados a la misma rama/PR (`claude/babel-project-bootstrap-k7bhww`) para aprobación conjunta.
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (scaffold del proyecto Angular) y Tarea 2 (esqueleto de Serverless Framework + tablas DynamoDB).

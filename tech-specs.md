@@ -176,9 +176,10 @@ interface Libro {
   autor: string;
   editorial: string | null;
   portadaUrl: string | null;
-  pvp: number;                 // en pesos colombianos
-  porcentajeDescuentoEditorial: number;
-  costo: number;               // derivado de pvp y porcentajeDescuentoEditorial
+  pvp: number;                        // en pesos colombianos
+  porcentajeDescuentoEditorial: number; // % que Le Tiende retiene como margen (típico 35%; 100% si no está en consignación)
+  costo: number;                      // pvp * (1 - porcentajeDescuentoEditorial / 100)
+  utilidadCatalogo: number;           // pvp * (porcentajeDescuentoEditorial / 100) — utilidad de referencia sin descuento de venta
   cantidadTotal: number;
   cantidadDisponible: number;
   estanteId: string;
@@ -191,8 +192,11 @@ interface Venta {
   ventaId: string;
   bookId: string;
   isbn: string | null;
-  porcentajeDescuentoAplicado: number;
-  precioFinal: number;
+  pvp: number;                         // snapshot del PVP al momento de la venta
+  porcentajeDescuentoVenta: number;    // descuento discrecional del vendedor (0% por defecto) — independiente del descuento editorial
+  precioFinal: number;                 // pvp * (1 - porcentajeDescuentoVenta / 100)
+  costoLibro: number;                  // snapshot de Libro.costo al momento de la venta (no cambia si luego se edita el % de la editorial)
+  utilidad: number;                    // precioFinal - costoLibro
   formaDePago: 'efectivo' | 'tarjeta' | 'transferencia' | 'nequi' | 'daviplata';
   vendidoPor: string;           // email del vendedor
   vendidoEn: string;            // ISO date
@@ -207,9 +211,13 @@ interface Estante {
 
 interface DescuentoEditorial {
   editorial: string;
-  porcentajePorDefecto: number;
-  porcentajesDisponibles: number[];
+  porcentajePorDefecto: number;     // ej. 35 para la mayoría de editoriales en consignación
+  porcentajesDisponibles: number[]; // alternativas propias de esa editorial (ej. editoriales independientes)
 }
+
+// Nota: el 100% (libro propio de Le Tiende, sin consignación) es siempre una opción
+// seleccionable al catalogar, para cualquier libro, independientemente de su editorial
+// y de si esa editorial tiene o no una fila en babel-editoriales-descuentos.
 
 interface Usuario {
   email: string;
@@ -243,11 +251,11 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | GET | `/api/metadatos/:isbn` | Vendedor/Admin | Orquesta `api.letiende.co` (Google Books) + scraping de PVP (lista blanca → Google Search de respaldo). | — |
 | POST | `/api/libros` | Vendedor/Admin | Crea un libro catalogado. | `Libro` (sin `bookId`/`creadoEn`) |
 | PATCH | `/api/libros/:isbn/estante` | Vendedor/Admin | Cambia el estante de un libro. | `{ estanteId }` |
-| POST | `/api/ventas` | Vendedor/Admin | Registra una venta; decrementa `cantidadDisponible`. | `{ bookId, formaDePago, porcentajeDescuentoAplicado }` |
+| POST | `/api/ventas` | Vendedor/Admin | Registra una venta; decrementa `cantidadDisponible`; calcula `precioFinal`/`utilidad` con snapshot de `costoLibro`. | `{ bookId, formaDePago, porcentajeDescuentoVenta }` |
 | GET | `/api/ventas` | Admin | Lista/filtra ventas para reportes. | Query: `desde`, `hasta`, `editorial`, `formaDePago` |
 | GET | `/api/ventas/exportar` | Admin | Genera y descarga el reporte en XLSX. | Mismos filtros que arriba |
 | GET / POST / PUT / DELETE | `/api/estantes` | Admin | CRUD de estantes. | `Estante` |
-| GET / POST / PUT / DELETE | `/api/editoriales-descuentos` | Admin | CRUD de descuentos por editorial. | `DescuentoEditorial` |
+| GET / POST / PUT / DELETE | `/api/editoriales-descuentos` | Admin | CRUD de descuentos por editorial (porcentaje por defecto y alternativas para libros en consignación). | `DescuentoEditorial` |
 | GET / POST / PUT / DELETE | `/api/usuarios` | Admin | CRUD de usuarios (vendedores/administradores). | `Usuario` |
 
 ### 5.1 Tablas DynamoDB
@@ -261,6 +269,11 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | `babel-usuarios` | `email` (PK) | Fuente de verdad del rol (`administrador`/`vendedor`). |
 
 **Decisión de diseño:** se usa una tabla `babel-ventas` separada (en vez de sobrescribir el estado del libro) porque los reportes requieren historial por transacción (fecha, forma de pago, utilidad) y un libro catalogado puede tener múltiples ejemplares vendidos en momentos distintos. `babel-libros.cantidadDisponible` se decrementa en cada venta; cuando llega a 0 el libro deja de aparecer como disponible en el catálogo público.
+
+**Decisión de diseño — dos descuentos distintos, no confundir:**
+- **Descuento editorial** (`Libro.porcentajeDescuentoEditorial`): margen que Le Tiende retiene sobre el PVP en libros en consignación (típico 35%; 100% si el libro es propiedad de Le Tiende, sin consignación). Se fija al catalogar y determina `Libro.costo`.
+- **Descuento de venta** (`Venta.porcentajeDescuentoVenta`): descuento discrecional del vendedor sobre el PVP al momento de vender (0% por defecto), independiente del anterior. Determina `Venta.precioFinal`.
+- `POST /api/ventas` debe copiar (snapshot) `Libro.costo` hacia `Venta.costoLibro` en el momento de la venta — si el administrador cambia después el % de una editorial, las ventas ya registradas no deben recalcularse, para que los reportes históricos de costo/utilidad sean correctos.
 
 ---
 
