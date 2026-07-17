@@ -1,2 +1,24 @@
-/* You can add global styles to this file, and also import other style files */
+/* Estilos globales — Tailwind CSS v4 activado mediante @tailwindcss/postcss */
 @import "tailwindcss";
+
+/*
+ * Paleta e tipografía de marca de Le Tiende (CLAUDE.md §4, heredada del
+ * sistema de diseño de Comandante — ver DESIGN.md de ese repo hermano).
+ * Angellya (nombre de marca) queda pendiente: no existe un archivo de
+ * fuente disponible todavía en ningún repo de Le Tiende, solo aparece
+ * vectorizada dentro del logotipo SVG. Mientras tanto, el nombre de marca
+ * usa Poppins como el resto de la interfaz.
+ */
+@theme {
+  --color-primary: #230c00;
+  --color-secondary: #e8630a;
+  --color-tertiary: #00b7a3;
+  --color-neutral: #ffe7b3;
+  --color-surface: #f7f5f2;
+  --color-danger: #c0392b;
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}

@@ -1,21 +1,48 @@
-<div class="flex min-h-screen items-center justify-center bg-[#FFE7B3] px-4">
-  <div class="w-full max-w-sm rounded-lg bg-white p-8 text-center shadow-lg">
-    <h1 class="mb-2 text-2xl font-semibold text-[#230C00]">Babel</h1>
-    <p class="mb-8 text-sm text-[#230C00]/70">
-      Catálogo e inventario de la librería de Le Tiende
-    </p>
+<div class="fixed inset-0 flex items-center justify-center overflow-y-auto bg-surface px-4">
+  <div class="w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-[0_4px_16px_rgba(35,12,0,0.15)]">
+    <img
+      src="/logo_negro_sin_fondo.svg"
+      alt="Le Tiende"
+      class="mx-auto mb-3 h-auto w-36"
+    />
+    <h1 class="mb-8 text-lg font-semibold text-primary">Babel</h1>
 
     <button
       type="button"
-      class="w-full rounded-md bg-[#E8630A] px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      class="flex h-12 w-full items-center justify-center gap-3 rounded-2xl bg-secondary px-4 font-semibold text-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       [disabled]="cargando()"
       (click)="ingresarConGoogle()"
     >
+      @if (cargando()) {
+        <span
+          class="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"
+          aria-hidden="true"
+        ></span>
+      } @else {
+        <svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="#4285F4"
+            d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.54 5.54 0 0 1-2.4 3.63v3h3.89c2.28-2.1 3.53-5.2 3.53-8.87Z"
+          />
+          <path
+            fill="#34A853"
+            d="M12 24c3.24 0 5.95-1.07 7.96-2.92l-3.89-3c-1.08.72-2.47 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.26v3.09A12 12 0 0 0 12 24Z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.27 14.27a7.2 7.2 0 0 1 0-4.54v-3.1H1.26a12 12 0 0 0 0 10.73l4.01-3.09Z"
+          />
+          <path
+            fill="#EA4335"
+            d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0A12 12 0 0 0 1.26 6.63l4.01 3.1C6.22 6.86 8.87 4.75 12 4.75Z"
+          />
+        </svg>
+      }
       {{ cargando() ? 'Ingresando…' : 'Ingresar con Google' }}
     </button>
 
     @if (mensajeError()) {
-      <p class="mt-4 text-sm text-red-700">{{ mensajeError() }}</p>
+      <p class="mt-4 text-sm text-danger">{{ mensajeError() }}</p>
     }
   </div>
 </div>
