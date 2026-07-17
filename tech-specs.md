@@ -282,7 +282,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | Servicio | Estado | Uso actual/futuro |
 |---|---|---|
 | `api.letiende.co` | Ya existente, compartido | Resolver metadatos de libro (título, autor, portada, editorial) a partir de ISBN u otros datos, vía Google Books API. |
-| Firebase Authentication | Ya existente, compartido con Comandante (mismo proyecto Firebase — `comandante-letiende` en `.firebaserc`, a confirmar con el administrador el `projectId` exacto a reutilizar) | Login con Google; Babel no crea un proyecto Firebase propio, reutiliza el de Comandante solo para autenticación. Los roles (administrador/vendedor) son independientes por app — ver §8. |
+| Firebase Authentication | Ya existente, compartido con Comandante — `projectId` confirmado: **`comandante-letiende`** | Login con Google; Babel no crea un proyecto Firebase propio, reutiliza el de Comandante solo para autenticación. Los roles (administrador/vendedor) son independientes por app — ver §8. |
 | Sitios de la lista blanca (scraping) | Por definir | Fuente primaria de PVP por nombre del libro. Lista mantenida como configuración estática en el repo (no editable desde la UI de administración en el alcance actual). |
 | Google Custom Search JSON API | Por habilitar | Fallback de búsqueda de PVP cuando la lista blanca no encuentra el libro, excluyendo la lista negra. **Cuota gratuita limitada (100 consultas/día)** — riesgo de costo si el volumen de catalogación la supera; ver §9 y PRD §9. |
 
@@ -322,9 +322,9 @@ Ver diagrama de §1. Componentes gestionados por Serverless Framework: 2 funcion
 
 ### 8.1 Identidad compartida con Comandante — modelo y riesgos
 
-Babel **no crea un proyecto Firebase propio**: reutiliza el mismo proyecto Firebase que ya usa Comandante para Google Sign-In (mismo `apiKey`/`authDomain`/`projectId` en `src/environments/`). Esto es identidad compartida (equivalente a un SSO entre ambas apps de Le Tiende); la autorización sigue siendo exclusiva de cada una.
+Babel **no crea un proyecto Firebase propio**: reutiliza el mismo proyecto Firebase que ya usa Comandante para Google Sign-In — `projectId` **`comandante-letiende`** (mismo `apiKey`/`authDomain`/`projectId` en `src/environments/`, copiados de la configuración pública de `comandante-letiende`). Esto es identidad compartida (equivalente a un SSO entre ambas apps de Le Tiende); la autorización sigue siendo exclusiva de cada una.
 
-- **`firebase-admin` de Babel debe inicializarse con el mismo `projectId`** que usa Comandante — `verifyIdToken()` valida el claim `aud` del token contra ese `projectId`; si se apuntara a un proyecto distinto, la verificación simplemente fallaría (modo seguro por defecto, nunca "abierto" por error de configuración).
+- **`firebase-admin` de Babel debe inicializarse con `projectId: 'comandante-letiende'`** (el mismo que usa Comandante) — `verifyIdToken()` valida el claim `aud` del token contra ese `projectId`; si se apuntara a un proyecto distinto, la verificación simplemente fallaría (modo seguro por defecto, nunca "abierto" por error de configuración).
 - **Cuenta de servicio propia:** aunque el proyecto Firebase es el mismo, Babel usa su propia cuenta de servicio (`FIREBASE_SERVICE_ACCOUNT_BABEL`, distinta de `FIREBASE_SERVICE_ACCOUNT_COMANDANTE_LETIENDE`) para poder rotar o revocar credenciales de un backend sin afectar al otro.
 - **Estar autenticado no implica autorización en ninguna app:** cualquier cuenta de Google puede obtener un ID Token válido del proyecto compartido (Firebase Auth no restringe el inicio de sesión por sí solo); el control de acceso real sigue siendo exclusivamente la existencia del correo en `babel-usuarios` (Babel) o en `users` de Firestore (Comandante). Esto no cambia respecto a tener proyectos separados.
 - **Blast radius:** si la cuenta de servicio o la configuración del proyecto Firebase compartido se ven comprometidas, el riesgo potencial cubre ambas apps a la vez, no una sola. Mitigación: cuentas de servicio separadas por app (punto anterior) y restringir el proveedor de Firebase Auth solo a Google Sign-In (sin email/password ni proveedores adicionales).

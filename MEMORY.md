@@ -90,7 +90,7 @@ Ningún ítem está implementado todavía; el repositorio solo contiene `README.
   - Mayor "blast radius" si el proyecto Firebase o una cuenta de servicio se ven comprometidos (afecta potencialmente a ambas apps) — mitigado con cuentas de servicio separadas por app.
   - Revocación en dos pasos: quitar el rol en `babel-usuarios` revoca solo Babel; deshabilitar la cuenta en la consola de Firebase revoca ambas apps. El administrador debe saber cuál usar según el caso.
   - Cuota de usuarios activos mensuales (MAU) de Firebase se comparte entre ambas apps (sin impacto esperado dado el volumen).
-  - Pendiente: confirmar con el administrador el `projectId` exacto del proyecto Firebase de Comandante a reutilizar (visto en `comandante-letiende/.firebaserc` como `comandante-letiende`) antes de configurar el SDK cliente y `firebase-admin` de Babel.
+  - `projectId` confirmado por el usuario el 2026-07-17: **`comandante-letiende`**. Babel debe configurar el SDK cliente y `firebase-admin` apuntando a ese `projectId` exacto (ver `tech-specs.md` §6 y §8.1).
 
 ---
 
@@ -102,7 +102,11 @@ Ninguna todavía — el `package.json` se crea en la Tarea 1 de `TODO.md`. Depen
 
 ## 5. Configuraciones vigentes
 
-Ninguna todavía (sin cuentas AWS/Firebase/dominio configuradas en esta sesión). Pendiente registrar aquí, a medida que se creen: ID de proyecto Firebase **(reutilizar el de Comandante — ADR-007, confirmar `projectId` exacto con el administrador)**, ARNs de recursos AWS, nombres exactos de tablas DynamoDB desplegadas, IDs de distribución si aplica CDN, y la configuración de dominio `babel.letiende.co` en Route53/API Gateway.
+| Campo | Valor |
+|---|---|
+| Proyecto Firebase (Authentication) | `comandante-letiende` — compartido con Comandante, confirmado por el usuario (ver ADR-007) |
+
+Resto pendiente (sin cuentas AWS/dominio configuradas en esta sesión): ARNs de recursos AWS, nombres exactos de tablas DynamoDB desplegadas, IDs de distribución si aplica CDN, y la configuración de dominio `babel.letiende.co` en Route53/API Gateway.
 
 ---
 
@@ -144,4 +148,6 @@ Se irán agregando hallazgos reales durante la implementación (actualmente son 
 
 Adicionalmente, el usuario pidió compartir el mismo proyecto Firebase Authentication de Comandante (misma cuenta de Google en ambas apps), manteniendo roles independientes por app en su propia base de datos. Se evaluaron los riesgos de seguridad (blast radius compartido, revocación en dos pasos, necesidad de cuenta de servicio propia por app) y se documentaron en `tech-specs.md` §8.1 (nueva), `CLAUDE.md` (OWASP A01/A07 y tabla de prohibiciones), `PRD.md` (§5.1, §9) y este documento (ADR-007). Todos los cambios se enviaron a la misma rama/PR (`claude/babel-project-bootstrap-k7bhww`, PR #1) para aprobación conjunta.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (scaffold del proyecto Angular) y Tarea 2 (esqueleto de Serverless Framework + tablas DynamoDB). Antes de implementar autenticación, confirmar con el administrador el `projectId` exacto del proyecto Firebase de Comandante a reutilizar (ADR-007).
+**Qué se hizo también el 2026-07-17 (continuación):** el usuario confirmó el `projectId` de Firebase a reutilizar: `comandante-letiende`. Se resolvió el pendiente de ADR-007 y se actualizaron `tech-specs.md` §6/§8.1 y este documento (§1, §5, ADR-007) con el valor exacto.
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (scaffold del proyecto Angular) y Tarea 2 (esqueleto de Serverless Framework + tablas DynamoDB). Ya no hay pendientes de confirmación para implementar la autenticación compartida.
