@@ -1,5 +1,6 @@
 # Angular specific
 /dist/
+/dist-server/
 /out-tsc/
 /tmp/
 /coverage/
@@ -20,6 +21,9 @@
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Serverless Framework
+/.serverless/
 
 # Logs
 npm-debug.log*

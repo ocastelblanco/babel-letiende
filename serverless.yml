@@ -1,0 +1,244 @@
+service: babel-letiende
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs24.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 10
+  httpApi:
+    cors: true
+  # Cada función define su propio rol de mínimo privilegio más abajo
+  # (ver `resources.Resources.ApiLambdaRole` / `SsrLambdaRole`) — ver
+  # CLAUDE.md §5 (A05: configuración de seguridad incorrecta).
+
+package:
+  individually: true
+
+custom:
+  nombresTablas:
+    libros: babel-libros-${sls:stage}
+    ventas: babel-ventas-${sls:stage}
+    estantes: babel-estantes-${sls:stage}
+    editorialesDescuentos: babel-editoriales-descuentos-${sls:stage}
+    usuarios: babel-usuarios-${sls:stage}
+
+functions:
+  api:
+    handler: dist-server/api/handlers/health.handler
+    role: !GetAtt ApiLambdaRole.Arn
+    description: >-
+      Lógica de negocio de Babel (catalogación, ventas, administración).
+      Por ahora solo expone /api/health como placeholder de verificación.
+    environment:
+      # Nombres "lógicos" (ver tech-specs.md §5.1) resueltos a los nombres
+      # reales de tabla por stage, para no chocar entre dev/staging/production.
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_VENTAS: ${self:custom.nombresTablas.ventas}
+      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
+      TABLA_EDITORIALES_DESCUENTOS: ${self:custom.nombresTablas.editorialesDescuentos}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      # Secretos/config externa (tech-specs.md §9) — nunca hardcodeados,
+      # quedan vacíos si la variable de entorno no está definida.
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+      GOOGLE_CUSTOM_SEARCH_API_KEY: ${env:GOOGLE_CUSTOM_SEARCH_API_KEY, ''}
+      GOOGLE_CUSTOM_SEARCH_CX: ${env:GOOGLE_CUSTOM_SEARCH_CX, ''}
+      API_LETIENDE_BASE_URL: ${env:API_LETIENDE_BASE_URL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/health.js'
+    events:
+      - httpApi:
+          path: /api/health
+          method: get
+      - httpApi:
+          path: /api/{proxy+}
+          method: '*'
+
+  ssr:
+    handler: server/ssr/handler.handler
+    role: !GetAtt SsrLambdaRole.Arn
+    description: >-
+      Renderizado SSR de Angular (catálogo público + app shell autenticada).
+      Sin permisos de DynamoDB: solo renderiza, no accede a datos directamente.
+    memorySize: 512
+    environment:
+      # Protección SSRF de Angular (`AngularNodeAppEngine`) exige una lista
+      # explícita de hosts permitidos; sin dominio personalizado todavía
+      # (fuera de alcance de esta tarea), se autoriza el host real generado
+      # por API Gateway para que el SSR pueda responder en este esqueleto.
+      NG_ALLOWED_HOSTS: !Sub '${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    package:
+      patterns:
+        - '!**'
+        - 'dist/babel-letiende/**'
+        - 'server/ssr/handler.mjs'
+        - 'node_modules/@codegenie/serverless-express/**'
+    events:
+      - httpApi:
+          path: /
+          method: get
+      - httpApi:
+          path: /{proxy+}
+          method: '*'
+
+resources:
+  Resources:
+    # --- Roles IAM de mínimo privilegio (uno por función) ---
+    ApiLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-api-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: babel-api-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - dynamodb:BatchGetItem
+                    - dynamodb:BatchWriteItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                    - !Sub '${TablaLibros.Arn}/index/*'
+                    - !GetAtt TablaVentas.Arn
+                    - !Sub '${TablaVentas.Arn}/index/*'
+                    - !GetAtt TablaEstantes.Arn
+                    - !GetAtt TablaEditorialesDescuentos.Arn
+                    - !GetAtt TablaUsuarios.Arn
+
+    SsrLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-ssr-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        # Sin políticas adicionales: el SSR solo renderiza, no accede a DynamoDB.
+
+    # --- Tablas DynamoDB (tech-specs.md §5.1) ---
+    # Capacidad aprovisionada 25/25 en todas (capa siempre gratuita de AWS,
+    # ver tech-specs.md §7.3 — objetivo de costo $0, nunca on-demand).
+    TablaLibros:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.libros}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: bookId
+            AttributeType: S
+          - AttributeName: isbn
+            AttributeType: S
+        KeySchema:
+          - AttributeName: bookId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: isbn-index
+            KeySchema:
+              - AttributeName: isbn
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 25
+              WriteCapacityUnits: 25
+
+    TablaVentas:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.ventas}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: ventaId
+            AttributeType: S
+          - AttributeName: vendidoEn
+            AttributeType: S
+        KeySchema:
+          - AttributeName: ventaId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: vendidoEn-index
+            KeySchema:
+              - AttributeName: vendidoEn
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 25
+              WriteCapacityUnits: 25
+
+    TablaEstantes:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.estantes}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: estanteId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: estanteId
+            KeyType: HASH
+
+    TablaEditorialesDescuentos:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.editorialesDescuentos}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: editorial
+            AttributeType: S
+        KeySchema:
+          - AttributeName: editorial
+            KeyType: HASH
+
+    TablaUsuarios:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.usuarios}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: email
+            KeyType: HASH

@@ -8,19 +8,21 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 
 | Campo | Valor |
 |---|---|
-| Versión | Sin release — scaffold de frontend recién creado, sin desplegar |
+| Versión | Sin release en producción — infraestructura backend ya desplegada y verificada en `staging` |
 | URL producción | https://babel.letiende.co (aún no desplegada) |
+| URL staging (real) | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (API Gateway HTTP API, stage `staging`) |
 | Rama principal | `main` |
-| Rama de trabajo actual | `feature/scaffold-angular-ssr` (PR #2, sin fusionar) |
-| Última sesión | 2026-07-17 — Scaffold del proyecto Angular 22 SSR + Tailwind 4 (Tarea 1 de `TODO.md` completada) |
+| Rama de trabajo actual | `feature/serverless-skeleton-dynamodb` (PR #3, sin fusionar) |
+| Última sesión | 2026-07-17 — Esqueleto de Serverless Framework + 5 tablas DynamoDB, desplegado realmente a `staging` |
 
 ---
 
 ## 2. Funcionalidades completadas vs. pendientes
 
 - [x] Scaffold del proyecto Angular 22 + SSR + Tailwind CSS 4 (PR #2, rama `feature/scaffold-angular-ssr`) — ver detalle en §9
-- [ ] Esqueleto de Serverless Framework + tablas DynamoDB (`TODO.md` Tarea 1)
-- [ ] Autenticación con Google (Firebase Auth) + resolución de rol (`TODO.md` Tarea 2 — SDK cliente/`AuthService`/`AuthGuard` primero, `RoleGuard` y verificación de rol en backend después)
+- [x] Esqueleto de Serverless Framework + tablas DynamoDB, desplegado a `staging` (PR #3, rama `feature/serverless-skeleton-dynamodb`) — ver detalle en §5 y §9
+- [ ] Autenticación con Google (Firebase Auth) + resolución de rol (`TODO.md` Tarea 1 — SDK cliente/`AuthService`/`AuthGuard` primero, `RoleGuard` y verificación de rol en backend después)
+- [ ] Modelos de datos compartidos + cliente DynamoDB base (`TODO.md` Tarea 2)
 - [ ] Flujo de catalogación (escaneo → metadatos → PVP → estante)
 - [ ] Registro de venta
 - [ ] Catálogo público de consulta (SSR)
@@ -31,7 +33,7 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 - [ ] Reportes de ventas + exportación XLSX (admin)
 - [ ] `DESIGN.md` propio de Babel
 
-El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`, `src/theme/`, `angular.json`, `package.json`, etc.) además de `README.md`, `LICENSE`, `.gitignore` y los documentos de este bootstrap. Ningún flujo de negocio está implementado todavía.
+El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`, `src/theme/`, `angular.json`, `package.json`, etc.), `serverless.yml` con las 2 Lambdas y las 5 tablas ya desplegadas en `staging`, además de `README.md`, `LICENSE`, `.gitignore` y los documentos de este bootstrap. Ningún flujo de negocio está implementado todavía.
 
 ---
 
@@ -101,7 +103,9 @@ El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`
 - Runtime: `@angular/{common,compiler,core,forms,platform-browser,platform-server,router,ssr}` 22.x, `express` 5.x (servidor SSR), `rxjs` 7.8, `tslib`
 - Dev: `@angular/{build,cli,compiler-cli}` 22.x, `tailwindcss` 4.x + `@tailwindcss/postcss` 4.x, `postcss`, `prettier` 3.x, `typescript` 6.x, `vitest` (test runner que usa `ng test` en Angular 22), `@types/{express,node}`, `jsdom`
 
-**Pendientes** (previstas en `tech-specs.md` §2, aún no instaladas): `firebase` (SDK cliente — próxima tarea), `firebase-admin` (backend), `xlsx`, `@zxing/browser`, `cheerio`, Serverless Framework 4.x, `aws-sdk`/`@aws-sdk/client-dynamodb`.
+**Ya instaladas** (esqueleto Serverless, Tarea completada 2026-07-17): `serverless` 4.39.0 (devDependency, versión exacta), `@codegenie/serverless-express` (wrapper Lambda del SSR), `@types/aws-lambda` (dev).
+
+**Pendientes** (previstas en `tech-specs.md` §2, aún no instaladas): `firebase` (SDK cliente — próxima tarea), `firebase-admin` (backend), `xlsx`, `@zxing/browser`, `cheerio`, `@aws-sdk/client-dynamodb`/`@aws-sdk/lib-dynamodb` (próxima tarea de modelos + cliente DynamoDB).
 
 ---
 
@@ -110,8 +114,16 @@ El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`
 | Campo | Valor |
 |---|---|
 | Proyecto Firebase (Authentication) | `comandante-letiende` — compartido con Comandante, confirmado por el usuario (ver ADR-007) |
+| Cuenta AWS | `696912647258` — credenciales configuradas localmente vía AWS CLI, usadas para el deploy real a `staging` del 2026-07-17 |
+| Stage `staging` — API Gateway | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (HTTP API, region `us-east-1`) |
+| Stage `staging` — Lambda `api` | `arn:aws:lambda:us-east-1:696912647258:function:babel-letiende-staging-api`, rol `babel-api-role-staging` (CRUD acotado a las 5 tablas + `/index/*`, sin más permisos) |
+| Stage `staging` — Lambda `ssr` | `arn:aws:lambda:us-east-1:696912647258:function:babel-letiende-staging-ssr`, rol `babel-ssr-role-staging` (solo `AWSLambdaBasicExecutionRole`, sin acceso a DynamoDB) |
+| Stage `staging` — Tablas DynamoDB (nombre real) | `babel-libros-staging`, `babel-ventas-staging`, `babel-estantes-staging`, `babel-editoriales-descuentos-staging`, `babel-usuarios-staging` — todas `PROVISIONED` 25/25 RCU/WCU (tabla y GSIs) |
+| Nombres lógicos → variables de entorno de la Lambda `api` | `TABLA_LIBROS`, `TABLA_VENTAS`, `TABLA_ESTANTES`, `TABLA_EDITORIALES_DESCUENTOS`, `TABLA_USUARIOS` (resueltos en `serverless.yml`, nunca hardcodeados en el código de negocio) |
 
-Resto pendiente (sin cuentas AWS/dominio configuradas en esta sesión): ARNs de recursos AWS, nombres exactos de tablas DynamoDB desplegadas, IDs de distribución si aplica CDN, y la configuración de dominio `babel.letiende.co` en Route53/API Gateway.
+**GitHub Actions Secrets configurados por el usuario (2026-07-17):** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SERVERLESS_LICENSE_KEY` (ruta de licencia de Serverless Framework v4, sin depender del dashboard — confirmado con la doc oficial que la variable de entorno exacta es `SERVERLESS_LICENSE_KEY`, no `SERVERLESS_ACCESS_KEY`; el workflow se corrigió para usarla).
+
+Pendiente (sin configurar en esta sesión): dominio personalizado `babel.letiende.co` en Route53/API Gateway/ACM (fuera de alcance de la tarea de esqueleto — ver roadmap técnico), y los secrets de negocio de producción (`FIREBASE_SERVICE_ACCOUNT_BABEL`, `GOOGLE_CUSTOM_SEARCH_*`, `API_LETIENDE_BASE_URL`).
 
 ---
 
@@ -132,7 +144,10 @@ Aún no hay código. Los patrones previstos (a validar en la primera implementac
 | **(Verificado 2026-07-17)** El `.gitignore` original del bootstrap (`b4a2bc4`) traía `/package-lock.json` ignorado — pasó inadvertido mientras no existía `package.json` | Corregido en PR #2: se quitó esa línea del `.gitignore`. Recordar para cualquier proyecto bootstrapeado con una plantilla genérica de `.gitignore` antes de tener `package.json`: revisar que no ignore el lockfile, ya que `CLAUDE.md` A08 exige `npm ci` reproducible en CI. |
 | **(Verificado 2026-07-17)** `tsconfig.json` de Angular 22 usa TypeScript 6.x, que deprecó `baseUrl` — los path aliases (`paths`) deben usar valores con prefijo `./` explícito y no depender de `baseUrl` | Confirmado con un import de prueba (`@core/models/...`) que compiló correctamente sin `baseUrl`, solo con `paths` apuntando a `./src/...`. |
 
-Los primeros tres hallazgos de esta tabla siguen siendo anticipados por analogía con Comandante (no verificados en código real de Babel); los tres marcados "(Verificado 2026-07-17)" ya se confirmaron en el scaffold real.
+| **(Verificado 2026-07-17)** Angular 22 con SSR protege contra SSRF exigiendo una lista explícita de hosts permitidos (`AngularNodeAppEngine`); sin ella, la Lambda `ssr` responde 400 a cualquier host, incluido el dominio real que genera API Gateway | Configurar `NG_ALLOWED_HOSTS` con el host real (`${HttpApi}.execute-api.${AWS::Region}.amazonaws.com` en `serverless.yml`) — no es necesario tener ya un dominio personalizado para que funcione. |
+| **(Verificado 2026-07-17)** El build SSR de Angular (`dist/babel-letiende/server/server.mjs`) exporta una instancia de Express pensada para `app.listen()`, no un handler Lambda | Envolver esa misma instancia con `@codegenie/serverless-express` (`server/ssr/handler.mjs`) en vez de reimplementar el bootstrap SSR; `src/server.ts` solo necesita `export { app }` adicional. |
+
+Los primeros tres hallazgos de esta tabla siguen siendo anticipados por analogía con Comandante (no verificados en código real de Babel); los marcados "(Verificado 2026-07-17)" ya se confirmaron en código/infraestructura real de Babel.
 
 ---
 
@@ -160,4 +175,6 @@ Adicionalmente, el usuario pidió compartir el mismo proyecto Firebase Authentic
 
 **Qué se hizo el 2026-07-17 (Tarea 1 de `TODO.md` — scaffold Angular):** se generó el proyecto Angular 22 SSR (standalone components) en la raíz del repo con `ng new`, configurado Tailwind CSS 4 vía `@tailwindcss/postcss` (`.postcssrc.json` en JSON puro — ver gotcha verificado en §7), creada la estructura de carpetas exacta de `tech-specs.md` §3 (`src/app/{core,features,shared}`, `src/theme/`), configurados los path aliases (`@core`, `@shared`, `@features`, `@theme`) en `tsconfig.json`, y Prettier con la config generada por Angular CLI. Se corrigió además `.gitignore` para dejar de ignorar `package-lock.json` (requerido por `CLAUDE.md` A08). Build (`npm run build`) y servidor de desarrollo (`npm run start`, HTTP 200) verificados de forma independiente antes de commitear. Cambios enviados en la rama `feature/scaffold-angular-ssr` (PR #2, sin fusionar), en dos commits separados: uno de documentación pendiente (README completo + symlinks de skills) y otro del scaffold en sí.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (esqueleto de Serverless Framework + tablas DynamoDB) y Tarea 2 (autenticación con Google: SDK cliente, `AuthService`, `AuthGuard`). Ya no hay pendientes de confirmación para implementar la autenticación compartida (ver ADR-007); la Tarea 2 puede avanzar en paralelo a la Tarea 1 ya que ambas son independientes entre sí.
+**Qué se hizo el 2026-07-17 (esqueleto de Serverless Framework + DynamoDB):** se creó `serverless.yml` con dos funciones Lambda separadas por rol IAM de mínimo privilegio (`api` con CRUD acotado a las 5 tablas, `ssr` sin ningún permiso de DynamoDB), las 5 tablas DynamoDB de `tech-specs.md` §5.1 con capacidad aprovisionada 25/25, el handler placeholder `GET /api/health`, el wrapper `server/ssr/handler.mjs` (`@codegenie/serverless-express`) sobre el build SSR de Angular, y `.github/workflows/deploy.yml`. El usuario autorizó explícitamente un **deploy real** a AWS stage `staging` (cuenta `696912647258`) — se ejecutó y se verificó de forma independiente (recursos reales confirmados por AWS CLI, ver §5). Cambios en la rama `feature/serverless-skeleton-dynamodb` (PR #3, sin fusionar). El primer run de CI falló (`serverless package` sin autenticar); el usuario configuró los GitHub Secrets (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SERVERLESS_LICENSE_KEY`) y se corrigió el workflow para usar `SERVERLESS_LICENSE_KEY` (no `SERVERLESS_ACCESS_KEY` — son dos rutas de auth distintas de Serverless Framework v4, confirmado con la documentación oficial, ver §5).
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (autenticación con Google: SDK cliente, `AuthService`, `AuthGuard`) y Tarea 2 (modelos de datos compartidos + cliente DynamoDB base). Ambas son independientes entre sí y pueden avanzar en paralelo.

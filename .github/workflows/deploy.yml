@@ -1,0 +1,84 @@
+name: Build, test y despliegue
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  build-y-test:
+    name: Build + test (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias (reproducible, package-lock.json)
+        run: npm ci
+
+      - name: Build de producción del frontend Angular (SSR)
+        run: npm run build -- --configuration=production
+
+      - name: Build de TypeScript de la Lambda "api"
+        run: npm run build:api
+
+      - name: Pruebas unitarias
+        run: npm test -- --watch=false
+
+      - name: Verificar sintaxis de infraestructura (serverless package)
+        run: npx serverless package --stage staging
+        env:
+          # License Key de Serverless Framework v4 (sin depender del dashboard),
+          # necesaria para que la CLI opere en CI sin login interactivo.
+          # No listada en tech-specs.md §9 (se agrega aquí por requerimiento
+          # de la propia CLI, no del dominio de Babel). Configurada como
+          # GitHub Secret por el usuario el 2026-07-17.
+          SERVERLESS_LICENSE_KEY: ${{ secrets.SERVERLESS_LICENSE_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  desplegar-produccion:
+    name: Deploy a producción
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias (reproducible, package-lock.json)
+        run: npm ci
+
+      - name: Build de producción del frontend Angular (SSR)
+        run: npm run build -- --configuration=production
+
+      - name: Build de TypeScript de la Lambda "api"
+        run: npm run build:api
+
+      - name: Desplegar con Serverless Framework (stage production)
+        run: npx serverless deploy --stage production
+        env:
+          SERVERLESS_LICENSE_KEY: ${{ secrets.SERVERLESS_LICENSE_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          FIREBASE_SERVICE_ACCOUNT_BABEL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BABEL }}
+          GOOGLE_CUSTOM_SEARCH_API_KEY: ${{ secrets.GOOGLE_CUSTOM_SEARCH_API_KEY }}
+          GOOGLE_CUSTOM_SEARCH_CX: ${{ secrets.GOOGLE_CUSTOM_SEARCH_CX }}
+          API_LETIENDE_BASE_URL: ${{ secrets.API_LETIENDE_BASE_URL }}
