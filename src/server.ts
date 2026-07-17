@@ -66,3 +66,10 @@ if (isMainModule(import.meta.url) || process.env['pm_id']) {
  * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
  */
 export const reqHandler = createNodeRequestHandler(app);
+
+/**
+ * Instancia de Express expuesta para que el wrapper de AWS Lambda
+ * (`server/ssr/handler.mjs`, vía `@codegenie/serverless-express`) pueda
+ * envolverla sin duplicar el bootstrap del motor SSR de Angular.
+ */
+export { app };
