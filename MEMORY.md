@@ -12,8 +12,8 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 | URL producción | https://babel.letiende.co (aún no desplegada) |
 | URL staging (real) | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (API Gateway HTTP API, stage `staging`) |
 | Rama principal | `main` |
-| Rama de trabajo actual | `main` — sin feature branch activa; próxima tarea aún no iniciada (ver `TODO.md`) |
-| Última sesión | 2026-07-17 — PR #3 (esqueleto Serverless + DynamoDB) fusionado a `main` tras corregir CI (`SERVERLESS_LICENSE_KEY`) |
+| Rama de trabajo actual | `feature/auth-google-firebase` (PR #5, sin fusionar) |
+| Última sesión | 2026-07-17 — Autenticación con Google: `AuthService` (Signals) + `AuthGuard`, SDK `firebase` puro |
 
 ---
 
@@ -21,8 +21,9 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 
 - [x] Scaffold del proyecto Angular 22 + SSR + Tailwind CSS 4 (PR #2, rama `feature/scaffold-angular-ssr`) — ver detalle en §9
 - [x] Esqueleto de Serverless Framework + tablas DynamoDB, desplegado a `staging` (PR #3, rama `feature/serverless-skeleton-dynamodb`) — ver detalle en §5 y §9
-- [ ] Autenticación con Google (Firebase Auth) + resolución de rol (`TODO.md` Tarea 1 — SDK cliente/`AuthService`/`AuthGuard` primero, `RoleGuard` y verificación de rol en backend después)
-- [ ] Modelos de datos compartidos + cliente DynamoDB base (`TODO.md` Tarea 2)
+- [x] Autenticación con Google (Firebase Auth) — SDK cliente, `AuthService` (Signals), `AuthGuard` (PR #5, rama `feature/auth-google-firebase`) — ver detalle en §9. Pendiente: `RoleGuard`, `LoginComponent` y verificación de rol en backend.
+- [ ] `LoginComponent` — pantalla de ingreso con Google + `NoAuthGuard` (`TODO.md` Tarea 2)
+- [ ] Modelos de datos compartidos + cliente DynamoDB base (`TODO.md` Tarea 1)
 - [ ] Flujo de catalogación (escaneo → metadatos → PVP → estante)
 - [ ] Registro de venta
 - [ ] Catálogo público de consulta (SSR)
@@ -105,7 +106,9 @@ El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`
 
 **Ya instaladas** (esqueleto Serverless, Tarea completada 2026-07-17): `serverless` 4.39.0 (devDependency, versión exacta), `@codegenie/serverless-express` (wrapper Lambda del SSR), `@types/aws-lambda` (dev).
 
-**Pendientes** (previstas en `tech-specs.md` §2, aún no instaladas): `firebase` (SDK cliente — próxima tarea), `firebase-admin` (backend), `xlsx`, `@zxing/browser`, `cheerio`, `@aws-sdk/client-dynamodb`/`@aws-sdk/lib-dynamodb` (próxima tarea de modelos + cliente DynamoDB).
+**Ya instaladas** (autenticación con Google, Tarea completada 2026-07-17): `firebase` v12.x (SDK cliente, sin `@angular/fire` — ver §7 y §9).
+
+**Pendientes** (previstas en `tech-specs.md` §2, aún no instaladas): `firebase-admin` (backend, verificación de rol), `xlsx`, `@zxing/browser`, `cheerio`, `@aws-sdk/client-dynamodb`/`@aws-sdk/lib-dynamodb` (próxima tarea de modelos + cliente DynamoDB).
 
 ---
 
@@ -146,6 +149,8 @@ Aún no hay código. Los patrones previstos (a validar en la primera implementac
 
 | **(Verificado 2026-07-17)** Angular 22 con SSR protege contra SSRF exigiendo una lista explícita de hosts permitidos (`AngularNodeAppEngine`); sin ella, la Lambda `ssr` responde 400 a cualquier host, incluido el dominio real que genera API Gateway | Configurar `NG_ALLOWED_HOSTS` con el host real (`${HttpApi}.execute-api.${AWS::Region}.amazonaws.com` en `serverless.yml`) — no es necesario tener ya un dominio personalizado para que funcione. |
 | **(Verificado 2026-07-17)** El build SSR de Angular (`dist/babel-letiende/server/server.mjs`) exporta una instancia de Express pensada para `app.listen()`, no un handler Lambda | Envolver esa misma instancia con `@codegenie/serverless-express` (`server/ssr/handler.mjs`) en vez de reimplementar el bootstrap SSR; `src/server.ts` solo necesita `export { app }` adicional. |
+| **(Verificado 2026-07-17)** El SDK cliente `firebase` (`initializeApp`/`getAuth`) depende de almacenamiento del navegador (indexedDB/localStorage); inicializarlo sin guardas durante el renderizado SSR de la Lambda `ssr` rompería el prerenderizado | Inicializar Firebase solo si `isPlatformBrowser(inject(PLATFORM_ID))`; en servidor, el Signal de usuario permanece `null` sin error. Confirmado: el build SSR sigue prerenderizando correctamente con `AuthService` en el árbol de providers. |
+| **(Verificado 2026-07-17)** `angular.json` con el builder `@angular/build:application` (Angular 22) sigue soportando `fileReplacements` por configuración, igual que en versiones anteriores de Angular | No cambió el mecanismo — se puede seguir usando `fileReplacements` en `architect.build.configurations.<config>` para alternar `environment.ts`/`environment.development.ts`. |
 
 Los primeros tres hallazgos de esta tabla siguen siendo anticipados por analogía con Comandante (no verificados en código real de Babel); los marcados "(Verificado 2026-07-17)" ya se confirmaron en código/infraestructura real de Babel.
 
@@ -177,4 +182,6 @@ Adicionalmente, el usuario pidió compartir el mismo proyecto Firebase Authentic
 
 **Qué se hizo el 2026-07-17 (esqueleto de Serverless Framework + DynamoDB):** se creó `serverless.yml` con dos funciones Lambda separadas por rol IAM de mínimo privilegio (`api` con CRUD acotado a las 5 tablas, `ssr` sin ningún permiso de DynamoDB), las 5 tablas DynamoDB de `tech-specs.md` §5.1 con capacidad aprovisionada 25/25, el handler placeholder `GET /api/health`, el wrapper `server/ssr/handler.mjs` (`@codegenie/serverless-express`) sobre el build SSR de Angular, y `.github/workflows/deploy.yml`. El usuario autorizó explícitamente un **deploy real** a AWS stage `staging` (cuenta `696912647258`) — se ejecutó y se verificó de forma independiente (recursos reales confirmados por AWS CLI, ver §5). Cambios en la rama `feature/serverless-skeleton-dynamodb` (PR #3). El primer run de CI falló (`serverless package` sin autenticar); el usuario configuró los GitHub Secrets (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SERVERLESS_LICENSE_KEY`) y se corrigió el workflow para usar `SERVERLESS_LICENSE_KEY` (no `SERVERLESS_ACCESS_KEY` — son dos rutas de auth distintas de Serverless Framework v4, confirmado con la documentación oficial, ver §5). CI en verde tras el fix; **PR #3 fusionado a `main`** y rama remota/local eliminadas.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (autenticación con Google: SDK cliente, `AuthService`, `AuthGuard`) y Tarea 2 (modelos de datos compartidos + cliente DynamoDB base). Ambas son independientes entre sí y pueden avanzar en paralelo.
+**Qué se hizo el 2026-07-17 (autenticación con Google):** se implementó `AuthService` (Signals, SDK `firebase` puro sin `@angular/fire`) y `AuthGuard` (`CanActivateFn`). La config pública de Firebase (proyecto compartido `comandante-letiende`) se copió del repo hermano Comandante (`/Users/ocastelblanco/Documents/LeTiende/letiende.co/comandante/src/environments/environment.ts`), confirmando que es la misma para ambos ambientes de Babel por ahora (no hay proyecto Firebase de producción distinto todavía). Firebase se inicializa solo en el navegador (`isPlatformBrowser`) para no romper el SSR. Cubierto con 6 tests unitarios (Vitest, mocks del SDK) — sin verificación manual de UI porque el alcance excluye explícitamente `LoginComponent`. Cambios en la rama `feature/auth-google-firebase` (PR #5, sin fusionar).
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (modelos de datos compartidos + cliente DynamoDB base) y Tarea 2 (`LoginComponent` + `NoAuthGuard`, para completar de punta a punta el flujo de login ya que `AuthGuard` redirige a una ruta `/login` que todavía no existe). Ambas son independientes entre sí y pueden avanzar en paralelo.
