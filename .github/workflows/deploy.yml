@@ -48,6 +48,57 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+  desplegar-staging:
+    name: Deploy a staging
+    if: github.event_name == 'pull_request'
+    needs: build-y-test
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://oyzau0c910.execute-api.us-east-1.amazonaws.com
+    concurrency:
+      # Un solo despliegue de staging a la vez: si hay pushes seguidos al
+      # mismo PR (o PRs distintos abiertos en paralelo), solo el más
+      # reciente termina desplegado — evita que dos runs se pisen entre sí
+      # sobre el mismo stack compartido de staging.
+      group: desplegar-staging
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias (reproducible, package-lock.json)
+        run: npm ci
+
+      - name: Build de producción del frontend Angular (SSR)
+        run: npm run build -- --configuration=production
+
+      - name: Build de TypeScript de la Lambda "api"
+        run: npm run build:api
+
+      - name: Desplegar con Serverless Framework (stage staging)
+        run: npx serverless deploy --stage staging
+        env:
+          SERVERLESS_LICENSE_KEY: ${{ secrets.SERVERLESS_LICENSE_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Comentar la URL de staging en el PR
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body \
+            "🚀 Desplegado a **staging**: https://oyzau0c910.execute-api.us-east-1.amazonaws.com"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   desplegar-produccion:
     name: Deploy a producción
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

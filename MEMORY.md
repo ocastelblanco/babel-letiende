@@ -128,6 +128,8 @@ El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`
 
 **GitHub Actions Secrets configurados por el usuario (2026-07-17):** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SERVERLESS_LICENSE_KEY` (ruta de licencia de Serverless Framework v4, sin depender del dashboard — confirmado con la doc oficial que la variable de entorno exacta es `SERVERLESS_LICENSE_KEY`, no `SERVERLESS_ACCESS_KEY`; el workflow se corrigió para usarla).
 
+**Deploy automático a `staging` en cada PR (2026-07-17):** `.github/workflows/deploy.yml` tiene un job `desplegar-staging` que corre en todo evento `pull_request` (después de `build-y-test`), despliega con `npx serverless deploy --stage staging` usando los mismos secrets, y comenta la URL en el PR. Con esto, cualquier sesión de Claude Code (incluida la app de Android) puede validar cambios en `staging` solo con `commit → push → PR`, sin necesidad de credenciales de AWS locales ni de un deploy manual desde esta Mac. Motivo: hasta este punto, todos los deploys de `staging` se habían hecho a mano (`npm run deploy:staging`) con las credenciales AWS configuradas únicamente en esta máquina.
+
 Pendiente (sin configurar en esta sesión): dominio personalizado `babel.letiende.co` en Route53/API Gateway/ACM (fuera de alcance de la tarea de esqueleto — ver roadmap técnico), y los secrets de negocio de producción (`FIREBASE_SERVICE_ACCOUNT_BABEL`, `GOOGLE_CUSTOM_SEARCH_*`, `API_LETIENDE_BASE_URL`).
 
 ---
