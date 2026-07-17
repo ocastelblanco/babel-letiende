@@ -2,33 +2,11 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Prioridad de selección aplicada:** no hay gaps de seguridad activos en producción. La tarea de esqueleto de Serverless Framework + DynamoDB se completó y desplegó realmente a `staging` (ver `MEMORY.md` §2, §5 y §9, PR #3). Se reemplazó por la siguiente pieza fundacional del roadmap **Alta** (`PRD.md` §6), independiente de la autenticación: los modelos de datos compartidos y el cliente DynamoDB base, ya que tanto el catálogo público como la catalogación y las ventas los necesitan antes de poder implementarse.
+**Prioridad de selección aplicada:** no hay gaps de seguridad activos en producción. La tarea de autenticación con Google (SDK cliente, `AuthService`, `AuthGuard`) se completó (ver `MEMORY.md` §2 y §9, PR #5). Se reemplazó por la siguiente pieza fundacional del roadmap **Alta** (`PRD.md` §6), independiente de los modelos/DynamoDB: la pantalla visual de login, ya que sin ella el `AuthGuard` recién implementado redirige a una ruta (`/login`) que todavía no existe.
 
 ---
 
-## Tarea 1 — [FEATURE]: Autenticación con Google (Firebase Auth) — SDK cliente, `AuthService` y `AuthGuard`
-
-**Origen:** `PRD.md` §5.1 y §6 (roadmap, prioridad Alta) — el login con Google es prerrequisito de todas las rutas protegidas (`tech-specs.md` §4.2: `/catalogar`, `/venta`, `/libros`, `/admin/*`). `tech-specs.md` §8 y §8.1 definen el flujo exacto y el modelo de identidad compartida con Comandante (mismo proyecto Firebase `comandante-letiende`, autorización independiente por app — ver `MEMORY.md` ADR-007).
-
-**Archivos:** `src/environments/environment.ts`, `src/environments/environment.development.ts` (config pública del SDK cliente de Firebase), `angular.json` (registrar `fileReplacements` de environments si `ng new` no los generó), `src/app/core/auth/auth.service.ts`, `src/app/core/auth/auth.guard.ts`.
-
-**Qué hacer:**
-1. Instalar el SDK cliente `firebase` (paquete npm) y crear `src/environments/environment.ts`/`environment.development.ts` con la config pública (`apiKey`, `authDomain`, `projectId: 'comandante-letiende'`, etc.) — ver `tech-specs.md` §8.1. Esta config es pública y sí puede vivir en el repo (no es secreta), a diferencia de la cuenta de servicio de backend.
-2. Implementar `src/app/core/auth/auth.service.ts` con Signals: `usuario$`/`usuario` (Signal del usuario autenticado o `null`), método `iniciarSesionConGoogle()` (usando `signInWithPopup` con `GoogleAuthProvider`, restringido solo a Google — ver `tech-specs.md` §8.1 "blast radius"), y `cerrarSesion()` (invoca `signOut(auth)` y limpia el estado reactivo — ver `CLAUDE.md` A07).
-3. Implementar `src/app/core/auth/auth.guard.ts` (`AuthGuard` funcional, `CanActivateFn`) que redirige a `/login` si no hay sesión activa. Nota explícita (`tech-specs.md` §8, `CLAUDE.md` A01): este guard es solo experiencia de usuario — la autorización real se resuelve en la Lambda `api` (ya desplegada en `staging`, ver `MEMORY.md` §5), nunca confiar en el rol resuelto en el cliente para decisiones de seguridad.
-4. Registrar el `AuthService`/Firebase app en `app.config.ts` (providers).
-5. No implementar todavía `RoleGuard` ni el componente visual `LoginComponent` (quedan para una tarea posterior de UI) — el alcance de esta tarea es la plomería de autenticación, no la pantalla de login.
-
-**Definition of done:**
-- [ ] `npm run build` compila sin errores con el SDK de Firebase instalado
-- [ ] `AuthService.iniciarSesionConGoogle()` abre el popup de Google y puebla el Signal de usuario tras un login exitoso (verificar manualmente en `npm run start`)
-- [ ] `AuthService.cerrarSesion()` limpia el Signal de usuario
-- [ ] `AuthGuard` redirige a `/login` cuando no hay sesión (probar con una ruta protegida de prueba)
-- [ ] Ningún secreto de backend (cuenta de servicio, `FIREBASE_SERVICE_ACCOUNT_BABEL`) queda en el código de cliente — solo la config pública del SDK
-
----
-
-## Tarea 2 — [FEATURE]: Modelos de datos compartidos + cliente DynamoDB base
+## Tarea 1 — [FEATURE]: Modelos de datos compartidos + cliente DynamoDB base
 
 **Origen:** `PRD.md` §6 (roadmap, prioridad Alta) — el catálogo público, la catalogación y el registro de venta necesitan los mismos modelos e igual acceso a datos; implementarlos una sola vez evita divergencia entre features. `tech-specs.md` §4.3 define las interfaces exactas y §5.1 las 5 tablas ya desplegadas (`TODO.md` anterior, `MEMORY.md` §5).
 
@@ -46,3 +24,26 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 - [ ] `npm run build:api` compila sin errores con `server/api/services/dynamodb.ts`
 - [ ] Las funciones genéricas del cliente DynamoDB funcionan contra una tabla real de `staging` (probar `guardar`/`obtenerPorClave` manualmente, p. ej. con un script puntual o `aws dynamodb get-item`, y limpiar el registro de prueba después)
 - [ ] Ningún nombre de tabla está hardcodeado — todos vienen de variables de entorno
+
+---
+
+## Tarea 2 — [FEATURE]: `LoginComponent` — pantalla de ingreso con Google
+
+**Origen:** `PRD.md` §5.1 (roadmap, prioridad Alta) — `tech-specs.md` §4.2 define la ruta `/login` con guard `NoAuthGuard`. El `AuthService`/`AuthGuard` ya existen (PR #5), pero no hay ninguna pantalla ni ruta que los use todavía: hoy `AuthGuard` redirige a `/login` y esa ruta no existe, dejando el flujo de login incompleto de punta a punta.
+
+**Archivos:** `src/app/core/auth/no-auth.guard.ts` (nuevo, `NoAuthGuard`), `src/app/features/login/login.component.ts` (+ `.html`/`.css` si excede el límite de componente inline de `CLAUDE.md` §4), `src/app/app.routes.ts` (registrar `/login` y aplicar `AuthGuard` a al menos una ruta de prueba para verificar el flujo de punta a punta).
+
+**Qué hacer:**
+1. Implementar `src/app/core/auth/no-auth.guard.ts` (`NoAuthGuard` funcional, `CanActivateFn`): si ya hay sesión activa (`AuthService.usuario()`), redirige fuera de `/login` (p. ej. a `/`); si no hay sesión, permite el acceso. Es el guard inverso de `AuthGuard` (ver `tech-specs.md` §4.2).
+2. Implementar `LoginComponent` (standalone, `features/login/`): botón "Ingresar con Google" que invoca `AuthService.iniciarSesionConGoogle()`; mientras la promesa está pendiente, mostrar un estado de carga simple; si falla (p. ej. el usuario cierra el popup), mostrar un mensaje de error legible, sin exponer detalles internos del error (`CLAUDE.md` A05). Tras un login exitoso, navegar a `/` (o a la ruta que corresponda — por ahora `/`, ya que no hay resolución de rol en el cliente todavía).
+3. Registrar la ruta `/login` → `LoginComponent` con `canActivate: [NoAuthGuard]` en `app.routes.ts`.
+4. Registrar temporalmente `AuthGuard` en al menos una ruta de prueba (o una ruta placeholder ya prevista del roadmap, si prefieres adelantar el andamiaje de `tech-specs.md` §4.2 con un componente vacío) para poder verificar el flujo completo: sin sesión → `AuthGuard` redirige a `/login` → login exitoso → navega fuera de `/login`.
+5. Estilos con Tailwind (ya configurado), siguiendo la paleta de marca de `CLAUDE.md` §4 (`primary #230C00`, `secondary #E8630A`, etc.) de forma básica — no es necesario un `DESIGN.md` completo todavía, solo que la pantalla no se vea sin estilo alguno.
+
+**Definition of done:**
+- [ ] `npm run build` compila sin errores
+- [ ] `npm run start` sirve `/login` y el botón "Ingresar con Google" invoca `iniciarSesionConGoogle()` (verificar manualmente con una cuenta de Google real, ya que esto requiere el popup real del navegador)
+- [ ] Tras un login exitoso, la app navega fuera de `/login`
+- [ ] `NoAuthGuard` redirige fuera de `/login` si ya hay sesión activa
+- [ ] La ruta de prueba protegida con `AuthGuard` redirige correctamente a `/login` sin sesión
+- [ ] Ningún detalle interno de error (stack trace, mensaje crudo del SDK de Firebase) se muestra al usuario final
