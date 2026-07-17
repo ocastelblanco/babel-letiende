@@ -14,7 +14,10 @@
   --color-secondary: #e8630a;
   --color-tertiary: #00b7a3;
   --color-neutral: #ffe7b3;
-  --color-surface: #f7f5f2;
+  /* #fff8f1 medido por pixel en https://comandante.letiende.co (fondo real
+     de pantalla) — más claro que el #f7f5f2 documentado en el DESIGN.md de
+     Comandante; se prioriza el valor real desplegado. */
+  --color-surface: #fff8f1;
   --color-danger: #c0392b;
   --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
