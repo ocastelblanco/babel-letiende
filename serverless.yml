@@ -63,11 +63,8 @@ functions:
     handler: dist-server/api/handlers/usuarios-me.handler
     role: !GetAtt UsuariosMeLambdaRole.Arn
     description: >-
-      GET /api/usuarios/me — verifica el ID Token de Firebase (proyecto
-      compartido con Comandante) y resuelve el rol del usuario contra
-      babel-usuarios (CLAUDE.md A01/A07, tech-specs.md §8.1). Función propia
-      (no comparte código con "api") para mantener su rol IAM acotado a
-      solo-lectura sobre una única tabla.
+      GET /api/usuarios/me — verifica el ID Token de Firebase y resuelve
+      el rol contra babel-usuarios (CLAUDE.md A01/A07, tech-specs.md §8.1).
     environment:
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
