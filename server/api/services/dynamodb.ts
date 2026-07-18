@@ -21,7 +21,7 @@ const documento = DynamoDBDocumentClient.from(clienteBase);
 /** Clave primaria (y, si aplica, de ordenamiento) de un ítem de DynamoDB. */
 export type ClaveDynamoDB = Record<string, string>;
 
-export async function obtenerPorClave<T extends Record<string, unknown>>(
+export async function obtenerPorClave<T extends object>(
   nombreTabla: string,
   clave: ClaveDynamoDB,
 ): Promise<T | undefined> {
@@ -31,7 +31,7 @@ export async function obtenerPorClave<T extends Record<string, unknown>>(
   return resultado.Item as T | undefined;
 }
 
-export async function guardar<T extends Record<string, unknown>>(
+export async function guardar<T extends object>(
   nombreTabla: string,
   item: T,
 ): Promise<void> {
@@ -43,7 +43,7 @@ export async function eliminar(nombreTabla: string, clave: ClaveDynamoDB): Promi
 }
 
 /** Consulta un índice secundario global por igualdad exacta de su clave de partición. */
-export async function consultarPorIndice<T extends Record<string, unknown>>(
+export async function consultarPorIndice<T extends object>(
   nombreTabla: string,
   nombreIndice: string,
   nombreAtributoClave: string,

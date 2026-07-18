@@ -12,6 +12,16 @@ name: Operaciones sobre staging
 # Alcance actual: usuarios de prueba en `babel-usuarios-staging` (lo que
 # necesita la verificación del ID Token, TODO.md Tarea 1). Agregar aquí
 # nuevas operaciones cuando otra tarea exija sembrar/limpiar otras tablas.
+#
+# `probar-usuarios-me` cierra el otro lado de esa misma tarea: emite un ID
+# Token real de Firebase (custom token de firebase-admin, canjeado por la
+# REST API de Identity Toolkit) y llama GET /api/usuarios/me desplegado en
+# staging, para no depender de un login interactivo de Google. Esto crea
+# (y borra al final del mismo run) un usuario real y desechable en el
+# proyecto Firebase compartido con Comandante — ver MEMORY.md §9. Usar
+# siempre el mismo email que `sembrar-usuario-prueba`/`eliminar-usuario-prueba`
+# para probar los casos 403 (correo sin fila en babel-usuarios) y 200
+# (con fila) de punta a punta.
 
 on:
   workflow_dispatch:
@@ -24,8 +34,10 @@ on:
           - sembrar-usuario-prueba
           - consultar-usuario-prueba
           - eliminar-usuario-prueba
+          - probar-usuarios-me
+          - ver-logs-usuarios-me
       email:
-        description: 'Email del usuario de prueba (clave de partición de babel-usuarios)'
+        description: 'Email del usuario de prueba (no aplica a ver-logs-usuarios-me, poner cualquier valor)'
         required: true
         type: string
       rol:
@@ -59,8 +71,27 @@ jobs:
       EMAIL: ${{ inputs.email }}
       ROL: ${{ inputs.rol }}
       NOMBRE: ${{ inputs.nombre }}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BABEL }}
+      URL_STAGING: https://oyzau0c910.execute-api.us-east-1.amazonaws.com
     steps:
+      - name: Checkout del código
+        # Solo lo necesita probar-usuarios-me (usa firebase-admin del
+        # package.json del repo) — inofensivo y rápido para las demás.
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        if: inputs.operacion == 'probar-usuarios-me'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias (reproducible, package-lock.json)
+        if: inputs.operacion == 'probar-usuarios-me'
+        run: npm ci
+
       - name: Validar email
+        if: inputs.operacion != 'ver-logs-usuarios-me'
         run: |
           if ! printf '%s' "$EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
             echo "::error::El email '$EMAIL' no tiene un formato válido."
@@ -68,6 +99,7 @@ jobs:
           fi
 
       - name: Ejecutar operación
+        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me'
         run: |
           case "$OPERACION" in
             sembrar-usuario-prueba)
@@ -110,6 +142,28 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Emitir un ID Token real (firebase-admin) y probar GET /api/usuarios/me
+        if: inputs.operacion == 'probar-usuarios-me'
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_BABEL" ]; then
+            echo "::error::Falta el secret FIREBASE_SERVICE_ACCOUNT_BABEL."
+            exit 1
+          fi
+          node server/scripts/probar-usuarios-me.mjs
+        env:
+          EMAIL: ${{ inputs.email }}
+
+      - name: Ver logs recientes de la Lambda usuariosMe
+        if: inputs.operacion == 'ver-logs-usuarios-me'
+        run: |
+          grupo="/aws/lambda/babel-letiende-staging-usuariosMe"
+          desde_ms=$(( ($(date +%s) - 900) * 1000 ))
+          aws logs filter-log-events \
+            --log-group-name "$grupo" \
+            --start-time "$desde_ms" \
+            --output text \
+            --query 'events[*].message'
 
       - name: Resumen
         run: |
