@@ -91,6 +91,21 @@ jobs:
           SERVERLESS_LICENSE_KEY: ${{ secrets.SERVERLESS_LICENSE_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Secretos de negocio que serverless.yml inyecta como variables de
+          # entorno de la Lambda "api" (con valor por defecto '' si el secret
+          # aún no existe en GitHub, así que su ausencia no rompe el deploy).
+          FIREBASE_SERVICE_ACCOUNT_BABEL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BABEL }}
+          GOOGLE_CUSTOM_SEARCH_API_KEY: ${{ secrets.GOOGLE_CUSTOM_SEARCH_API_KEY }}
+          GOOGLE_CUSTOM_SEARCH_CX: ${{ secrets.GOOGLE_CUSTOM_SEARCH_CX }}
+          API_LETIENDE_BASE_URL: ${{ secrets.API_LETIENDE_BASE_URL }}
+
+      - name: Smoke test contra staging recién desplegado
+        run: |
+          url="https://oyzau0c910.execute-api.us-east-1.amazonaws.com/api/health"
+          codigo=$(curl -sS -o /tmp/salud.json -w '%{http_code}' "$url")
+          echo "GET $url → HTTP $codigo"
+          cat /tmp/salud.json
+          test "$codigo" = "200"
 
       - name: Comentar la URL de staging en el PR
         run: |

@@ -1,0 +1,122 @@
+name: Operaciones sobre staging
+
+# Job manual (workflow_dispatch) para sembrar, consultar y limpiar datos de
+# prueba en las tablas de staging usando los secrets de AWS ya configurados.
+# Motivo: las credenciales AWS reales solo existen en GitHub Actions (y en la
+# Mac del usuario), así que cualquier sesión de desarrollo — Claude Code CLI,
+# Web, Mobile o Desktop — puede cumplir los "Definition of Done" que exigen
+# datos reales en staging disparando este workflow (UI de GitHub → Actions →
+# "Operaciones sobre staging" → Run workflow, o `gh workflow run`), sin
+# credenciales locales. Ver MEMORY.md §5.
+#
+# Alcance actual: usuarios de prueba en `babel-usuarios-staging` (lo que
+# necesita la verificación del ID Token, TODO.md Tarea 1). Agregar aquí
+# nuevas operaciones cuando otra tarea exija sembrar/limpiar otras tablas.
+
+on:
+  workflow_dispatch:
+    inputs:
+      operacion:
+        description: 'Operación a ejecutar'
+        required: true
+        type: choice
+        options:
+          - sembrar-usuario-prueba
+          - consultar-usuario-prueba
+          - eliminar-usuario-prueba
+      email:
+        description: 'Email del usuario de prueba (clave de partición de babel-usuarios)'
+        required: true
+        type: string
+      rol:
+        description: 'Rol del usuario (solo aplica a sembrar-usuario-prueba)'
+        required: false
+        type: choice
+        options:
+          - vendedor
+          - administrador
+        default: vendedor
+      nombre:
+        description: 'Nombre del usuario (solo aplica a sembrar-usuario-prueba)'
+        required: false
+        type: string
+        default: Usuario de prueba
+
+jobs:
+  operar-staging:
+    name: ${{ inputs.operacion }} (${{ inputs.email }})
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+      TABLA_USUARIOS: babel-usuarios-staging
+      # Los inputs se pasan por variables de entorno (nunca interpolados
+      # directamente en el script) para evitar inyección de comandos.
+      OPERACION: ${{ inputs.operacion }}
+      EMAIL: ${{ inputs.email }}
+      ROL: ${{ inputs.rol }}
+      NOMBRE: ${{ inputs.nombre }}
+    steps:
+      - name: Validar email
+        run: |
+          if ! printf '%s' "$EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
+            echo "::error::El email '$EMAIL' no tiene un formato válido."
+            exit 1
+          fi
+
+      - name: Ejecutar operación
+        run: |
+          case "$OPERACION" in
+            sembrar-usuario-prueba)
+              item=$(jq -n \
+                --arg email "$EMAIL" \
+                --arg nombre "$NOMBRE" \
+                --arg rol "$ROL" \
+                --arg creadoEn "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+                '{
+                  email:    { S: $email },
+                  nombre:   { S: $nombre },
+                  fotoUrl:  { NULL: true },
+                  rol:      { S: $rol },
+                  creadoEn: { S: $creadoEn }
+                }')
+              aws dynamodb put-item --table-name "$TABLA_USUARIOS" --item "$item"
+              echo "✅ Usuario de prueba sembrado en $TABLA_USUARIOS: $EMAIL (rol: $ROL)"
+              ;;
+            consultar-usuario-prueba)
+              clave=$(jq -n --arg email "$EMAIL" '{ email: { S: $email } }')
+              aws dynamodb get-item --table-name "$TABLA_USUARIOS" --key "$clave" --output json | tee /tmp/resultado.json
+              if jq -e '.Item' /tmp/resultado.json > /dev/null; then
+                echo "✅ El usuario $EMAIL existe en $TABLA_USUARIOS (ver Item arriba)"
+              else
+                echo "ℹ️ El usuario $EMAIL NO existe en $TABLA_USUARIOS"
+              fi
+              ;;
+            eliminar-usuario-prueba)
+              clave=$(jq -n --arg email "$EMAIL" '{ email: { S: $email } }')
+              aws dynamodb delete-item --table-name "$TABLA_USUARIOS" --key "$clave" \
+                --return-values ALL_OLD --output json | tee /tmp/resultado.json
+              if jq -e '.Attributes' /tmp/resultado.json > /dev/null; then
+                echo "🧹 Usuario de prueba eliminado de $TABLA_USUARIOS: $EMAIL"
+              else
+                echo "ℹ️ No había nada que eliminar: $EMAIL no existía en $TABLA_USUARIOS"
+              fi
+              ;;
+            *)
+              echo "::error::Operación desconocida: $OPERACION"
+              exit 1
+              ;;
+          esac
+
+      - name: Resumen
+        run: |
+          {
+            echo "## Operaciones sobre staging"
+            echo ""
+            echo "- **Operación:** $OPERACION"
+            echo "- **Tabla:** $TABLA_USUARIOS"
+            echo "- **Email:** $EMAIL"
+          } >> "$GITHUB_STEP_SUMMARY"
