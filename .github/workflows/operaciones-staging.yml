@@ -35,8 +35,9 @@ on:
           - consultar-usuario-prueba
           - eliminar-usuario-prueba
           - probar-usuarios-me
+          - ver-logs-usuarios-me
       email:
-        description: 'Email del usuario de prueba (clave de partición de babel-usuarios)'
+        description: 'Email del usuario de prueba (no aplica a ver-logs-usuarios-me, poner cualquier valor)'
         required: true
         type: string
       rol:
@@ -90,6 +91,7 @@ jobs:
         run: npm ci
 
       - name: Validar email
+        if: inputs.operacion != 'ver-logs-usuarios-me'
         run: |
           if ! printf '%s' "$EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
             echo "::error::El email '$EMAIL' no tiene un formato válido."
@@ -151,6 +153,17 @@ jobs:
           node server/scripts/probar-usuarios-me.mjs
         env:
           EMAIL: ${{ inputs.email }}
+
+      - name: Ver logs recientes de la Lambda usuariosMe
+        if: inputs.operacion == 'ver-logs-usuarios-me'
+        run: |
+          grupo="/aws/lambda/babel-letiende-staging-usuariosMe"
+          desde_ms=$(( ($(date +%s) - 900) * 1000 ))
+          aws logs filter-log-events \
+            --log-group-name "$grupo" \
+            --start-time "$desde_ms" \
+            --output text \
+            --query 'events[*].message'
 
       - name: Resumen
         run: |
