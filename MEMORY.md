@@ -12,8 +12,8 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 | URL producción | https://babel.letiende.co (aún no desplegada) |
 | URL staging (real) | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (API Gateway HTTP API, stage `staging`) |
 | Rama principal | `main` |
-| Rama de trabajo actual | `main` — sin feature branch activa; próxima tarea aún no iniciada (ver `TODO.md`) |
-| Última sesión | 2026-07-17 — PRs #7–#10 fusionados: fix de dominio Firebase, deploy automático a `staging` en cada PR, identidad visual igualada a Comandante (sin Ionic), íconos PWA + `manifest.webmanifest` |
+| Rama de trabajo actual | `feature/modelos-datos-dynamodb-client` — Tarea 1 de `TODO.md` implementada, pendiente de push/PR (ver §9) |
+| Última sesión | 2026-07-17/18 — PRs #7–#10 fusionados (fix de dominio Firebase, deploy automático a `staging`, identidad visual, íconos PWA); sesión siguiente: modelos de datos + cliente DynamoDB genérico (Tarea 1) |
 
 ---
 
@@ -25,8 +25,9 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 - [x] `LoginComponent` + `NoAuthGuard` — probado con deploy real a `staging`, identidad visual igualada a Comandante por medición de píxeles (sin Ionic, PR #6/#9 fusionados) — ver detalle en §7 y §9. Pendiente: `RoleGuard` y verificación de rol en backend.
 - [x] Deploy automático a `staging` en cada PR (CI, PR #8 fusionado) — ver §5 y §9
 - [x] Íconos PWA + `manifest.webmanifest` (PR #10 fusionado) — ver §7 y §9. Pendiente sin urgencia: fuente Angellya como `@font-face`.
-- [ ] Verificación real del ID Token de Firebase en el backend + resolución de rol (`TODO.md` Tarea 2)
-- [ ] Modelos de datos compartidos + cliente DynamoDB base (`TODO.md` Tarea 1)
+- [x] Modelos de datos compartidos + cliente DynamoDB base (rama `feature/modelos-datos-dynamodb-client`, PR pendiente de crear) — ver detalle en §9. Pendiente: verificación en vivo contra `staging` (ver aviso en `TODO.md`).
+- [ ] Verificación real del ID Token de Firebase en el backend + resolución de rol (`TODO.md` Tarea 1)
+- [ ] Endpoint público `GET /api/libros` — catálogo de consulta (`TODO.md` Tarea 2)
 - [ ] Flujo de catalogación (escaneo → metadatos → PVP → estante)
 - [ ] Registro de venta
 - [ ] Catálogo público de consulta (SSR)
@@ -111,7 +112,9 @@ El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`
 
 **Ya instaladas** (autenticación con Google, Tarea completada 2026-07-17): `firebase` v12.x (SDK cliente, sin `@angular/fire` — ver §7 y §9).
 
-**Pendientes** (previstas en `tech-specs.md` §2, aún no instaladas): `firebase-admin` (backend, verificación de rol), `xlsx`, `@zxing/browser`, `cheerio`, `@aws-sdk/client-dynamodb`/`@aws-sdk/lib-dynamodb` (próxima tarea de modelos + cliente DynamoDB).
+**Ya instaladas** (modelos + cliente DynamoDB, Tarea completada 2026-07-18): `@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb` (dependencias de runtime del backend, ver §9 — instaladas con `--ignore-scripts` por un problema de red del entorno, no de los paquetes en sí, ver §7).
+
+**Pendientes** (previstas en `tech-specs.md` §2, aún no instaladas): `firebase-admin` (backend, verificación de rol — próxima tarea), `xlsx`, `@zxing/browser`, `cheerio`.
 
 ---
 
@@ -138,7 +141,10 @@ Pendiente (sin configurar en esta sesión): dominio personalizado `babel.letiend
 
 ## 6. Patrones de código establecidos
 
-Aún no hay código. Los patrones previstos (a validar en la primera implementación) están documentados en `tech-specs.md` §4.1 (Signals, servicios unidireccionales, componentes Smart/Dumb) y `CLAUDE.md` §4 (convenciones de código e idioma).
+- **Frontend:** Signals para estado reactivo (`AuthService`), Standalone components, guards como `CanActivateFn` — ver `tech-specs.md` §4.1 y `CLAUDE.md` §4.
+- **Modelos de datos:** una interfaz TypeScript por archivo en `src/app/core/models/`, nombre de archivo en kebab-case + sufijo `.model.ts` (ej. `descuento-editorial.model.ts`), tipos de unión de string exportados aparte cuando se reutilizan (`FormaDePago`, `RolUsuario`). Comentario TSDoc solo en el nivel de la interfaz explicando el "por qué" de negocio (referencia a `tech-specs.md`/`MEMORY.md` ADR); comentario en línea por campo únicamente si su fórmula o su rango no es autoevidente (ej. `costo`, `porcentajeDescuentoEditorial`). Sin `any`.
+- **Backend — acceso a datos:** un cliente `DynamoDBDocumentClient` único por proceso (`server/api/services/dynamodb.ts`) con funciones genéricas (`obtenerPorClave`, `guardar`, `eliminar`, `consultarPorIndice`) parametrizadas por nombre de tabla — el nombre real de tabla nunca se hardcodea dentro del servicio, lo resuelve el handler que llama desde `process.env.TABLA_*` (variables ya declaradas en `serverless.yml`). Los handlers de endpoint (`server/api/handlers/*.ts`) no hablan con el SDK de AWS directamente, siempre pasan por este servicio.
+- **Backend — handlers:** un archivo por endpoint/grupo en `server/api/handlers/`, tipados con `APIGatewayProxyHandlerV2`/`APIGatewayProxyResultV2` de `aws-lambda`, TSDoc de una sola frase explicando el alcance (ver `health.ts`).
 
 ---
 
@@ -165,7 +171,11 @@ Aún no hay código. Los patrones previstos (a validar en la primera implementac
 
 | **(Verificado 2026-07-17, benigno — sin acción)** Tras el fix de dominio autorizado, Chrome muestra en consola `Cross-Origin-Opener-Policy policy would block the window.close call` durante `signInWithPopup`, aunque el login se completa correctamente | Warning conocido y confirmado como cosmético (ver issues `firebase-js-sdk` [#8541](https://github.com/firebase/firebase-js-sdk/issues/8541)/[#8295](https://github.com/firebase/firebase-js-sdk/issues/8295)): ocurre porque el dominio de Google/Firebase donde corre el popup tiene su propio COOP restrictivo, y el navegador bloquea la llamada a `window.close()` cross-origin — el SDK completa el login por otra vía igual. Solo pasa en Chrome. Decisión del usuario: no agregar el header `Cross-Origin-Opener-Policy: same-origin-allow-popups` en el servidor SSR por ahora, ya que no hay garantía de que elimine el warning (la política restrictiva vive del lado de Google) y no hay ningún problema funcional que arreglar. |
 
-Los primeros tres hallazgos de esta tabla siguen siendo anticipados por analogía con Comandante (no verificados en código real de Babel); los marcados "(Verificado 2026-07-17)" ya se confirmaron en código/infraestructura real de Babel.
+| **(Verificado 2026-07-18)** `npm install` completo falla en entornos sandbox sin salida a internet general (aunque el registro de npm sí sea alcanzable): el `postinstall` de la devDependency `serverless` intenta descargar un release y aborta todo el `npm install`, incluidos paquetes nuevos que no tienen nada que ver con `serverless` | Instalar con `--ignore-scripts` cuando el fallo sea específicamente el `postInstall.js` de `serverless` (confirmar el error exacto antes de usarlo, no como solución genérica). Verificado: los paquetes nuevos (`@aws-sdk/*`) quedaron correctamente en `package.json`/`package-lock.json` y `node_modules` tras reintentar así. |
+| **(Verificado 2026-07-18)** Angular CLI 22 exige Node `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0`; algunos entornos traen preinstalado un patch inferior (`v22.22.2`) que falla `ng build`/`ng test` con un mensaje claro, pero no es evidente que sea solo un patch de diferencia | Si hay `nvm` disponible, `nvm install 22.22.3` (o la versión mayor/menor equivalente) resuelve sin tocar ninguna configuración del proyecto — no es un problema del repo, es del entorno de ejecución. |
+| **(Confirmado 2026-07-18)** Las credenciales AWS (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`) presentes como variables de entorno en un entorno de ejecución en la nube (a diferencia de la Mac del usuario o del runner de GitHub Actions) no necesariamente son válidas contra la cuenta real `696912647258` — un intento de `guardar()`/`obtenerPorClave()` real contra `babel-estantes-staging` devolvió `UnrecognizedClientException` | No asumir que cualquier sesión tiene acceso real a AWS solo porque las variables de entorno existen. La verificación en vivo contra `staging` sigue dependiendo de GitHub Actions (que sí tiene los secrets reales) o de una sesión con credenciales confirmadas — y solo se ejerce genuinamente cuando existe al menos un handler que invoque el código en cuestión (ver `TODO.md`, aviso de prioridad). |
+
+Los primeros tres hallazgos de esta tabla siguen siendo anticipados por analogía con Comandante (no verificados en código real de Babel); los marcados "(Verificado 2026-07-17)" o "(Verificado/Confirmado 2026-07-18)" ya se confirmaron en código/infraestructura real de Babel (o en el entorno de ejecución, en el caso de los tres últimos).
 
 ---
 
@@ -213,4 +223,6 @@ Adicionalmente, el usuario pidió compartir el mismo proyecto Firebase Authentic
 
 **Qué se hizo el 2026-07-17 (íconos PWA + `manifest.webmanifest`, PR #10 fusionado):** ver detalle arriba — usó el set ya generado en `favicon_io/` en vez de regenerar desde el SVG. Verificado con auto-deploy real a `staging`.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (modelos de datos compartidos + cliente DynamoDB base) y Tarea 2 (verificación real del ID Token de Firebase en el backend + resolución de rol vía `GET /api/usuarios/me`, prerrequisito de seguridad para cualquier `RoleGuard`/ruta de admin futura). Ambas son independientes entre sí y pueden avanzar en paralelo. Pendiente sin urgencia: integrar la fuente Angellya (ya localizada, ver §7) como `@font-face`.
+**Qué se hizo el 2026-07-18 (Tarea 1 de `TODO.md` — modelos de datos + cliente DynamoDB):** se crearon las 5 interfaces de `src/app/core/models/` (`Libro`, `Venta`, `Estante`, `DescuentoEditorial`, `Usuario`, exactamente como `tech-specs.md` §4.3), se instalaron `@aws-sdk/client-dynamodb`/`@aws-sdk/lib-dynamodb` (con `--ignore-scripts`, ver gotcha en §7) y se implementó `server/api/services/dynamodb.ts` con un `DynamoDBDocumentClient` único y 4 funciones genéricas (`obtenerPorClave`, `guardar`, `eliminar`, `consultarPorIndice`) parametrizadas por nombre de tabla, sin lógica de negocio. `npm run build`, `npm run build:api` y `npm test` (8 tests) pasan limpios en este entorno (tras instalar Node 22.22.3 vía `nvm`, ver §7). **No se pudo completar** el último ítem del Definition of Done: la verificación en vivo contra una tabla real de `staging` — un script puntual (`guardar`/`obtenerPorClave`/`eliminar` de prueba contra `babel-estantes-staging`, no commiteado) falló con `UnrecognizedClientException` porque las credenciales AWS de este entorno no son válidas contra la cuenta real (ver §7). No quedó ningún dato de prueba escrito (el fallo ocurrió en el primer `guardar()`). Se documentó el riesgo abierto en `TODO.md` y se decidió cerrarlo naturalmente con la Tarea 2 (primer endpoint real que invoca este servicio), en vez de forzar una verificación artificial fuera de alcance. Cambios en la rama `feature/modelos-datos-dynamodb-client`, PR por crear.
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (verificación real del ID Token de Firebase + resolución de rol) y Tarea 2 (endpoint público `GET /api/libros`, primera pieza que ejercita de verdad el cliente DynamoDB de hoy contra datos reales). Ambas son independientes entre sí. Pendiente sin urgencia: integrar la fuente Angellya (ya localizada, ver §7) como `@font-face`.

@@ -25,6 +25,8 @@
     "@angular/platform-server": "^22.0.0",
     "@angular/router": "^22.0.0",
     "@angular/ssr": "^22.0.7",
+    "@aws-sdk/client-dynamodb": "^3.1090.0",
+    "@aws-sdk/lib-dynamodb": "^3.1090.0",
     "@codegenie/serverless-express": "^5.0.0",
     "express": "^5.1.0",
     "firebase": "^12.16.0",
