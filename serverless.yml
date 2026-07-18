@@ -59,6 +59,34 @@ functions:
           path: /api/{proxy+}
           method: '*'
 
+  usuariosMe:
+    handler: dist-server/api/handlers/usuarios-me.handler
+    role: !GetAtt UsuariosMeLambdaRole.Arn
+    description: >-
+      GET /api/usuarios/me — verifica el ID Token de Firebase (proyecto
+      compartido con Comandante) y resuelve el rol del usuario contra
+      babel-usuarios (CLAUDE.md A01/A07, tech-specs.md §8.1). Función propia
+      (no comparte código con "api") para mantener su rol IAM acotado a
+      solo-lectura sobre una única tabla.
+    environment:
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/usuarios-me.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # `firebase-admin` (y sus dependencias transitivas: google-auth-library,
+        # jose, gaxios, etc.) y `@aws-sdk/*` no se pueden empaquetar con una
+        # lista manual confiable — se incluye node_modules completo para esta
+        # función en vez de mantener un allowlist frágil.
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/usuarios/me
+          method: get
+
   ssr:
     handler: server/ssr/handler.handler
     role: !GetAtt SsrLambdaRole.Arn
@@ -124,6 +152,32 @@ resources:
                     - !Sub '${TablaVentas.Arn}/index/*'
                     - !GetAtt TablaEstantes.Arn
                     - !GetAtt TablaEditorialesDescuentos.Arn
+                    - !GetAtt TablaUsuarios.Arn
+
+    UsuariosMeLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-usuarios-me-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Más acotado que ApiLambdaRole a propósito: esta función solo lee
+          # un ítem por clave primaria de una única tabla (CLAUDE.md A05).
+          - PolicyName: babel-usuarios-me-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
                     - !GetAtt TablaUsuarios.Arn
 
     SsrLambdaRole:
