@@ -99,7 +99,7 @@ jobs:
           fi
 
       - name: Ejecutar operación
-        if: inputs.operacion != 'probar-usuarios-me'
+        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me'
         run: |
           case "$OPERACION" in
             sembrar-usuario-prueba)
