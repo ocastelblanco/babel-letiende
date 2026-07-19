@@ -97,6 +97,14 @@ functions:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
         - 'dist-server/api/services/dynamodb.js'
+        # `libros.js` compilado incluye TANTO `handler` (GET, este) como
+        # `handlerCrear` (POST, función `catalogarLibro`) — ambos exports
+        # viven en el mismo módulo, así que el `import` de nivel superior a
+        # `verificar-token` (usado solo por `handlerCrear`) igual debe
+        # resolver aquí, o el runtime de Lambda revienta con
+        # `Runtime.ImportModuleError` al invocar CUALQUIER handler del
+        # archivo — confirmado en un 500 real en staging (ver MEMORY.md §7).
+        - 'dist-server/api/lib/verificar-token.js'
         # Igual que en usuariosMe: no se intenta un allowlist manual de las
         # dependencias transitivas de @aws-sdk/* (ver gotcha de jose/jwks-rsa
         # en MEMORY.md §7) — se incluye node_modules completo.
