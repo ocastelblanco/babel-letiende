@@ -139,6 +139,40 @@ functions:
           path: /api/libros
           method: post
 
+  estantes:
+    handler: dist-server/api/handlers/estantes.handler
+    role: !GetAtt EstantesLambdaRole.Arn
+    description: >-
+      CRUD /api/estantes — exige rol administrador exclusivamente
+      (CLAUDE.md A01, ADR-008).
+    environment:
+      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/estantes.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Verifica tokens con firebase-admin — igual que usuariosMe/
+        # catalogarLibro, se incluye node_modules completo en vez de un
+        # allowlist manual (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/estantes
+          method: get
+      - httpApi:
+          path: /api/estantes
+          method: post
+      - httpApi:
+          path: /api/estantes/{estanteId}
+          method: put
+      - httpApi:
+          path: /api/estantes/{estanteId}
+          method: delete
+
   ssr:
     handler: server/ssr/handler.handler
     role: !GetAtt SsrLambdaRole.Arn
@@ -285,6 +319,41 @@ resources:
                     - dynamodb:PutItem
                   Resource:
                     - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
+    EstantesLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-estantes-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # CRUD completo sobre babel-estantes y solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token — sin acceso a
+          # ninguna otra tabla (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-estantes-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaEstantes.Arn
                 - Effect: Allow
                   Action:
                     - dynamodb:GetItem
