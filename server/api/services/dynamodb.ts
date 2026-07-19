@@ -5,6 +5,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 
 /**
@@ -56,6 +57,28 @@ export async function consultarPorIndice<T extends object>(
       KeyConditionExpression: '#clave = :valor',
       ExpressionAttributeNames: { '#clave': nombreAtributoClave },
       ExpressionAttributeValues: { ':valor': valorClave },
+    }),
+  );
+  return (resultado.Items ?? []) as T[];
+}
+
+/**
+ * Escanea toda la tabla filtrando por un atributo numérico estrictamente
+ * mayor que un valor. Un `Scan` recorre toda la tabla (no usa índice), así
+ * que solo es aceptable para tablas pequeñas/alcance inicial — ver
+ * TODO.md/MEMORY.md sobre filtros más finos como tarea futura.
+ */
+export async function escanearMayorQue<T extends object>(
+  nombreTabla: string,
+  nombreAtributo: string,
+  valorMinimoExcluido: number,
+): Promise<T[]> {
+  const resultado = await documento.send(
+    new ScanCommand({
+      TableName: nombreTabla,
+      FilterExpression: '#atributo > :valor',
+      ExpressionAttributeNames: { '#atributo': nombreAtributo },
+      ExpressionAttributeValues: { ':valor': valorMinimoExcluido },
     }),
   );
   return (resultado.Items ?? []) as T[];

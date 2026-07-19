@@ -84,6 +84,28 @@ functions:
           path: /api/usuarios/me
           method: get
 
+  libros:
+    handler: dist-server/api/handlers/libros.handler
+    role: !GetAtt LibrosLambdaRole.Arn
+    description: >-
+      GET /api/libros — catálogo público de consulta, sin autenticación
+      (tech-specs.md §5).
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Igual que en usuariosMe: no se intenta un allowlist manual de las
+        # dependencias transitivas de @aws-sdk/* (ver gotcha de jose/jwks-rsa
+        # en MEMORY.md §7) — se incluye node_modules completo.
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/libros
+          method: get
+
   ssr:
     handler: server/ssr/handler.handler
     role: !GetAtt SsrLambdaRole.Arn
@@ -176,6 +198,33 @@ resources:
                     - dynamodb:GetItem
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
+
+    LibrosLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-libros-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lectura (Scan) sobre babel-libros — endpoint público de
+          # solo consulta, sin necesidad de escribir ni leer otras tablas
+          # (CLAUDE.md A05).
+          - PolicyName: babel-libros-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
 
     SsrLambdaRole:
       Type: AWS::IAM::Role
