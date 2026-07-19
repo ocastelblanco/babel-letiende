@@ -57,4 +57,17 @@ export class AuthService {
     }
     this.usuarioSignal.set(null);
   }
+
+  /**
+   * ID Token de Firebase del usuario actual, para enviar como
+   * `Authorization: Bearer <token>` a la Lambda `api` (CLAUDE.md A01/A07).
+   * `null` si no hay sesión activa.
+   */
+  async obtenerIdToken(): Promise<string | null> {
+    const usuarioActual = this.usuarioSignal();
+    if (!usuarioActual) {
+      return null;
+    }
+    return usuarioActual.getIdToken();
+  }
 }
