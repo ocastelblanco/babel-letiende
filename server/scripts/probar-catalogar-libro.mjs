@@ -54,7 +54,13 @@ async function main() {
     projectId: 'comandante-letiende',
   });
   const auth = getAuth(app);
-  const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+  // Región explícita: a diferencia de una Lambda real (que la recibe
+  // automáticamente del runtime), este script corre en un runner de GitHub
+  // Actions — el SDK de JS v3 no cae de vuelta a AWS_DEFAULT_REGION (esa es
+  // una convención del AWS CLI), así que se resuelve explícitamente aquí en
+  // vez de depender únicamente de que el workflow declare AWS_REGION.
+  const region = process.env['AWS_REGION'] ?? requerirEnv('AWS_DEFAULT_REGION');
+  const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
 
   let usuario;
   try {

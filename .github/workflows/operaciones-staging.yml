@@ -29,6 +29,12 @@ name: Operaciones sobre staging
 # de `babel-libros-staging` al final del mismo run — no depende de
 # `eliminar-usuario-prueba` para limpiar (esa sigue siendo necesaria solo
 # para la fila de `babel-usuarios-staging` sembrada con `sembrar-usuario-prueba`).
+#
+# `eliminar-libro-prueba` (agregada junto con `probar-catalogar-libro`): borra
+# un ítem puntual de `babel-libros-staging` por `bookId` (input `bookId`) —
+# de respaldo manual si `probar-catalogar-libro` no llega a limpiar su propio
+# libro de prueba (p. ej. por el bug real de "Region is missing" que motivó
+# agregar `AWS_REGION` más abajo, ver MEMORY.md §7).
 
 on:
   workflow_dispatch:
@@ -44,8 +50,9 @@ on:
           - probar-usuarios-me
           - ver-logs-usuarios-me
           - probar-catalogar-libro
+          - eliminar-libro-prueba
       email:
-        description: 'Email del usuario de prueba (no aplica a ver-logs-usuarios-me, poner cualquier valor)'
+        description: 'Email del usuario de prueba (no aplica a ver-logs-usuarios-me/eliminar-libro-prueba, poner cualquier valor)'
         required: true
         type: string
       rol:
@@ -61,6 +68,10 @@ on:
         required: false
         type: string
         default: Usuario de prueba
+      bookId:
+        description: 'bookId del libro a eliminar (solo aplica a eliminar-libro-prueba)'
+        required: false
+        type: string
 
 jobs:
   operar-staging:
@@ -71,7 +82,14 @@ jobs:
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # AWS_DEFAULT_REGION es la convención del AWS CLI (usada por los `aws
+      # dynamodb ...` de este workflow); el SDK de JavaScript v3 (usado por
+      # probar-catalogar-libro.mjs vía @aws-sdk/client-dynamodb) resuelve la
+      # región con AWS_REGION, no con AWS_DEFAULT_REGION — sin esta, el SDK
+      # falla con "Region is missing" (confirmado en un run real, ver
+      # MEMORY.md §7). Se declaran ambas para cubrir los dos casos.
       AWS_DEFAULT_REGION: us-east-1
+      AWS_REGION: us-east-1
       TABLA_USUARIOS: babel-usuarios-staging
       TABLA_LIBROS: babel-libros-staging
       # Los inputs se pasan por variables de entorno (nunca interpolados
@@ -80,6 +98,7 @@ jobs:
       EMAIL: ${{ inputs.email }}
       ROL: ${{ inputs.rol }}
       NOMBRE: ${{ inputs.nombre }}
+      BOOK_ID: ${{ inputs.bookId }}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BABEL }}
       URL_STAGING: https://oyzau0c910.execute-api.us-east-1.amazonaws.com
     steps:
@@ -100,15 +119,23 @@ jobs:
         run: npm ci
 
       - name: Validar email
-        if: inputs.operacion != 'ver-logs-usuarios-me'
+        if: inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'eliminar-libro-prueba'
         run: |
           if ! printf '%s' "$EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
             echo "::error::El email '$EMAIL' no tiene un formato válido."
             exit 1
           fi
 
+      - name: Validar bookId
+        if: inputs.operacion == 'eliminar-libro-prueba'
+        run: |
+          if [ -z "$BOOK_ID" ]; then
+            echo "::error::Falta el input 'bookId' para eliminar-libro-prueba."
+            exit 1
+          fi
+
       - name: Ejecutar operación
-        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'probar-catalogar-libro'
+        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'probar-catalogar-libro' && inputs.operacion != 'eliminar-libro-prueba'
         run: |
           case "$OPERACION" in
             sembrar-usuario-prueba)
@@ -162,6 +189,18 @@ jobs:
           node server/scripts/probar-usuarios-me.mjs
         env:
           EMAIL: ${{ inputs.email }}
+
+      - name: Eliminar libro de prueba
+        if: inputs.operacion == 'eliminar-libro-prueba'
+        run: |
+          clave=$(jq -n --arg bookId "$BOOK_ID" '{ bookId: { S: $bookId } }')
+          aws dynamodb delete-item --table-name "$TABLA_LIBROS" --key "$clave" \
+            --return-values ALL_OLD --output json | tee /tmp/resultado.json
+          if jq -e '.Attributes' /tmp/resultado.json > /dev/null; then
+            echo "🧹 Libro de prueba eliminado de $TABLA_LIBROS: $BOOK_ID"
+          else
+            echo "ℹ️ No había nada que eliminar: $BOOK_ID no existía en $TABLA_LIBROS"
+          fi
 
       - name: Emitir un ID Token real (firebase-admin) y probar POST /api/libros
         if: inputs.operacion == 'probar-catalogar-libro'
