@@ -83,3 +83,13 @@ export async function escanearMayorQue<T extends object>(
   );
   return (resultado.Items ?? []) as T[];
 }
+
+/**
+ * Escanea toda la tabla sin filtro. Igual que `escanearMayorQue`, solo
+ * aceptable para tablas pequeñas (ej. `babel-estantes`, sin `Query`/GSI
+ * propio) — ver TODO.md/MEMORY.md sobre filtros más finos como tarea futura.
+ */
+export async function escanearTodo<T extends object>(nombreTabla: string): Promise<T[]> {
+  const resultado = await documento.send(new ScanCommand({ TableName: nombreTabla }));
+  return (resultado.Items ?? []) as T[];
+}
