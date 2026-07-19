@@ -7,6 +7,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "test:api": "vitest run",
     "serve:ssr:babel-letiende": "node dist/babel-letiende/server/server.mjs",
     "build:api": "tsc -p server/tsconfig.json",
     "build:infra": "npm run build && npm run build:api",

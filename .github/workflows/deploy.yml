@@ -33,8 +33,11 @@ jobs:
       - name: Build de TypeScript de la Lambda "api"
         run: npm run build:api
 
-      - name: Pruebas unitarias
+      - name: Pruebas unitarias (frontend)
         run: npm test -- --watch=false
+
+      - name: Pruebas unitarias (backend)
+        run: npm run test:api
 
       - name: Verificar sintaxis de infraestructura (serverless package)
         run: npx serverless package --stage staging
