@@ -1,6 +1,8 @@
 import { Routes } from '@angular/router';
 import { AuthGuard } from './core/auth/auth.guard';
 import { NoAuthGuard } from './core/auth/no-auth.guard';
+import { RoleGuard } from './core/auth/role.guard';
+import { CatalogarLibroComponent } from './features/catalogar/catalogar-libro.component';
 import { CatalogoPublicoComponent } from './features/catalogo-publico/catalogo-publico.component';
 import { LoginComponent } from './features/login/login.component';
 import { ListaLibrosCatalogadosComponent } from './features/libros/lista-libros-catalogados.component';
@@ -17,6 +19,12 @@ export const routes: Routes = [
     path: 'libros',
     component: ListaLibrosCatalogadosComponent,
     canActivate: [AuthGuard],
+  },
+  {
+    // POST /api/libros acepta vendedor o administrador (TODO.md, catalogación manual).
+    path: 'catalogar',
+    component: CatalogarLibroComponent,
+    canActivate: [RoleGuard(['vendedor', 'administrador'])],
   },
   { path: '**', redirectTo: '' },
 ];

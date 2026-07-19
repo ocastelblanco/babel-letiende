@@ -82,4 +82,34 @@ describe('RoleGuard', () => {
     expect(resultado).toBe(true);
     expect(navigateMock).not.toHaveBeenCalled();
   });
+
+  it('permite el acceso con una lista de roles cuando el rol del usuario está incluido', async () => {
+    const usuarioVendedor: Usuario = {
+      email: 'vendedor@letiende.co',
+      nombre: 'Vendedor de prueba',
+      fotoUrl: null,
+      rol: 'vendedor',
+      creadoEn: '2026-07-19T00:00:00.000Z',
+    };
+    const { navigateMock } = configurarPrueba(usuarioVendedor);
+
+    const resultado = await TestBed.runInInjectionContext(() =>
+      RoleGuard(['vendedor', 'administrador'])(rutaFalsa, estadoFalso),
+    );
+
+    expect(resultado).toBe(true);
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('bloquea y redirige a /libros con una lista de roles cuando el rol del usuario no está incluida', async () => {
+    const usuarioSinFila: Usuario | null = null;
+    const { navigateMock } = configurarPrueba(usuarioSinFila);
+
+    const resultado = await TestBed.runInInjectionContext(() =>
+      RoleGuard(['vendedor', 'administrador'])(rutaFalsa, estadoFalso),
+    );
+
+    expect(resultado).toBe(false);
+    expect(navigateMock).toHaveBeenCalledWith(['/libros']);
+  });
 });
