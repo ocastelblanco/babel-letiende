@@ -35,6 +35,13 @@ name: Operaciones sobre staging
 # de respaldo manual si `probar-catalogar-libro` no llega a limpiar su propio
 # libro de prueba (p. ej. por el bug real de "Region is missing" que motivó
 # agregar `AWS_REGION` más abajo, ver MEMORY.md §7).
+#
+# `sembrar-libros-demo`: siembra 3 libros reales y presentables (no
+# desechables) en `babel-libros-staging`, para poder probar el catálogo
+# público (CatalogoPublicoComponent) desde el navegador con datos que se
+# vean bien. Usa `bookId` fijos (`demo-1`/`demo-2`/`demo-3`) — correrla de
+# nuevo actualiza los mismos 3 ítems en vez de crear duplicados. Para
+# quitarlos, usar `eliminar-libro-prueba` con cada `bookId`.
 
 on:
   workflow_dispatch:
@@ -52,8 +59,9 @@ on:
           - probar-catalogar-libro
           - eliminar-libro-prueba
           - ver-logs-libros
+          - sembrar-libros-demo
       email:
-        description: 'Email del usuario de prueba (no aplica a ver-logs-usuarios-me/ver-logs-libros/eliminar-libro-prueba, poner cualquier valor)'
+        description: 'Email del usuario de prueba (no aplica a ver-logs-usuarios-me/ver-logs-libros/eliminar-libro-prueba/sembrar-libros-demo, poner cualquier valor)'
         required: true
         type: string
       rol:
@@ -109,18 +117,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configurar Node.js
-        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro'
+        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro' || inputs.operacion == 'sembrar-libros-demo'
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
 
       - name: Instalar dependencias (reproducible, package-lock.json)
-        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro'
+        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro' || inputs.operacion == 'sembrar-libros-demo'
         run: npm ci
 
       - name: Validar email
-        if: inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'ver-logs-libros' && inputs.operacion != 'eliminar-libro-prueba'
+        if: inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'ver-logs-libros' && inputs.operacion != 'eliminar-libro-prueba' && inputs.operacion != 'sembrar-libros-demo'
         run: |
           if ! printf '%s' "$EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
             echo "::error::El email '$EMAIL' no tiene un formato válido."
@@ -136,7 +144,7 @@ jobs:
           fi
 
       - name: Ejecutar operación
-        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'probar-catalogar-libro' && inputs.operacion != 'eliminar-libro-prueba' && inputs.operacion != 'ver-logs-libros'
+        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'probar-catalogar-libro' && inputs.operacion != 'eliminar-libro-prueba' && inputs.operacion != 'ver-logs-libros' && inputs.operacion != 'sembrar-libros-demo'
         run: |
           case "$OPERACION" in
             sembrar-usuario-prueba)
@@ -213,6 +221,10 @@ jobs:
           node server/scripts/probar-catalogar-libro.mjs
         env:
           EMAIL: ${{ inputs.email }}
+
+      - name: Sembrar libros de demostración
+        if: inputs.operacion == 'sembrar-libros-demo'
+        run: node server/scripts/sembrar-libros-demo.mjs
 
       - name: Ver logs recientes de la Lambda usuariosMe
         if: inputs.operacion == 'ver-logs-usuarios-me'
