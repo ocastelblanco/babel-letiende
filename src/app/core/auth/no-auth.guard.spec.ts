@@ -5,6 +5,19 @@ import type { User } from 'firebase/auth';
 import { NoAuthGuard } from './no-auth.guard';
 import { AuthService } from './auth.service';
 
+// `auth.service.ts` (importado arriba solo como token de DI) importa el SDK
+// real de Firebase a nivel de módulo. Se mockea aquí igual que en
+// `auth.service.spec.ts` para que este archivo nunca cargue el `firebase/auth`
+// real — ver gotcha en MEMORY.md §7 (vi.mock no aislado entre archivos).
+vi.mock('firebase/app', () => ({ initializeApp: vi.fn(() => ({})) }));
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({})),
+  onAuthStateChanged: vi.fn(),
+  signInWithPopup: vi.fn(),
+  signOut: vi.fn(),
+  GoogleAuthProvider: vi.fn(),
+}));
+
 const rutaFalsa = {} as ActivatedRouteSnapshot;
 const estadoFalso = {} as RouterStateSnapshot;
 

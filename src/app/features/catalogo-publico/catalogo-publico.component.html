@@ -1,0 +1,41 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <header class="mx-auto mb-8 max-w-5xl text-center">
+    <img src="/logo_negro_sin_fondo.svg" alt="Le Tiende" class="mx-auto mb-3 h-auto w-32" />
+    <h1 class="text-2xl font-bold text-primary">Catálogo</h1>
+  </header>
+
+  <main class="mx-auto max-w-5xl">
+    @if (cargando()) {
+      <p class="text-center text-primary/70">Cargando catálogo…</p>
+    } @else if (error()) {
+      <p class="text-center text-danger">
+        No se pudo cargar el catálogo. Intenta de nuevo más tarde.
+      </p>
+    } @else if (libros().length === 0) {
+      <p class="text-center text-primary/70">Todavía no hay libros disponibles.</p>
+    } @else {
+      <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+        @for (libro of libros(); track libro.bookId) {
+          <li class="flex flex-col rounded-2xl bg-white p-3 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+            @if (libro.portadaUrl) {
+              <img
+                [src]="libro.portadaUrl"
+                [alt]="libro.titulo"
+                class="mb-2 aspect-[2/3] w-full rounded-xl object-cover"
+              />
+            } @else {
+              <div
+                class="mb-2 flex aspect-[2/3] w-full items-center justify-center rounded-xl bg-neutral text-xs text-primary/60"
+              >
+                Sin portada
+              </div>
+            }
+            <p class="line-clamp-2 text-sm font-semibold text-primary">{{ libro.titulo }}</p>
+            <p class="line-clamp-1 text-xs text-primary/70">{{ libro.autor }}</p>
+            <p class="mt-auto pt-2 text-sm font-bold text-secondary">{{ libro.pvp | pvp }}</p>
+          </li>
+        }
+      </ul>
+    }
+  </main>
+</div>
