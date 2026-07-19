@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import type {
   APIGatewayProxyHandlerV2,
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
-import { escanearMayorQue } from '../services/dynamodb';
+import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
+import { escanearMayorQue, guardar, obtenerPorClave } from '../services/dynamodb';
 
 /**
  * Copia local de `src/app/core/models/libro.model.ts` (misma forma exacta).
@@ -28,6 +30,15 @@ interface Libro {
   actualizadoEn: string;
 }
 
+/** Copia local de `src/app/core/models/usuario.model.ts` — mismo motivo que arriba. */
+interface Usuario {
+  email: string;
+  nombre: string;
+  fotoUrl: string | null;
+  rol: 'administrador' | 'vendedor';
+  creadoEn: string;
+}
+
 function respuestaJson(statusCode: number, cuerpo: unknown): APIGatewayProxyResultV2 {
   return {
     statusCode,
@@ -40,6 +51,14 @@ function nombreTablaLibros(): string {
   const nombre = process.env['TABLA_LIBROS'];
   if (!nombre) {
     throw new Error('Falta la variable de entorno TABLA_LIBROS.');
+  }
+  return nombre;
+}
+
+function nombreTablaUsuarios(): string {
+  const nombre = process.env['TABLA_USUARIOS'];
+  if (!nombre) {
+    throw new Error('Falta la variable de entorno TABLA_USUARIOS.');
   }
   return nombre;
 }
@@ -59,6 +78,145 @@ export const handler: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayPro
     );
     return respuestaJson(200, libros);
   } catch {
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/** Datos aceptados en el body de `POST /api/libros` — el resto lo genera el backend (ver `handlerCrear`). */
+interface DatosNuevoLibro {
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  editorial: string | null;
+  portadaUrl: string | null;
+  pvp: number;
+  porcentajeDescuentoEditorial: number;
+  cantidadTotal: number;
+  estanteId: string;
+}
+
+/** Techo de sanidad para el PVP (CLAUDE.md A08) — no es un límite de negocio real, solo detecta datos claramente erróneos. */
+const PVP_MAXIMO = 5_000_000;
+
+type ResultadoValidacion =
+  | { valido: true; datos: DatosNuevoLibro }
+  | { valido: false; error: string };
+
+/**
+ * Valida el body de `POST /api/libros` (CLAUDE.md A08: el PVP en esta tarea
+ * lo ingresa manualmente el vendedor —la resolución automática por ISBN es
+ * una tarea futura— pero el backend igual valida que sea un número positivo
+ * dentro de un rango razonable antes de guardarlo). Exportada para poder
+ * probarla sin invocar el handler completo.
+ */
+export function validarDatosNuevoLibro(cuerpo: unknown): ResultadoValidacion {
+  if (typeof cuerpo !== 'object' || cuerpo === null) {
+    return { valido: false, error: 'El cuerpo de la petición debe ser un objeto JSON.' };
+  }
+  const datos = cuerpo as Record<string, unknown>;
+
+  if (typeof datos['titulo'] !== 'string' || datos['titulo'].trim() === '') {
+    return { valido: false, error: 'El título es requerido.' };
+  }
+  if (typeof datos['autor'] !== 'string' || datos['autor'].trim() === '') {
+    return { valido: false, error: 'El autor es requerido.' };
+  }
+  if (typeof datos['estanteId'] !== 'string' || datos['estanteId'].trim() === '') {
+    return { valido: false, error: 'El estante es requerido.' };
+  }
+  if (
+    typeof datos['pvp'] !== 'number' ||
+    !Number.isFinite(datos['pvp']) ||
+    datos['pvp'] <= 0 ||
+    datos['pvp'] > PVP_MAXIMO
+  ) {
+    return { valido: false, error: `El PVP debe ser un número mayor a 0 y menor o igual a ${PVP_MAXIMO}.` };
+  }
+  if (
+    typeof datos['porcentajeDescuentoEditorial'] !== 'number' ||
+    !Number.isFinite(datos['porcentajeDescuentoEditorial']) ||
+    datos['porcentajeDescuentoEditorial'] < 0 ||
+    datos['porcentajeDescuentoEditorial'] > 100
+  ) {
+    return { valido: false, error: 'El porcentaje de descuento editorial debe estar entre 0 y 100.' };
+  }
+  if (
+    typeof datos['cantidadTotal'] !== 'number' ||
+    !Number.isInteger(datos['cantidadTotal']) ||
+    datos['cantidadTotal'] <= 0
+  ) {
+    return { valido: false, error: 'La cantidad total debe ser un número entero mayor a 0.' };
+  }
+
+  const isbn = typeof datos['isbn'] === 'string' && datos['isbn'].trim() !== '' ? datos['isbn'] : null;
+  const editorial =
+    typeof datos['editorial'] === 'string' && datos['editorial'].trim() !== '' ? datos['editorial'] : null;
+  const portadaUrl =
+    typeof datos['portadaUrl'] === 'string' && datos['portadaUrl'].trim() !== '' ? datos['portadaUrl'] : null;
+
+  return {
+    valido: true,
+    datos: {
+      isbn,
+      titulo: datos['titulo'],
+      autor: datos['autor'],
+      editorial,
+      portadaUrl,
+      pvp: datos['pvp'],
+      porcentajeDescuentoEditorial: datos['porcentajeDescuentoEditorial'],
+      cantidadTotal: datos['cantidadTotal'],
+      estanteId: datos['estanteId'],
+    },
+  };
+}
+
+/**
+ * `POST /api/libros` — cataloga un libro (tech-specs.md §5, "Vendedor/Admin").
+ * Exige rol `vendedor` o `administrador` en `babel-usuarios` (CLAUDE.md A01)
+ * — nunca confía en un rol enviado desde el cliente. `creadoPor` se toma
+ * siempre del email verificado del token, nunca del body.
+ */
+export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para catalogar libros en Babel.' });
+    }
+
+    let cuerpo: unknown;
+    try {
+      cuerpo = event.body ? JSON.parse(event.body) : undefined;
+    } catch {
+      return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
+    }
+
+    const validacion = validarDatosNuevoLibro(cuerpo);
+    if (!validacion.valido) {
+      return respuestaJson(400, { error: validacion.error });
+    }
+
+    const { datos } = validacion;
+    const ahora = new Date().toISOString();
+    const libro: Libro = {
+      ...datos,
+      bookId: randomUUID(),
+      costo: Math.round(datos.pvp * (1 - datos.porcentajeDescuentoEditorial / 100)),
+      utilidadCatalogo: Math.round(datos.pvp * (datos.porcentajeDescuentoEditorial / 100)),
+      cantidadDisponible: datos.cantidadTotal,
+      creadoPor: email,
+      creadoEn: ahora,
+      actualizadoEn: ahora,
+    };
+
+    await guardar(nombreTablaLibros(), libro);
+
+    return respuestaJson(201, libro);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }
 };

@@ -106,6 +106,31 @@ functions:
           path: /api/libros
           method: get
 
+  catalogarLibro:
+    handler: dist-server/api/handlers/libros.handlerCrear
+    role: !GetAtt CatalogarLibroLambdaRole.Arn
+    description: >-
+      POST /api/libros — cataloga un libro, exige rol vendedor o
+      administrador (CLAUDE.md A01, ADR-008).
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que el GET público, pero esta Lambda
+        # además verifica tokens con firebase-admin — igual que usuariosMe,
+        # se incluye node_modules completo en vez de un allowlist manual.
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/libros
+          method: post
+
   ssr:
     handler: server/ssr/handler.handler
     role: !GetAtt SsrLambdaRole.Arn
@@ -225,6 +250,38 @@ resources:
                     - dynamodb:Scan
                   Resource:
                     - !GetAtt TablaLibros.Arn
+
+    CatalogarLibroLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-catalogar-libro-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Escribe en babel-libros y solo lee (GetItem) babel-usuarios para
+          # resolver el rol del token — sin acceso a ninguna otra tabla
+          # (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-catalogar-libro-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
 
     SsrLambdaRole:
       Type: AWS::IAM::Role
