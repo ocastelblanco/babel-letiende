@@ -53,14 +53,29 @@ function nombreTablaUsuarios(): string {
 
 /**
  * Verifica el ID Token y exige rol `administrador` exclusivamente (CLAUDE.md
- * A01) — a diferencia de `POST /api/libros`, aquí NO basta con `vendedor`.
- * Lanza `TokenInvalidoError` (401) o devuelve `null` (403, sin fila o rol
- * insuficiente) para que el handler que llama decida la respuesta exacta.
+ * A01) — usado por `POST`/`PUT`/`DELETE`, que modifican la configuración
+ * física de estantes. Lanza `TokenInvalidoError` (401) o devuelve `null`
+ * (403, sin fila o rol insuficiente) para que el handler que llama decida
+ * la respuesta exacta.
  */
 async function exigirAdministrador(headerAuthorization: string | undefined): Promise<string | null> {
   const { email } = await verificarTokenDesdeHeader(headerAuthorization);
   const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
   return usuario?.rol === 'administrador' ? email : null;
+}
+
+/**
+ * Verifica el ID Token y exige rol `vendedor` **o** `administrador` — usado
+ * solo por `GET` (listar estantes es de solo lectura, sin datos sensibles).
+ * Un `vendedor` necesita esta lista para elegir dónde ubicar un libro al
+ * catalogarlo (`CatalogarLibroComponent`), mismo criterio que
+ * `POST /api/libros`. Lanza `TokenInvalidoError` (401) o devuelve `null`
+ * (403) para que el handler decida la respuesta exacta.
+ */
+async function exigirVendedorOAdministrador(headerAuthorization: string | undefined): Promise<string | null> {
+  const { email } = await verificarTokenDesdeHeader(headerAuthorization);
+  const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+  return usuario?.rol === 'vendedor' || usuario?.rol === 'administrador' ? email : null;
 }
 
 /** Datos aceptados en el body de `POST`/`PUT /api/estantes` — sin `estanteId`, que genera/resuelve el backend. */
@@ -100,24 +115,31 @@ export function validarDatosEstante(cuerpo: unknown): ResultadoValidacion {
 }
 
 /**
- * CRUD `/api/estantes` (tech-specs.md §5, "Admin"): las 4 operaciones exigen
- * rol `administrador` exclusivamente. Un solo Lambda para los 4 verbos
- * (ADR-008: "grupo pequeño de endpoints muy relacionados") — se distinguen
- * por `event.requestContext.http.method`.
+ * CRUD `/api/estantes` (tech-specs.md §5): `GET` (solo lectura) acepta
+ * `vendedor` **o** `administrador` — un vendedor necesita listar los
+ * estantes para catalogar un libro (`TODO.md`, catalogación manual).
+ * `POST`/`PUT`/`DELETE` (modifican la configuración física) siguen
+ * exigiendo `administrador` exclusivamente. Un solo Lambda para los 4
+ * verbos (ADR-008: "grupo pequeño de endpoints muy relacionados") — se
+ * distinguen por `event.requestContext.http.method`.
  */
 export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
-    const email = await exigirAdministrador(event.headers['authorization']);
-    if (!email) {
-      return respuestaJson(403, { error: 'Este correo no está autorizado para administrar estantes en Babel.' });
-    }
-
     const metodo = event.requestContext.http.method;
     const estanteId = event.pathParameters?.['estanteId'];
 
     if (metodo === 'GET') {
+      const email = await exigirVendedorOAdministrador(event.headers['authorization']);
+      if (!email) {
+        return respuestaJson(403, { error: 'Este correo no está autorizado para consultar estantes en Babel.' });
+      }
       const estantes = await escanearTodo<Estante>(nombreTablaEstantes());
       return respuestaJson(200, estantes);
+    }
+
+    const email = await exigirAdministrador(event.headers['authorization']);
+    if (!email) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para administrar estantes en Babel.' });
     }
 
     if (metodo === 'POST') {

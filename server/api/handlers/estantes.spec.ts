@@ -80,13 +80,38 @@ describe('handler (/api/estantes)', () => {
     expect(respuesta).toMatchObject({ statusCode: 401 });
   });
 
-  it('responde 403 cuando el rol no es administrador', async () => {
-    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
-    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+  it('GET responde 403 cuando el correo no tiene fila en babel-usuarios', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'desconocido@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue(undefined);
 
     const respuesta = await handler(eventoFalso('GET', { authorization: 'Bearer token' }), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 403 });
+  });
+
+  it('GET responde 200 para un vendedor (solo lectura, necesita elegir estante al catalogar)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    const listaFalsa = [{ estanteId: 'e1', ...datosValidos }];
+    escanearTodoMock.mockResolvedValue(listaFalsa);
+
+    const respuesta = await handler(eventoFalso('GET', { authorization: 'Bearer token' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify(listaFalsa) });
+  });
+
+  it('POST responde 403 para un vendedor (solo administrador puede modificar estantes)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+
+    const respuesta = await handler(
+      eventoFalso('POST', { authorization: 'Bearer token', body: datosValidos }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(guardarMock).not.toHaveBeenCalled();
   });
 
   describe('con un administrador autenticado', () => {

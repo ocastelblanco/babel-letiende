@@ -1,0 +1,147 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-xl">
+    <h1 class="mb-6 text-2xl font-bold text-primary">Catalogar libro</h1>
+
+    <form
+      [formGroup]="formulario"
+      (ngSubmit)="guardar()"
+      class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+    >
+      <div>
+        <label for="isbn" class="mb-1 block text-sm font-semibold text-primary">ISBN (opcional)</label>
+        <input
+          id="isbn"
+          type="text"
+          formControlName="isbn"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+      </div>
+
+      <div>
+        <label for="titulo" class="mb-1 block text-sm font-semibold text-primary">Título</label>
+        <input
+          id="titulo"
+          type="text"
+          formControlName="titulo"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+        @if (formulario.controls.titulo.invalid && formulario.controls.titulo.touched) {
+          <p class="mt-1 text-xs text-danger">El título es requerido.</p>
+        }
+      </div>
+
+      <div>
+        <label for="autor" class="mb-1 block text-sm font-semibold text-primary">Autor</label>
+        <input
+          id="autor"
+          type="text"
+          formControlName="autor"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+        @if (formulario.controls.autor.invalid && formulario.controls.autor.touched) {
+          <p class="mt-1 text-xs text-danger">El autor es requerido.</p>
+        }
+      </div>
+
+      <div>
+        <label for="editorial" class="mb-1 block text-sm font-semibold text-primary">Editorial (opcional)</label>
+        <input
+          id="editorial"
+          type="text"
+          formControlName="editorial"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+      </div>
+
+      <div>
+        <label for="portadaUrl" class="mb-1 block text-sm font-semibold text-primary">URL de portada (opcional)</label>
+        <input
+          id="portadaUrl"
+          type="text"
+          formControlName="portadaUrl"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="pvp" class="mb-1 block text-sm font-semibold text-primary">PVP (COP)</label>
+          <input
+            id="pvp"
+            type="number"
+            formControlName="pvp"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formulario.controls.pvp.invalid && formulario.controls.pvp.touched) {
+            <p class="mt-1 text-xs text-danger">El PVP debe ser mayor a 0.</p>
+          }
+        </div>
+
+        <div>
+          <label for="porcentajeDescuentoEditorial" class="mb-1 block text-sm font-semibold text-primary">
+            % descuento editorial
+          </label>
+          <input
+            id="porcentajeDescuentoEditorial"
+            type="number"
+            formControlName="porcentajeDescuentoEditorial"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formulario.controls.porcentajeDescuentoEditorial.invalid && formulario.controls.porcentajeDescuentoEditorial.touched) {
+            <p class="mt-1 text-xs text-danger">Debe estar entre 0 y 100.</p>
+          }
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="cantidadTotal" class="mb-1 block text-sm font-semibold text-primary">Cantidad</label>
+          <input
+            id="cantidadTotal"
+            type="number"
+            formControlName="cantidadTotal"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formulario.controls.cantidadTotal.invalid && formulario.controls.cantidadTotal.touched) {
+            <p class="mt-1 text-xs text-danger">La cantidad debe ser mayor a 0.</p>
+          }
+        </div>
+
+        <div>
+          <label for="estanteId" class="mb-1 block text-sm font-semibold text-primary">Estante</label>
+          <select
+            id="estanteId"
+            formControlName="estanteId"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+          >
+            <option value="" disabled>Selecciona un estante</option>
+            @for (estante of estantes(); track estante.estanteId) {
+              <option [value]="estante.estanteId">{{ estante.espacio }} — {{ estante.mueble }} — {{ estante.ubicacion }}</option>
+            }
+          </select>
+          @if (formulario.controls.estanteId.invalid && formulario.controls.estanteId.touched) {
+            <p class="mt-1 text-xs text-danger">El estante es requerido.</p>
+          }
+          @if (errorEstantes()) {
+            <p class="mt-1 text-xs text-danger">No se pudieron cargar los estantes.</p>
+          }
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        class="mt-2 flex h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        [disabled]="guardando()"
+      >
+        {{ guardando() ? 'Guardando…' : 'Catalogar libro' }}
+      </button>
+
+      @if (mensajeExito()) {
+        <p class="text-center text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+      }
+      @if (mensajeError()) {
+        <p class="text-center text-sm text-danger">{{ mensajeError() }}</p>
+      }
+    </form>
+  </div>
+</div>

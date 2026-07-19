@@ -33,10 +33,42 @@ export class AuthService {
   /** Usuario autenticado (o `null`). Solo identidad — el rol se resuelve siempre en la Lambda `api`. */
   readonly usuario = this.usuarioSignal.asReadonly();
 
+  /**
+   * `onAuthStateChanged` es asíncrono incluso para restaurar una sesión ya
+   * persistida (IndexedDB) — leer `usuario()` inmediatamente después de
+   * cargar la página (antes de que dispare por primera vez) da un falso
+   * `null`. `AuthGuard`/`NoAuthGuard` deben esperar `esperarListo()` antes de
+   * decidir, para no expulsar a un usuario con sesión real solo por leer el
+   * Signal demasiado pronto.
+   */
+  private readonly listoPromise: Promise<void>;
+  private resolverListo!: () => void;
+
   constructor() {
+    this.listoPromise = new Promise<void>((resolve) => {
+      this.resolverListo = resolve;
+    });
+
     if (this.auth) {
-      onAuthStateChanged(this.auth, (usuario) => this.usuarioSignal.set(usuario));
+      onAuthStateChanged(this.auth, (usuario) => {
+        this.usuarioSignal.set(usuario);
+        this.resolverListo();
+      });
     }
+  }
+
+  /**
+   * Resuelve cuando Firebase ya determinó el estado inicial de sesión (tras
+   * el primer `onAuthStateChanged`). En el servidor (sin SDK, `this.auth`
+   * `null`) resuelve de inmediato — ahí nunca hay sesión real que esperar,
+   * así que los guards deben usarse solo en rutas `RenderMode.Client` para
+   * que la espera ocurra en el navegador, donde sí existe el SDK.
+   */
+  async esperarListo(): Promise<void> {
+    if (!this.auth) {
+      return;
+    }
+    await this.listoPromise;
   }
 
   /** Abre el popup de Google Sign-In. Restringido solo a Google (tech-specs.md §8.1, "blast radius"). */
@@ -64,6 +96,7 @@ export class AuthService {
    * `null` si no hay sesión activa.
    */
   async obtenerIdToken(): Promise<string | null> {
+    await this.esperarListo();
     const usuarioActual = this.usuarioSignal();
     if (!usuarioActual) {
       return null;

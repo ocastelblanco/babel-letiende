@@ -62,4 +62,29 @@ describe('AuthService', () => {
     expect(signOutMock).toHaveBeenCalledTimes(1);
     expect(servicio.usuario()).toBeNull();
   });
+
+  it('obtenerIdToken espera a que Firebase resuelva el estado inicial de sesión antes de responder (onAuthStateChanged es asíncrono incluso para restaurar una sesión persistida)', async () => {
+    let callbackCapturado: ((usuario: User | null) => void) | undefined;
+    onAuthStateChangedMock.mockImplementation((_auth: unknown, callback: (usuario: User | null) => void) => {
+      callbackCapturado = callback;
+    });
+
+    const servicio = TestBed.inject(AuthService);
+    let resuelto = false;
+    const promesa = servicio.obtenerIdToken().then((resultado) => {
+      resuelto = true;
+      return resultado;
+    });
+
+    // onAuthStateChanged todavía no disparó — obtenerIdToken() no debe
+    // resolver leyendo un Signal que aún no refleja el estado real.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resuelto).toBe(false);
+
+    const getIdTokenMock = vi.fn().mockResolvedValue('token-real');
+    callbackCapturado?.({ ...usuarioFalso, getIdToken: getIdTokenMock } as unknown as User);
+
+    expect(await promesa).toBe('token-real');
+  });
 });

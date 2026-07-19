@@ -1,1 +1,15 @@
+<header class="flex items-center justify-end gap-4 bg-white px-4 py-2 shadow-[0_1px_4px_rgba(35,12,0,0.08)]">
+  @if (authService.usuario()) {
+    <a routerLink="/libros" class="text-sm font-semibold text-primary hover:opacity-80">Mi cuenta</a>
+    <button
+      type="button"
+      (click)="cerrarSesion()"
+      class="text-sm font-semibold text-secondary hover:opacity-80"
+    >
+      Cerrar sesión
+    </button>
+  } @else {
+    <a routerLink="/login" class="text-sm font-semibold text-secondary hover:opacity-80">Ingresar</a>
+  }
+</header>
 <router-outlet />

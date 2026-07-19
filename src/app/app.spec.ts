@@ -1,10 +1,25 @@
+import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { App } from './app';
+
+// `app.ts` inyecta `AuthService`, que importa el SDK real de Firebase a
+// nivel de módulo — mismo motivo de mock que en `role.guard.spec.ts`/
+// `usuarios.service.spec.ts` (ver MEMORY.md §7, `vi.mock` no aislado entre
+// archivos).
+vi.mock('firebase/app', () => ({ initializeApp: vi.fn(() => ({})) }));
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({})),
+  onAuthStateChanged: vi.fn(),
+  signInWithPopup: vi.fn(),
+  signOut: vi.fn(),
+  GoogleAuthProvider: vi.fn(),
+}));
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [provideRouter([])],
     }).compileComponents();
   });
 
