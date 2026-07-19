@@ -1,4 +1,5 @@
 import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { provideHttpClient, withFetch } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
@@ -10,6 +11,9 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideClientHydration(),
+    // withFetch(): usa la Fetch API en vez de XHR, compatible con el
+    // renderizado en servidor (Lambda `ssr`) sin depender de un polyfill.
+    provideHttpClient(withFetch()),
     // Instancia el AuthService al arrancar la app para que el listener de
     // sesión de Firebase (onAuthStateChanged) arranque antes de que el
     // AuthGuard evalúe el Signal `usuario` en la primera navegación.
