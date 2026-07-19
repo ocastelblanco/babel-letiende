@@ -143,8 +143,8 @@ functions:
     handler: dist-server/api/handlers/estantes.handler
     role: !GetAtt EstantesLambdaRole.Arn
     description: >-
-      CRUD /api/estantes — exige rol administrador exclusivamente
-      (CLAUDE.md A01, ADR-008).
+      CRUD /api/estantes — GET acepta vendedor o administrador, POST/PUT/
+      DELETE exigen administrador (CLAUDE.md A01, ADR-008).
     environment:
       TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}

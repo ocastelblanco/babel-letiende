@@ -254,7 +254,8 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | POST | `/api/ventas` | Vendedor/Admin | Registra una venta; decrementa `cantidadDisponible`; calcula `precioFinal`/`utilidad` con snapshot de `costoLibro`. | `{ bookId, formaDePago, porcentajeDescuentoVenta }` |
 | GET | `/api/ventas` | Admin | Lista/filtra ventas para reportes. | Query: `desde`, `hasta`, `editorial`, `formaDePago` |
 | GET | `/api/ventas/exportar` | Admin | Genera y descarga el reporte en XLSX. | Mismos filtros que arriba |
-| GET / POST / PUT / DELETE | `/api/estantes` | Admin | CRUD de estantes. | `Estante` |
+| GET | `/api/estantes` | Vendedor/Admin | Lista estantes (solo lectura) — un vendedor la necesita para elegir dónde ubicar un libro al catalogarlo. | — |
+| POST / PUT / DELETE | `/api/estantes` | Admin | Alta/edición/baja de estantes. | `Estante` |
 | GET / POST / PUT / DELETE | `/api/editoriales-descuentos` | Admin | CRUD de descuentos por editorial (porcentaje por defecto y alternativas para libros en consignación). | `DescuentoEditorial` |
 | GET / POST / PUT / DELETE | `/api/usuarios` | Admin | CRUD de usuarios (vendedores/administradores). | `Usuario` |
 
