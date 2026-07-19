@@ -22,32 +22,35 @@ const rutaFalsa = {} as ActivatedRouteSnapshot;
 const estadoFalso = {} as RouterStateSnapshot;
 
 describe('NoAuthGuard', () => {
-  it('redirige a / cuando ya hay una sesión activa', () => {
+  it('redirige a / cuando ya hay una sesión activa', async () => {
     const navigateMock = vi.fn();
     const usuarioFalso = { uid: 'uid-123' } as User;
     TestBed.configureTestingModule({
       providers: [
-        { provide: AuthService, useValue: { usuario: () => usuarioFalso } },
+        {
+          provide: AuthService,
+          useValue: { usuario: () => usuarioFalso, esperarListo: () => Promise.resolve() },
+        },
         { provide: Router, useValue: { navigate: navigateMock } },
       ],
     });
 
-    const resultado = TestBed.runInInjectionContext(() => NoAuthGuard(rutaFalsa, estadoFalso));
+    const resultado = await TestBed.runInInjectionContext(() => NoAuthGuard(rutaFalsa, estadoFalso));
 
     expect(resultado).toBe(false);
     expect(navigateMock).toHaveBeenCalledWith(['/']);
   });
 
-  it('permite el acceso cuando no hay sesión activa', () => {
+  it('permite el acceso cuando no hay sesión activa', async () => {
     const navigateMock = vi.fn();
     TestBed.configureTestingModule({
       providers: [
-        { provide: AuthService, useValue: { usuario: () => null } },
+        { provide: AuthService, useValue: { usuario: () => null, esperarListo: () => Promise.resolve() } },
         { provide: Router, useValue: { navigate: navigateMock } },
       ],
     });
 
-    const resultado = TestBed.runInInjectionContext(() => NoAuthGuard(rutaFalsa, estadoFalso));
+    const resultado = await TestBed.runInInjectionContext(() => NoAuthGuard(rutaFalsa, estadoFalso));
 
     expect(resultado).toBe(true);
     expect(navigateMock).not.toHaveBeenCalled();
