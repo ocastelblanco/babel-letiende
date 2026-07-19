@@ -12,8 +12,8 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 | URL producción | https://babel.letiende.co (aún no desplegada) |
 | URL staging (real) | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (API Gateway HTTP API, stage `staging`) |
 | Rama principal | `main` |
-| Rama de trabajo actual | `feature/verificacion-id-token-backend` — verificación de ID Token completada y probada en vivo (401/403/200), PR pendiente de fusión |
-| Última sesión | 2026-07-18 — verificación real del ID Token de Firebase + `GET /api/usuarios/me`, con hallazgo y corrección de un bug real de arranque de Lambda (`jose` ESM) y de un permiso IAM faltante en la cuenta de servicio — ver §7 y §9 |
+| Rama de trabajo actual | `feature/endpoint-libros-publico` — `GET /api/libros` completado y probado en vivo, PR pendiente de fusión |
+| Última sesión | 2026-07-18/19 — verificación real del ID Token (PR #14 fusionado) y `GET /api/libros` público (nueva función Lambda `libros`, verificada en vivo contra `staging`) — ver §7 y §9 |
 
 ---
 
@@ -26,12 +26,12 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 - [x] Deploy automático a `staging` en cada PR (CI, PR #8 fusionado) — ver §5 y §9
 - [x] Íconos PWA + `manifest.webmanifest` (PR #10 fusionado) — ver §7 y §9. La fuente Angellya NO se integrará como `@font-face`: decisión del usuario 2026-07-18, es tipografía exclusiva del logo y los logos ya existen como SVG (ver §7).
 - [x] Modelos de datos compartidos + cliente DynamoDB base (PR #12, rama `feature/modelos-datos-dynamodb-client`) — ver detalle en §9.
-- [x] Verificación real del ID Token de Firebase en el backend + `GET /api/usuarios/me` (PR pendiente de fusión, rama `feature/verificacion-id-token-backend`) — 401/403/200 verificados en vivo contra `staging` con un ID Token real. Ver detalle en §9.
-- [ ] Endpoint público `GET /api/libros` — catálogo de consulta (`TODO.md` Tarea 1)
-- [ ] `RoleGuard` en el frontend usando `GET /api/usuarios/me` (`TODO.md` Tarea 2)
+- [x] Verificación real del ID Token de Firebase en el backend + `GET /api/usuarios/me` (PR #14 fusionado) — 401/403/200 verificados en vivo contra `staging` con un ID Token real. Ver detalle en §9.
+- [x] Endpoint público `GET /api/libros` — catálogo de consulta (PR pendiente de fusión, rama `feature/endpoint-libros-publico`) — verificado en vivo contra `staging` (`200` con `[]`, sin auth). Backend solamente, sin consumo desde el frontend todavía. Ver detalle en §9.
+- [ ] `RoleGuard` en el frontend usando `GET /api/usuarios/me` (`TODO.md` Tarea 1)
+- [ ] `CatalogoPublicoComponent` — consumo real de `GET /api/libros` desde el frontend, SSR (`TODO.md` Tarea 2)
 - [ ] Flujo de catalogación (escaneo → metadatos → PVP → estante)
 - [ ] Registro de venta
-- [ ] Catálogo público de consulta (SSR)
 - [ ] Cambio de estante de un libro catalogado
 - [ ] Configuración de estantes (CRUD, admin)
 - [ ] Configuración de descuentos de editorial (CRUD, admin)
@@ -138,6 +138,7 @@ El repositorio ya tiene el scaffold de Angular (`src/app/{core,features,shared}`
 | Stage `staging` — API Gateway | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (HTTP API, region `us-east-1`) |
 | Stage `staging` — Lambda `api` | `arn:aws:lambda:us-east-1:696912647258:function:babel-letiende-staging-api`, rol `babel-api-role-staging` (CRUD acotado a las 5 tablas + `/index/*`, sin más permisos) |
 | Stage `staging` — Lambda `usuariosMe` | `arn:aws:lambda:us-east-1:696912647258:function:babel-letiende-staging-usuariosMe`, rol `babel-usuarios-me-role-staging` (solo `dynamodb:GetItem` sobre `babel-usuarios`, ver ADR-008). Ruta `GET /api/usuarios/me`. |
+| Stage `staging` — Lambda `libros` | `arn:aws:lambda:us-east-1:696912647258:function:babel-letiende-staging-libros`, rol `babel-libros-role-staging` (solo `dynamodb:Scan` sobre `babel-libros`, ver ADR-008). Ruta pública `GET /api/libros`, sin autenticación. |
 | Stage `staging` — Lambda `ssr` | `arn:aws:lambda:us-east-1:696912647258:function:babel-letiende-staging-ssr`, rol `babel-ssr-role-staging` (solo `AWSLambdaBasicExecutionRole`, sin acceso a DynamoDB) |
 | Stage `staging` — Tablas DynamoDB (nombre real) | `babel-libros-staging`, `babel-ventas-staging`, `babel-estantes-staging`, `babel-editoriales-descuentos-staging`, `babel-usuarios-staging` — todas `PROVISIONED` 25/25 RCU/WCU (tabla y GSIs) |
 | Nombres lógicos → variables de entorno de la Lambda `api` | `TABLA_LIBROS`, `TABLA_VENTAS`, `TABLA_ESTANTES`, `TABLA_EDITORIALES_DESCUENTOS`, `TABLA_USUARIOS` (resueltos en `serverless.yml`, nunca hardcodeados en el código de negocio) |
@@ -261,4 +262,8 @@ Build/tests locales en verde, y el caso `401` se probó localmente invocando el 
 
 Para los casos `403`/`200` (que exigen un ID Token real, no solo datos de DynamoDB) se preguntó al usuario cómo proceder, dado que automatizarlo implica crear/borrar un usuario desechable en el proyecto Firebase **compartido** con Comandante — el usuario aprobó automatizarlo. Se agregó la operación `probar-usuarios-me` a `operaciones-staging.yml` (emite un custom token con `firebase-admin`, lo canjea por un ID Token real vía la REST API de Identity Toolkit, prueba el endpoint, y siempre borra el usuario de Firebase Auth al final). El primer intento falló con `auth/insufficient-permission`: la cuenta de servicio no tenía el rol de Google Cloud IAM necesario para administrar usuarios de Firebase Authentication. Se le dieron al usuario (desde su celular) las instrucciones exactas para otorgar el rol `Firebase Authentication Admin` (`roles/firebaseauth.admin`) a esa cuenta de servicio en la consola de IAM. Tras confirmarlo, se re-disparó la verificación: **`403` confirmado** (correo sin fila en `babel-usuarios-staging`) y, tras sembrar un registro de prueba con `sembrar-usuario-prueba`, **`200` confirmado con el rol `vendedor` correcto** en la respuesta — el registro de DynamoDB y el usuario de Firebase Auth de prueba quedaron limpios al terminar. Cambios en la rama `feature/verificacion-id-token-backend`, PR pendiente de crear/fusionar.
 
-**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (endpoint público `GET /api/libros`, primera pieza que ejercita de verdad el cliente DynamoDB contra datos reales) y Tarea 2 (`RoleGuard` en el frontend usando `GET /api/usuarios/me`, el punto que esta sesión dejó explícitamente pendiente). Ambas son independientes entre sí.
+**Qué se hizo el 2026-07-19 (endpoint público `GET /api/libros`):** implementada `escanearMayorQue` en `server/api/services/dynamodb.ts` (nueva función genérica de `Scan` + `FilterExpression`, parametrizada por tabla/atributo) y `server/api/handlers/libros.ts` (`GET /api/libros`, sin autenticación, filtra `cantidadDisponible > 0`). Nueva función Lambda `libros` en `serverless.yml` con rol IAM propio de solo lectura (`dynamodb:Scan` únicamente sobre `babel-libros`, siguiendo ADR-008); `package.patterns` con `node_modules/**` completo a propósito (misma precaución que `usuariosMe` tras el incidente de `jose`/`jwks-rsa`, en vez de un allowlist manual de las dependencias de `@aws-sdk/*`).
+
+Build/tests locales en verde. Verificado en vivo contra `staging` con `curl` real: `GET /api/libros` → `200` con `[]` (tabla vacía, sin datos catalogados todavía), sin ningún header de autenticación. Se confirmó además que no hubo regresión en `/api/health` (`200`) ni en `/api/usuarios/me` sin token (`401`) — el ruteo de API Gateway prioriza correctamente la ruta específica `/api/libros` sobre el catch-all `/api/{proxy+}` de la función `api`. Cambios en la rama `feature/endpoint-libros-publico`, PR pendiente de fusión.
+
+**Próxima tarea sugerida:** ver `TODO.md` — Tarea 1 (`RoleGuard` en el frontend usando `GET /api/usuarios/me`, pendiente desde la tarea de verificación de ID Token) y Tarea 2 (`CatalogoPublicoComponent`, primer consumo real de `GET /api/libros` desde el frontend, con SSR). Ambas son independientes entre sí.
