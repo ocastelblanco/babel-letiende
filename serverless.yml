@@ -173,6 +173,32 @@ functions:
           path: /api/estantes/{estanteId}
           method: delete
 
+  registrarVenta:
+    handler: dist-server/api/handlers/ventas.handler
+    role: !GetAtt RegistrarVentaLambdaRole.Arn
+    description: >-
+      POST /api/ventas — registra una venta, exige rol vendedor o
+      administrador (CLAUDE.md A01, ADR-008).
+    environment:
+      TABLA_VENTAS: ${self:custom.nombresTablas.ventas}
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/ventas.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Verifica tokens con firebase-admin — igual que usuariosMe/
+        # catalogarLibro/estantes, se incluye node_modules completo en vez
+        # de un allowlist manual (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/ventas
+          method: post
+
   ssr:
     handler: server/ssr/handler.handler
     role: !GetAtt SsrLambdaRole.Arn
@@ -354,6 +380,45 @@ resources:
                     - dynamodb:Scan
                   Resource:
                     - !GetAtt TablaEstantes.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
+    RegistrarVentaLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-registrar-venta-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Escribe en babel-ventas, lee y actualiza (decrementa
+          # cantidadDisponible) babel-libros, y solo lee babel-usuarios para
+          # resolver el rol del token — sin acceso a ninguna otra tabla
+          # (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-registrar-venta-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaVentas.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
                 - Effect: Allow
                   Action:
                     - dynamodb:GetItem
