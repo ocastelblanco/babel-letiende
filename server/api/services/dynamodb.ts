@@ -1,4 +1,4 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
   DynamoDBDocumentClient,
@@ -6,6 +6,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 
 /**
@@ -92,4 +93,37 @@ export async function escanearMayorQue<T extends object>(
 export async function escanearTodo<T extends object>(nombreTabla: string): Promise<T[]> {
   const resultado = await documento.send(new ScanCommand({ TableName: nombreTabla }));
   return (resultado.Items ?? []) as T[];
+}
+
+/**
+ * Decrementa en 1 un atributo numérico solo si su valor actual es
+ * estrictamente mayor que 0 — operación atómica (`ConditionExpression`) para
+ * evitar sobrevender si dos ventas del mismo libro llegan casi al mismo
+ * tiempo (`POST /api/ventas`). Devuelve `false` (sin lanzar) si la condición
+ * falla, ya sea porque el atributo ya está en 0 o porque el ítem no existe
+ * — quien llama decide qué código HTTP corresponde en cada caso.
+ */
+export async function decrementarSiPositivo(
+  nombreTabla: string,
+  clave: ClaveDynamoDB,
+  nombreAtributo: string,
+): Promise<boolean> {
+  try {
+    await documento.send(
+      new UpdateCommand({
+        TableName: nombreTabla,
+        Key: clave,
+        UpdateExpression: 'SET #atributo = #atributo - :uno',
+        ConditionExpression: '#atributo > :cero',
+        ExpressionAttributeNames: { '#atributo': nombreAtributo },
+        ExpressionAttributeValues: { ':uno': 1, ':cero': 0 },
+      }),
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return false;
+    }
+    throw error;
+  }
 }
