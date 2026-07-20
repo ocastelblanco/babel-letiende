@@ -279,13 +279,13 @@ export function validarFiltrosVentas(
  * ventas que ya pasaron los demás filtros (evita un `Scan` completo de
  * `babel-libros`, solo `GetItem` puntuales — CLAUDE.md A05).
  *
- * **Nota de infraestructura:** el GSI `vendidoEn-index` de `babel-ventas`
- * (`serverless.yml`) solo tiene `vendidoEn` como partición (sin clave de
- * ordenamiento), así que no admite consultas de rango vía `Query` a pesar de
- * que `tech-specs.md` lo describe como pensado para eso — se usa `Scan` +
- * filtrado en memoria (`escanearTodo`), mismo criterio ya aceptado para
- * tablas pequeñas que `estantes.ts`/`editoriales-descuentos.ts` (ver
- * `MEMORY.md` §6/§7). Corregir el GSI queda fuera de alcance de esta tarea.
+ * Filtra con `Scan` + filtrado en memoria (`escanearTodo`) a propósito:
+ * `babel-ventas` no tiene ningún GSI (el `vendidoEn-index` original, con
+ * partición-únicamente, nunca admitió `Query` por rango y fue eliminado —
+ * ver `MEMORY.md` §7 y el comentario de `TablaVentas` en `serverless.yml`),
+ * y a este volumen (miles de ventas) el `Scan` es el mismo criterio ya
+ * aceptado para tablas pequeñas que `estantes.ts`/`editoriales-descuentos.ts`
+ * (`MEMORY.md` §6).
  */
 export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {

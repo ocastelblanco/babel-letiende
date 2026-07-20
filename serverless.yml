@@ -382,7 +382,6 @@ resources:
                     - !GetAtt TablaLibros.Arn
                     - !Sub '${TablaLibros.Arn}/index/*'
                     - !GetAtt TablaVentas.Arn
-                    - !Sub '${TablaVentas.Arn}/index/*'
                     - !GetAtt TablaEstantes.Arn
                     - !GetAtt TablaEditorialesDescuentos.Arn
                     - !GetAtt TablaUsuarios.Arn
@@ -737,21 +736,18 @@ resources:
         AttributeDefinitions:
           - AttributeName: ventaId
             AttributeType: S
-          - AttributeName: vendidoEn
-            AttributeType: S
         KeySchema:
           - AttributeName: ventaId
             KeyType: HASH
-        GlobalSecondaryIndexes:
-          - IndexName: vendidoEn-index
-            KeySchema:
-              - AttributeName: vendidoEn
-                KeyType: HASH
-            Projection:
-              ProjectionType: ALL
-            ProvisionedThroughput:
-              ReadCapacityUnits: 25
-              WriteCapacityUnits: 25
+        # Sin GSI a propósito: el vendidoEn-index original (vendidoEn como
+        # única clave de partición, sin sort key) nunca admitió Query por
+        # rango — solo igualdad exacta de un timestamp con milisegundos,
+        # inservible para reportes — y aún así reservaba 25/25 RCU/WCU
+        # propios y duplicaba el almacenamiento de cada venta, contra el
+        # objetivo de costo $0. GET /api/ventas filtra por rango de fecha
+        # con Scan + filtrado en memoria (criterio de tablas pequeñas, ver
+        # MEMORY.md §6/§7); si el volumen algún día lo exige, diseñar un
+        # GSI real con partición fija + vendidoEn como clave de rango.
 
     TablaEstantes:
       Type: AWS::DynamoDB::Table
