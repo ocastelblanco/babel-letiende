@@ -1,0 +1,58 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-xl">
+    <a routerLink="/libros" class="mb-4 inline-block text-sm font-semibold text-secondary underline">← Volver</a>
+    <h1 class="mb-6 text-2xl font-bold text-primary">Cambiar estante</h1>
+
+    @if (cargandoLibro()) {
+      <p class="text-sm text-primary/70">Cargando…</p>
+    } @else if (!libro()) {
+      <p class="text-sm text-danger">No se encontró el libro.</p>
+    } @else {
+      <div class="mb-4 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <p class="text-sm font-semibold text-primary">{{ libro()!.titulo }}</p>
+        <p class="text-xs text-primary/70">{{ libro()!.autor }}</p>
+      </div>
+
+      <form
+        [formGroup]="formulario"
+        (ngSubmit)="guardar()"
+        class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+      >
+        <div>
+          <label for="estanteId" class="mb-1 block text-sm font-semibold text-primary">Estante</label>
+          <select
+            id="estanteId"
+            formControlName="estanteId"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+          >
+            <option value="" disabled>Selecciona un estante</option>
+            @for (estante of estantes(); track estante.estanteId) {
+              <option [value]="estante.estanteId">{{ estante.espacio }} — {{ estante.mueble }} — {{ estante.ubicacion }}</option>
+            }
+          </select>
+          @if (formulario.controls.estanteId.invalid && formulario.controls.estanteId.touched) {
+            <p class="mt-1 text-xs text-danger">El estante es requerido.</p>
+          }
+          @if (errorEstantes()) {
+            <p class="mt-1 text-xs text-danger">No se pudieron cargar los estantes.</p>
+          }
+        </div>
+
+        <button
+          type="submit"
+          class="mt-2 flex h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          [disabled]="guardando()"
+        >
+          {{ guardando() ? 'Guardando…' : 'Guardar' }}
+        </button>
+
+        @if (mensajeExito()) {
+          <p class="text-center text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+        }
+        @if (mensajeError()) {
+          <p class="text-center text-sm text-danger">{{ mensajeError() }}</p>
+        }
+      </form>
+    }
+  </div>
+</div>
