@@ -25,6 +25,10 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Client
   },
   {
+    path: 'libros/:bookId/estante',
+    renderMode: RenderMode.Client
+  },
+  {
     path: 'catalogar',
     renderMode: RenderMode.Client
   },
