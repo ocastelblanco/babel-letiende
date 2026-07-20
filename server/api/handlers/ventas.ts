@@ -4,7 +4,7 @@ import type {
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
-import { decrementarSiPositivo, guardar, obtenerPorClave } from '../services/dynamodb';
+import { decrementarSiPositivo, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
 
 /**
  * Copia local de `src/app/core/models/libro.model.ts` (misma forma exacta).
@@ -87,6 +87,17 @@ function nombreTablaUsuarios(): string {
     throw new Error('Falta la variable de entorno TABLA_USUARIOS.');
   }
   return nombre;
+}
+
+/**
+ * Verifica el ID Token y exige rol `administrador` exclusivamente (CLAUDE.md
+ * A01) — a diferencia de `POST /api/ventas`, un reporte con costos/
+ * utilidades es información sensible de negocio, `vendedor` no basta.
+ */
+async function exigirAdministrador(headerAuthorization: string | undefined): Promise<string | null> {
+  const { email } = await verificarTokenDesdeHeader(headerAuthorization);
+  const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+  return usuario?.rol === 'administrador' ? email : null;
 }
 
 /** Datos aceptados en el body de `POST /api/ventas` — el resto lo genera/resuelve el backend (ver `handler`). */
@@ -199,6 +210,117 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
     await guardar(nombreTablaVentas(), venta);
 
     return respuestaJson(201, venta);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/** Filtros opcionales aceptados por `GET /api/ventas` — todos son query params, todos opcionales. */
+interface FiltrosVentas {
+  desde?: string;
+  hasta?: string;
+  editorial?: string;
+  formaDePago?: FormaDePago;
+}
+
+type ResultadoValidacionFiltros = { valido: true; filtros: FiltrosVentas } | { valido: false; error: string };
+
+/**
+ * Valida los query params de `GET /api/ventas`. Exportada para poder
+ * probarla sin invocar el handler completo (mismo patrón que
+ * `validarDatosNuevaVenta`). `desde`/`hasta` deben ser fechas ISO válidas
+ * (comparables directamente contra `Venta.vendidoEn`, que siempre se genera
+ * con `new Date().toISOString()`); `formaDePago` debe ser uno de los 5
+ * valores válidos. `editorial` no tiene formato propio que validar — se
+ * compara contra `Libro.editorial` al filtrar (ver `handlerListar`).
+ */
+export function validarFiltrosVentas(
+  query: Record<string, string | undefined> | null | undefined,
+): ResultadoValidacionFiltros {
+  const params = query ?? {};
+  const filtros: FiltrosVentas = {};
+
+  if (params['desde'] !== undefined) {
+    if (Number.isNaN(Date.parse(params['desde']))) {
+      return { valido: false, error: 'El parámetro desde debe ser una fecha ISO válida.' };
+    }
+    filtros.desde = params['desde'];
+  }
+  if (params['hasta'] !== undefined) {
+    if (Number.isNaN(Date.parse(params['hasta']))) {
+      return { valido: false, error: 'El parámetro hasta debe ser una fecha ISO válida.' };
+    }
+    filtros.hasta = params['hasta'];
+  }
+  if (filtros.desde && filtros.hasta && new Date(filtros.desde) > new Date(filtros.hasta)) {
+    return { valido: false, error: 'El parámetro desde no puede ser posterior a hasta.' };
+  }
+  if (params['formaDePago'] !== undefined) {
+    if (!FORMAS_DE_PAGO.includes(params['formaDePago'] as FormaDePago)) {
+      return { valido: false, error: `La forma de pago debe ser una de: ${FORMAS_DE_PAGO.join(', ')}.` };
+    }
+    filtros.formaDePago = params['formaDePago'] as FormaDePago;
+  }
+  if (params['editorial'] !== undefined && params['editorial'].trim() !== '') {
+    filtros.editorial = params['editorial'];
+  }
+
+  return { valido: true, filtros };
+}
+
+/**
+ * `GET /api/ventas` — lista/filtra ventas para reportes (tech-specs.md §5,
+ * "Admin"). Exige rol `administrador` exclusivamente. `desde`/`hasta`/
+ * `formaDePago` filtran directamente sobre los campos de `Venta`; `editorial`
+ * filtra contra `Libro.editorial`, resuelto por `bookId` únicamente para las
+ * ventas que ya pasaron los demás filtros (evita un `Scan` completo de
+ * `babel-libros`, solo `GetItem` puntuales — CLAUDE.md A05).
+ *
+ * **Nota de infraestructura:** el GSI `vendidoEn-index` de `babel-ventas`
+ * (`serverless.yml`) solo tiene `vendidoEn` como partición (sin clave de
+ * ordenamiento), así que no admite consultas de rango vía `Query` a pesar de
+ * que `tech-specs.md` lo describe como pensado para eso — se usa `Scan` +
+ * filtrado en memoria (`escanearTodo`), mismo criterio ya aceptado para
+ * tablas pequeñas que `estantes.ts`/`editoriales-descuentos.ts` (ver
+ * `MEMORY.md` §6/§7). Corregir el GSI queda fuera de alcance de esta tarea.
+ */
+export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const email = await exigirAdministrador(event.headers['authorization']);
+    if (!email) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para ver reportes de ventas en Babel.' });
+    }
+
+    const validacion = validarFiltrosVentas(event.queryStringParameters);
+    if (!validacion.valido) {
+      return respuestaJson(400, { error: validacion.error });
+    }
+    const { desde, hasta, editorial, formaDePago } = validacion.filtros;
+
+    let ventas = await escanearTodo<Venta>(nombreTablaVentas());
+
+    if (desde) {
+      ventas = ventas.filter((venta) => venta.vendidoEn >= desde);
+    }
+    if (hasta) {
+      ventas = ventas.filter((venta) => venta.vendidoEn <= hasta);
+    }
+    if (formaDePago) {
+      ventas = ventas.filter((venta) => venta.formaDePago === formaDePago);
+    }
+    if (editorial) {
+      const bookIds = [...new Set(ventas.map((venta) => venta.bookId))];
+      const libros = await Promise.all(
+        bookIds.map((bookId) => obtenerPorClave<Libro>(nombreTablaLibros(), { bookId })),
+      );
+      const editorialPorBookId = new Map(bookIds.map((bookId, indice) => [bookId, libros[indice]?.editorial ?? null]));
+      ventas = ventas.filter((venta) => editorialPorBookId.get(venta.bookId) === editorial);
+    }
+
+    return respuestaJson(200, ventas);
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });
