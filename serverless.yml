@@ -207,6 +207,41 @@ functions:
           path: /api/usuarios/{email}
           method: delete
 
+  editorialesDescuentos:
+    handler: dist-server/api/handlers/editoriales-descuentos.handler
+    role: !GetAtt EditorialesDescuentosLambdaRole.Arn
+    description: >-
+      CRUD /api/editoriales-descuentos — exige rol administrador
+      exclusivamente (CLAUDE.md A01, ADR-008).
+    environment:
+      TABLA_EDITORIALES_DESCUENTOS: ${self:custom.nombresTablas.editorialesDescuentos}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/editoriales-descuentos.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Verifica tokens con firebase-admin — igual que usuariosMe/
+        # catalogarLibro/estantes/registrarVenta/usuarios, se incluye
+        # node_modules completo en vez de un allowlist manual (ver gotcha de
+        # jose/jwks-rsa en MEMORY.md §7).
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/editoriales-descuentos
+          method: get
+      - httpApi:
+          path: /api/editoriales-descuentos
+          method: post
+      - httpApi:
+          path: /api/editoriales-descuentos/{editorial}
+          method: put
+      - httpApi:
+          path: /api/editoriales-descuentos/{editorial}
+          method: delete
+
   registrarVenta:
     handler: dist-server/api/handlers/ventas.handler
     role: !GetAtt RegistrarVentaLambdaRole.Arn
@@ -447,6 +482,41 @@ resources:
                     - dynamodb:PutItem
                     - dynamodb:DeleteItem
                     - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
+    EditorialesDescuentosLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-editoriales-descuentos-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # CRUD completo sobre babel-editoriales-descuentos y solo lee
+          # (GetItem) babel-usuarios para resolver el rol del token — sin
+          # acceso a ninguna otra tabla (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-editoriales-descuentos-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaEditorialesDescuentos.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
 
