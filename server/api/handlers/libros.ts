@@ -39,6 +39,14 @@ interface Usuario {
   creadoEn: string;
 }
 
+/** Copia local de `src/app/core/models/estante.model.ts` — mismo motivo que arriba. */
+interface Estante {
+  estanteId: string;
+  espacio: string;
+  mueble: string;
+  ubicacion: string;
+}
+
 function respuestaJson(statusCode: number, cuerpo: unknown): APIGatewayProxyResultV2 {
   return {
     statusCode,
@@ -59,6 +67,14 @@ function nombreTablaUsuarios(): string {
   const nombre = process.env['TABLA_USUARIOS'];
   if (!nombre) {
     throw new Error('Falta la variable de entorno TABLA_USUARIOS.');
+  }
+  return nombre;
+}
+
+function nombreTablaEstantes(): string {
+  const nombre = process.env['TABLA_ESTANTES'];
+  if (!nombre) {
+    throw new Error('Falta la variable de entorno TABLA_ESTANTES.');
   }
   return nombre;
 }
@@ -213,6 +229,62 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
     await guardar(nombreTablaLibros(), libro);
 
     return respuestaJson(201, libro);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `PATCH /api/libros/:bookId/estante` — cambia el estante de un libro ya
+ * catalogado (tech-specs.md §5, "Vendedor/Admin"). Exige rol `vendedor` o
+ * `administrador` (CLAUDE.md A01), mismo criterio que `POST /api/libros` —
+ * mover un libro de estante es parte de la operación diaria, no solo de
+ * administración. La ruta usa `bookId` (clave primaria real de
+ * `babel-libros`, tech-specs.md §5.1) y no `isbn`, que puede ser `null`.
+ */
+export const handlerCambiarEstante: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para catalogar libros en Babel.' });
+    }
+
+    const bookId = event.pathParameters?.['bookId'];
+    if (!bookId) {
+      return respuestaJson(400, { error: 'Falta el bookId en la ruta.' });
+    }
+
+    const libro = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
+    if (!libro) {
+      return respuestaJson(404, { error: 'El libro no existe.' });
+    }
+
+    let cuerpo: unknown;
+    try {
+      cuerpo = event.body ? JSON.parse(event.body) : undefined;
+    } catch {
+      return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
+    }
+    const datos = typeof cuerpo === 'object' && cuerpo !== null ? (cuerpo as Record<string, unknown>) : {};
+    if (typeof datos['estanteId'] !== 'string' || datos['estanteId'].trim() === '') {
+      return respuestaJson(400, { error: 'El estanteId es requerido.' });
+    }
+    const estanteId = datos['estanteId'];
+
+    const estante = await obtenerPorClave<Estante>(nombreTablaEstantes(), { estanteId });
+    if (!estante) {
+      return respuestaJson(400, { error: 'El estante indicado no existe.' });
+    }
+
+    const libroActualizado: Libro = { ...libro, estanteId, actualizadoEn: new Date().toISOString() };
+    await guardar(nombreTablaLibros(), libroActualizado);
+
+    return respuestaJson(200, libroActualizado);
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

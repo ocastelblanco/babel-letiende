@@ -159,7 +159,7 @@ Configurados en `tsconfig.json`:
 | `/catalogar` | `CatalogarLibroComponent` | `AuthGuard` | Lazy | Flujo de catalogación (vendedor/admin). |
 | `/venta` | `RegistrarVentaComponent` | `AuthGuard` | Lazy | Registro de venta (vendedor/admin). |
 | `/libros` | `ListaLibrosCatalogadosComponent` | `AuthGuard` | Lazy | Lista interna para buscar un libro y cambiar su estante. |
-| `/libros/:isbn/estante` | `CambiarEstanteComponent` | `AuthGuard` | Lazy | Edición de ubicación física. |
+| `/libros/:bookId/estante` | `CambiarEstanteComponent` | `AuthGuard` | Lazy | Edición de ubicación física. |
 | `/admin/reportes` | `ReportesVentasComponent` | `AuthGuard` + `RoleGuard(admin)` | Lazy | Filtros y exportación XLSX. |
 | `/admin/usuarios` | `GestionUsuariosComponent` | `AuthGuard` + `RoleGuard(admin)` | Lazy | CRUD de vendedores/administradores. |
 | `/admin/editoriales` | `DescuentosEditorialesComponent` | `AuthGuard` + `RoleGuard(admin)` | Lazy | CRUD de porcentajes de descuento por editorial. |
@@ -250,7 +250,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | GET | `/api/libros/:isbn` | Pública | Detalle de un libro disponible. | — |
 | GET | `/api/metadatos/:isbn` | Vendedor/Admin | Orquesta `api.letiende.co` (Google Books) + scraping de PVP (lista blanca → Google Search de respaldo). | — |
 | POST | `/api/libros` | Vendedor/Admin | Crea un libro catalogado. | `Libro` (sin `bookId`/`creadoEn`) |
-| PATCH | `/api/libros/:isbn/estante` | Vendedor/Admin | Cambia el estante de un libro. | `{ estanteId }` |
+| PATCH | `/api/libros/:bookId/estante` | Vendedor/Admin | Cambia el estante de un libro (`bookId` es la clave primaria real de `babel-libros`, ver §5.1 — `isbn` puede ser `null`). | `{ estanteId }` |
 | POST | `/api/ventas` | Vendedor/Admin | Registra una venta; decrementa `cantidadDisponible`; calcula `precioFinal`/`utilidad` con snapshot de `costoLibro`. | `{ bookId, formaDePago, porcentajeDescuentoVenta }` |
 | GET | `/api/ventas` | Admin | Lista/filtra ventas para reportes. | Query: `desde`, `hasta`, `editorial`, `formaDePago` |
 | GET | `/api/ventas/exportar` | Admin | Genera y descarga el reporte en XLSX. | Mismos filtros que arriba |
