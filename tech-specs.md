@@ -264,7 +264,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | Tabla | Clave primaria | Notas |
 |---|---|---|
 | `babel-libros` | `bookId` (PK) | GSI por `isbn` para búsquedas directas por código de barras. |
-| `babel-ventas` | `ventaId` (PK) | GSI por `vendidoEn` (rango de fecha) para reportes. |
+| `babel-ventas` | `ventaId` (PK) | Sin GSI: los reportes (`GET /api/ventas`) filtran por rango de `vendidoEn` con `Scan` + filtrado en memoria — aceptable para el volumen esperado (miles de ventas). Si el volumen algún día lo exige, diseñar un GSI real con partición fija + `vendidoEn` como clave de rango (ver `MEMORY.md` §7). |
 | `babel-estantes` | `estanteId` (PK) | — |
 | `babel-editoriales-descuentos` | `editorial` (PK) | — |
 | `babel-usuarios` | `email` (PK) | Fuente de verdad del rol (`administrador`/`vendedor`). |
