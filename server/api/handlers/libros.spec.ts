@@ -25,7 +25,7 @@ vi.mock('../services/dynamodb', () => ({
   escanearMayorQue: escanearMayorQueMock,
 }));
 
-const { handlerCrear, validarDatosNuevoLibro } = await import('./libros');
+const { handlerCrear, handlerCambiarEstante, validarDatosNuevoLibro } = await import('./libros');
 
 const datosValidos = {
   isbn: '9780000000000',
@@ -45,6 +45,37 @@ function eventoFalso(body: unknown, authorization?: string): APIGatewayProxyEven
     body: body === undefined ? undefined : JSON.stringify(body),
   } as unknown as APIGatewayProxyEventV2;
 }
+
+function eventoCambiarEstante(
+  opciones: { body?: unknown; authorization?: string; bookId?: string } = {},
+): APIGatewayProxyEventV2 {
+  return {
+    headers: opciones.authorization ? { authorization: opciones.authorization } : {},
+    body: opciones.body === undefined ? undefined : JSON.stringify(opciones.body),
+    pathParameters: opciones.bookId ? { bookId: opciones.bookId } : undefined,
+  } as unknown as APIGatewayProxyEventV2;
+}
+
+const libroFalso = {
+  bookId: 'libro-1',
+  isbn: '9780000000000',
+  titulo: 'Cien años de soledad',
+  autor: 'Gabriel García Márquez',
+  editorial: 'Sudamericana',
+  portadaUrl: null,
+  pvp: 45000,
+  porcentajeDescuentoEditorial: 35,
+  costo: 29250,
+  utilidadCatalogo: 15750,
+  cantidadTotal: 2,
+  cantidadDisponible: 2,
+  estanteId: 'estante-1',
+  creadoPor: 'vendedor@letiende.co',
+  creadoEn: '2026-01-01T00:00:00.000Z',
+  actualizadoEn: '2026-01-01T00:00:00.000Z',
+};
+
+const estanteFalso = { estanteId: 'estante-2', espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' };
 
 describe('validarDatosNuevoLibro', () => {
   it('acepta un body válido', () => {
@@ -83,6 +114,7 @@ describe('handlerCrear (POST /api/libros)', () => {
     vi.clearAllMocks();
     process.env['TABLA_LIBROS'] = 'babel-libros-test';
     process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_ESTANTES'] = 'babel-estantes-test';
   });
 
   it('responde 401 sin token válido', async () => {
@@ -141,5 +173,102 @@ describe('handlerCrear (POST /api/libros)', () => {
     const respuesta = await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 201 });
+  });
+});
+
+describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_ESTANTES'] = 'babel-estantes-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerCambiarEstante(eventoCambiarEstante({}), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el correo no tiene fila en babel-usuarios', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue(undefined);
+
+    const respuesta = await handlerCambiarEstante(
+      eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: { estanteId: 'estante-2' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
+  describe('con un vendedor autenticado', () => {
+    beforeEach(() => {
+      verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+      obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    });
+
+    it('responde 404 cuando el bookId no existe', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+      const respuesta = await handlerCambiarEstante(
+        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'no-existe', body: { estanteId: 'estante-2' } }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 404 });
+      expect(guardarMock).not.toHaveBeenCalled();
+    });
+
+    it('responde 400 sin estanteId en el body', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+
+      const respuesta = await handlerCambiarEstante(
+        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: {} }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 400 });
+      expect(guardarMock).not.toHaveBeenCalled();
+    });
+
+    it('responde 400 cuando el estanteId no existe', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+      const respuesta = await handlerCambiarEstante(
+        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: { estanteId: 'no-existe' } }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 400 });
+      expect(guardarMock).not.toHaveBeenCalled();
+    });
+
+    it('responde 200 y actualiza el estante cuando todo es válido', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      obtenerPorClaveMock.mockResolvedValueOnce(estanteFalso);
+
+      const respuesta = await handlerCambiarEstante(
+        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: { estanteId: 'estante-2' } }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      expect(guardarMock).toHaveBeenCalledTimes(1);
+      const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(libroGuardado['estanteId']).toBe('estante-2');
+      expect(libroGuardado['bookId']).toBe('libro-1');
+      expect(libroGuardado['actualizadoEn']).not.toBe(libroFalso.actualizadoEn);
+    });
   });
 });

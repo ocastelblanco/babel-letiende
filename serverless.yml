@@ -139,6 +139,32 @@ functions:
           path: /api/libros
           method: post
 
+  cambiarEstanteLibro:
+    handler: dist-server/api/handlers/libros.handlerCambiarEstante
+    role: !GetAtt CambiarEstanteLibroLambdaRole.Arn
+    description: >-
+      PATCH /api/libros/:bookId/estante — cambia el estante de un libro,
+      exige rol vendedor o administrador (CLAUDE.md A01, ADR-008).
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST — mismo cuidado documentado
+        # arriba (MEMORY.md §7): un import nuevo a nivel superior afecta a
+        # las 3 funciones Lambda que comparten este archivo, no solo esta.
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/libros/{bookId}/estante
+          method: patch
+
   estantes:
     handler: dist-server/api/handlers/estantes.handler
     role: !GetAtt EstantesLambdaRole.Arn
@@ -418,6 +444,42 @@ resources:
                   Action:
                     - dynamodb:GetItem
                   Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
+    CambiarEstanteLibroLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-cambiar-estante-libro-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Lee/escribe babel-libros, solo lee (GetItem) babel-estantes para
+          # validar que el estante destino exista, y solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token — sin acceso de
+          # escritura a ninguna tabla salvo babel-libros (CLAUDE.md A05,
+          # ADR-008).
+          - PolicyName: babel-cambiar-estante-libro-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaEstantes.Arn
                     - !GetAtt TablaUsuarios.Arn
 
     EstantesLambdaRole:

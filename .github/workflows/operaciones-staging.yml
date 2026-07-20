@@ -78,6 +78,15 @@ name: Operaciones sobre staging
 # (403) o el token no es válido (401), el script se detiene ahí. Si es
 # administrador (200), corre el ciclo completo POST → PUT → GET → DELETE
 # sobre una editorial de prueba fija, limpiándola al final.
+#
+# `probar-cambiar-estante` (TODO.md Tarea 1, PATCH /api/libros/:bookId/
+# estante): mismo mecanismo de ID Token real. Siembra dos estantes
+# desechables por DynamoDB directo (origen/destino, sin depender de que
+# estante-1/estante-2 ya existan), cataloga un libro de prueba apuntando al
+# origen (POST /api/libros — si el correo no es vendedor/administrador,
+# responde 403 y el script se detiene ahí), cambia su estante al destino
+# (PATCH) y confirma el cambio con GET /api/libros. Limpia el libro y ambos
+# estantes de prueba al terminar.
 
 on:
   workflow_dispatch:
@@ -105,6 +114,8 @@ on:
           - ver-logs-usuarios
           - probar-editoriales-descuentos-crud
           - ver-logs-editoriales-descuentos
+          - probar-cambiar-estante
+          - ver-logs-cambiar-estante-libro
       email:
         description: 'Email del usuario de prueba (no aplica a ver-logs-*/eliminar-libro-prueba/sembrar-libros-demo/sembrar-estantes-demo, poner cualquier valor)'
         required: true
@@ -164,18 +175,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configurar Node.js
-        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro' || inputs.operacion == 'sembrar-libros-demo' || inputs.operacion == 'sembrar-estantes-demo' || inputs.operacion == 'probar-estantes' || inputs.operacion == 'probar-registrar-venta' || inputs.operacion == 'probar-usuarios-crud' || inputs.operacion == 'probar-editoriales-descuentos-crud'
+        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro' || inputs.operacion == 'sembrar-libros-demo' || inputs.operacion == 'sembrar-estantes-demo' || inputs.operacion == 'probar-estantes' || inputs.operacion == 'probar-registrar-venta' || inputs.operacion == 'probar-usuarios-crud' || inputs.operacion == 'probar-editoriales-descuentos-crud' || inputs.operacion == 'probar-cambiar-estante'
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
 
       - name: Instalar dependencias (reproducible, package-lock.json)
-        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro' || inputs.operacion == 'sembrar-libros-demo' || inputs.operacion == 'sembrar-estantes-demo' || inputs.operacion == 'probar-estantes' || inputs.operacion == 'probar-registrar-venta' || inputs.operacion == 'probar-usuarios-crud' || inputs.operacion == 'probar-editoriales-descuentos-crud'
+        if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro' || inputs.operacion == 'sembrar-libros-demo' || inputs.operacion == 'sembrar-estantes-demo' || inputs.operacion == 'probar-estantes' || inputs.operacion == 'probar-registrar-venta' || inputs.operacion == 'probar-usuarios-crud' || inputs.operacion == 'probar-editoriales-descuentos-crud' || inputs.operacion == 'probar-cambiar-estante'
         run: npm ci
 
       - name: Validar email
-        if: inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'ver-logs-libros' && inputs.operacion != 'ver-logs-estantes' && inputs.operacion != 'ver-logs-registrar-venta' && inputs.operacion != 'ver-logs-usuarios' && inputs.operacion != 'ver-logs-editoriales-descuentos' && inputs.operacion != 'eliminar-libro-prueba' && inputs.operacion != 'sembrar-libros-demo' && inputs.operacion != 'sembrar-estantes-demo'
+        if: inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'ver-logs-libros' && inputs.operacion != 'ver-logs-estantes' && inputs.operacion != 'ver-logs-registrar-venta' && inputs.operacion != 'ver-logs-usuarios' && inputs.operacion != 'ver-logs-editoriales-descuentos' && inputs.operacion != 'ver-logs-cambiar-estante-libro' && inputs.operacion != 'eliminar-libro-prueba' && inputs.operacion != 'sembrar-libros-demo' && inputs.operacion != 'sembrar-estantes-demo'
         run: |
           if ! printf '%s' "$EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
             echo "::error::El email '$EMAIL' no tiene un formato válido."
@@ -191,7 +202,7 @@ jobs:
           fi
 
       - name: Ejecutar operación
-        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'probar-catalogar-libro' && inputs.operacion != 'eliminar-libro-prueba' && inputs.operacion != 'ver-logs-libros' && inputs.operacion != 'sembrar-libros-demo' && inputs.operacion != 'sembrar-estantes-demo' && inputs.operacion != 'probar-estantes' && inputs.operacion != 'ver-logs-estantes' && inputs.operacion != 'probar-registrar-venta' && inputs.operacion != 'ver-logs-registrar-venta' && inputs.operacion != 'probar-usuarios-crud' && inputs.operacion != 'ver-logs-usuarios' && inputs.operacion != 'probar-editoriales-descuentos-crud' && inputs.operacion != 'ver-logs-editoriales-descuentos'
+        if: inputs.operacion != 'probar-usuarios-me' && inputs.operacion != 'ver-logs-usuarios-me' && inputs.operacion != 'probar-catalogar-libro' && inputs.operacion != 'eliminar-libro-prueba' && inputs.operacion != 'ver-logs-libros' && inputs.operacion != 'sembrar-libros-demo' && inputs.operacion != 'sembrar-estantes-demo' && inputs.operacion != 'probar-estantes' && inputs.operacion != 'ver-logs-estantes' && inputs.operacion != 'probar-registrar-venta' && inputs.operacion != 'ver-logs-registrar-venta' && inputs.operacion != 'probar-usuarios-crud' && inputs.operacion != 'ver-logs-usuarios' && inputs.operacion != 'probar-editoriales-descuentos-crud' && inputs.operacion != 'ver-logs-editoriales-descuentos' && inputs.operacion != 'probar-cambiar-estante' && inputs.operacion != 'ver-logs-cambiar-estante-libro'
         run: |
           case "$OPERACION" in
             sembrar-usuario-prueba)
@@ -321,6 +332,17 @@ jobs:
         env:
           EMAIL: ${{ inputs.email }}
 
+      - name: Emitir un ID Token real (firebase-admin) y probar PATCH /api/libros/:bookId/estante
+        if: inputs.operacion == 'probar-cambiar-estante'
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_BABEL" ]; then
+            echo "::error::Falta el secret FIREBASE_SERVICE_ACCOUNT_BABEL."
+            exit 1
+          fi
+          node server/scripts/probar-cambiar-estante.mjs
+        env:
+          EMAIL: ${{ inputs.email }}
+
       - name: Ver logs recientes de la Lambda usuariosMe
         if: inputs.operacion == 'ver-logs-usuarios-me'
         run: |
@@ -380,6 +402,17 @@ jobs:
         if: inputs.operacion == 'ver-logs-editoriales-descuentos'
         run: |
           grupo="/aws/lambda/babel-letiende-staging-editorialesDescuentos"
+          desde_ms=$(( ($(date +%s) - 900) * 1000 ))
+          aws logs filter-log-events \
+            --log-group-name "$grupo" \
+            --start-time "$desde_ms" \
+            --output text \
+            --query 'events[*].message'
+
+      - name: Ver logs recientes de la Lambda cambiarEstanteLibro
+        if: inputs.operacion == 'ver-logs-cambiar-estante-libro'
+        run: |
+          grupo="/aws/lambda/babel-letiende-staging-cambiarEstanteLibro"
           desde_ms=$(( ($(date +%s) - 900) * 1000 ))
           aws logs filter-log-events \
             --log-group-name "$grupo" \
