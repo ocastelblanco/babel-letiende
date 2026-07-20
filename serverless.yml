@@ -294,6 +294,32 @@ functions:
           path: /api/ventas
           method: post
 
+  listarVentas:
+    handler: dist-server/api/handlers/ventas.handlerListar
+    role: !GetAtt ListarVentasLambdaRole.Arn
+    description: >-
+      GET /api/ventas — lista/filtra ventas para reportes, exige rol
+      administrador exclusivamente (CLAUDE.md A01, ADR-008).
+    environment:
+      TABLA_VENTAS: ${self:custom.nombresTablas.ventas}
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/ventas.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (ventas.ts) que POST — mismo cuidado documentado en
+        # MEMORY.md §7: un import nuevo a nivel superior afecta a ambas
+        # funciones Lambda que comparten este archivo, no solo esta.
+        - 'node_modules/**'
+    events:
+      - httpApi:
+          path: /api/ventas
+          method: get
+
   ssr:
     handler: server/ssr/handler.handler
     role: !GetAtt SsrLambdaRole.Arn
@@ -619,6 +645,40 @@ resources:
                   Action:
                     - dynamodb:GetItem
                   Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
+    ListarVentasLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-listar-ventas-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lectura: Scan sobre babel-ventas, GetItem puntual sobre
+          # babel-libros (resolver editorial por bookId al filtrar) y sobre
+          # babel-usuarios (resolver el rol del token) — sin acceso de
+          # escritura a ninguna tabla (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-listar-ventas-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaVentas.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
                     - !GetAtt TablaUsuarios.Arn
 
     SsrLambdaRole:
