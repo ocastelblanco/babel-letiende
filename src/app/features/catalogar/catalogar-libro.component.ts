@@ -7,15 +7,19 @@ import type { IScannerControls } from '@zxing/browser';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { EstantesService } from '../../core/api/estantes.service';
+import { MetadatosService } from '../../core/api/metadatos.service';
 
 const PVP_MAXIMO = 5_000_000;
 
 /**
- * Primer recorte vertical del flujo de catalogación (`TODO.md`, roadmap
- * Alta) — captura **manual** de todos los campos contra `POST /api/libros`,
- * ya verificado en vivo. El escaneo de ISBN con cámara y el autocompletado
- * de metadatos/PVP quedan para tareas futuras (extensiones independientes
- * de este mismo formulario).
+ * Flujo de catalogación (`TODO.md`, roadmap Alta) — captura los campos del
+ * libro contra `POST /api/libros`, ya verificado en vivo. El ISBN puede
+ * llegar por escaneo con cámara (`@zxing/browser`) o entrada manual; en
+ * ambos casos dispara la búsqueda de metadatos (`MetadatosService`) que
+ * pre-carga título/autor/editorial/portada — siempre editables por el
+ * vendedor. El autocompletado automático de PVP (scraping/Google Custom
+ * Search) queda para una tarea futura independiente (superficie de
+ * seguridad propia, `CLAUDE.md` A10).
  *
  * La validación del formulario es solo UX: `POST /api/libros` vuelve a
  * validar y recalcula `costo`/`utilidadCatalogo`/`bookId`/`creadoPor` en el
@@ -32,6 +36,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
   private readonly estantesService = inject(EstantesService);
+  private readonly metadatosService = inject(MetadatosService);
 
   protected readonly estantes = this.estantesService.estantes;
   protected readonly errorEstantes = this.estantesService.error;
@@ -39,6 +44,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   protected readonly guardando = signal(false);
   protected readonly mensajeExito = signal<string | null>(null);
   protected readonly mensajeError = signal<string | null>(null);
+
+  /** `true` mientras se consulta `MetadatosService` tras obtener un ISBN (escaneo o entrada manual). */
+  protected readonly buscandoMetadatos = signal(false);
+  /** `true` cuando la última búsqueda de metadatos no encontró ningún dato — mensaje neutral, no bloqueante. */
+  protected readonly metadatosNoEncontrados = signal(false);
 
   /** Referencia al `<video>` que muestra la vista de la cámara mientras se escanea. */
   private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
@@ -96,6 +106,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
           if (resultado) {
             this.formulario.controls.isbn.setValue(resultado.getText());
             this.detenerEscaneo();
+            void this.buscarYPrecargarMetadatos(resultado.getText());
           }
           // Los errores de "no encontrado" se disparan en cada frame sin
           // código detectado — no son errores reales, se ignoran.
@@ -112,6 +123,52 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     this.controlesEscaner?.stop();
     this.controlesEscaner = null;
     this.escaneando.set(false);
+  }
+
+  /** Se dispara al perder el foco el campo ISBN cuando se ingresó manualmente (sin cámara). */
+  protected alPerderFocoIsbn(): void {
+    void this.buscarYPrecargarMetadatos(this.formulario.controls.isbn.value);
+  }
+
+  /**
+   * Consulta `MetadatosService` con el ISBN disponible (por escaneo o
+   * entrada manual) y pre-carga título/autor/editorial/portada SOLO en los
+   * campos que el vendedor todavía no completó a mano — nunca pisa un valor
+   * ya escrito (`CLAUDE.md` A08). Si no se encuentra nada o la API falla, el
+   * formulario sigue siendo 100% editable manualmente: no hay ningún
+   * mensaje bloqueante, solo un aviso neutral opcional.
+   */
+  private async buscarYPrecargarMetadatos(isbn: string): Promise<void> {
+    const isbnLimpio = isbn.trim();
+    if (isbnLimpio === '') {
+      return;
+    }
+
+    this.metadatosNoEncontrados.set(false);
+    this.buscandoMetadatos.set(true);
+    try {
+      const metadatos = await this.metadatosService.obtenerMetadatos(isbnLimpio);
+      const controles = this.formulario.controls;
+
+      if (controles.titulo.value.trim() === '' && metadatos.titulo) {
+        controles.titulo.setValue(metadatos.titulo);
+      }
+      if (controles.autor.value.trim() === '' && metadatos.autor) {
+        controles.autor.setValue(metadatos.autor);
+      }
+      if (controles.editorial.value.trim() === '' && metadatos.editorial) {
+        controles.editorial.setValue(metadatos.editorial);
+      }
+      if (controles.portadaUrl.value.trim() === '' && metadatos.portadaUrl) {
+        controles.portadaUrl.setValue(metadatos.portadaUrl);
+      }
+
+      if (!metadatos.titulo && !metadatos.autor && !metadatos.editorial && !metadatos.portadaUrl) {
+        this.metadatosNoEncontrados.set(true);
+      }
+    } finally {
+      this.buscandoMetadatos.set(false);
+    }
   }
 
   protected async guardar(): Promise<void> {
