@@ -2,33 +2,13 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Prioridad de selección aplicada:** `CambiarEstanteComponent` se completó (PR #28): `ListaLibrosCatalogadosComponent` dejó de ser el placeholder del scaffold (ahora lista el catálogo real con un enlace "Cambiar estante" por libro) y se implementó `CambiarEstanteComponent` (`bookId` resuelto del catálogo público ya cargado por `LibrosService`, sin nuevo endpoint de detalle; `<select>` de `EstantesService`; `PATCH` autenticado inline en el componente, mismo patrón que `CatalogarLibroComponent`). Verificado con la evidencia combinada que el usuario eligió (recomendada): el backend `PATCH /api/libros/:bookId/estante` ya estaba verificado en vivo contra `staging` (tarea histórica, PR #25) + 10 tests unitarios nuevos del frontend (`CambiarEstanteComponent` 6, `ListaLibrosCatalogadosComponent` 4). Sube a Tarea 1 la sección `/admin` (ya estaba en el TODO como Tarea 2, sin cambios de contenido). Se agrega como Tarea 2 el escaneo de código de barras con cámara en `CatalogarLibroComponent` (`PRD.md` §5.2, primer paso de "Flujo de catalogación completo", prioridad Alta en el roadmap; `tech-specs.md` línea 86 ya decide la librería, `@zxing/browser`). Ambas tareas son independientes entre sí: una es la nueva sección `/admin` (guardada con `RoleGuard('administrador')`), la otra toca únicamente `CatalogarLibroComponent` (ruta `/catalogar`, ya existente).
+**Prioridad de selección aplicada:** la sección `/admin` se completó (PR #29): `AdminInicioComponent` (índice con las 4 secciones futuras, ninguna implementada todavía), ruta `/admin` guardada con `RoleGuard('administrador')` y enlace "Administración" condicional en el header (`computed()` sobre `authService.usuario()` + `usuariosService.usuarioActual()?.rol`, para que desaparezca de inmediato al cerrar sesión). 7 tests unitarios nuevos (5 de `App` + 2 de `AdminInicioComponent`). Verificado con un login real elegido explícitamente por el usuario ("Verificación manual tuya"): confirmó en vivo contra `staging` que el enlace y `/admin` funcionan con la cuenta `administrador`, y que un `vendedor` no ve el enlace ni puede acceder. Sube a Tarea 1 el escaneo de código de barras con cámara (ya estaba en el TODO como Tarea 2, sin cambios de contenido). Se agrega como Tarea 2 `GestionEstantesComponent` — primer CRUD real de administración (`PRD.md` §6, "Configuración de estantes (CRUD)", prioridad Media, ahora desbloqueada porque `/admin` ya existe como punto de entrada): el backend (`CRUD /api/estantes`) ya está implementado y verificado en vivo desde hace varias tareas, pero ningún frontend lo consume para escritura (`EstantesService` hoy solo tiene `GET`, usado por `CatalogarLibroComponent`/`CambiarEstanteComponent`). Ambas tareas son independientes entre sí: una toca únicamente `CatalogarLibroComponent`/`/catalogar`, la otra agrega una pantalla nueva bajo `/admin/estantes`.
 
 ---
 
-## Tarea 1 — [FEATURE]: sección `/admin` — placeholder de navegación + `RoleGuard('administrador')`
+## Tarea 1 — [FEATURE]: escaneo de código de barras con cámara en `CatalogarLibroComponent`
 
-**Origen:** `tech-specs.md` §4.2 (rutas `/admin/estantes`, `/admin/editoriales`, `/admin/usuarios`, `/admin/reportes`, todas guardadas con `AuthGuard` + `RoleGuard(admin)`) y `PRD.md` §5.6 (configuración de la aplicación, solo administrador). Los 4 CRUDs de backend que alimentarán esta sección ya están implementados y verificados en vivo (`estantes`, `usuarios`, `editoriales-descuentos`, y ahora `GET /api/ventas` para reportes), pero ningún administrador tiene hoy una forma de llegar a ellos desde la interfaz — ni siquiera un enlace. Esta tarea es deliberadamente pequeña: un punto de entrada real y protegido a la sección admin, no cada pantalla CRUD (esas quedan como tareas futuras independientes, una por CRUD, siguiendo el mismo patrón atómico ya usado en todo el proyecto).
-
-**Archivos:** `src/app/features/admin/admin-inicio.component.ts` (nuevo, placeholder simple con enlaces a cada futura pantalla — pueden ser `<a>` deshabilitados o rutas que aún no existen, a decidir durante la implementación), ruta nueva `/admin` en `app.routes.ts` (guardada con `RoleGuard('administrador')`, mismo patrón que la extensión multi-rol ya soportada), enlace visible solo para administradores desde el header (`src/app/app.html`, que hoy ya muestra "Mi cuenta"/"Cerrar sesión" condicionalmente según sesión — extender con un enlace "Administración" visible solo si `usuario()?.rol === 'administrador'`, requiere resolver el rol del usuario actual en el header, hoy solo sabe si hay sesión o no).
-
-**Qué hacer:**
-1. Decidir cómo el header (`App`, hoy solo usa `AuthService.usuario()` para saber si hay sesión) resuelve el rol del usuario actual para mostrar/ocultar el enlace "Administración" — reutilizar `UsuariosService`/`obtenerUsuarioActual()` (ya existente, usado por `RoleGuard`) en vez de duplicar lógica.
-2. Implementar `AdminInicioComponent` (standalone, ruta `/admin`, guardada con `RoleGuard('administrador')`): página simple que liste las secciones futuras (Estantes, Usuarios, Editoriales, Reportes) — sin implementar ninguna todavía, es un índice/placeholder real, no una pantalla vacía sin sentido (ej. puede mostrar conteos básicos si `GET /api/estantes`/`GET /api/usuarios`/`GET /api/editoriales-descuentos` ya devuelven eso fácilmente, a evaluar sin sobrealcanzar la tarea).
-3. Cubrir con `npm test -- --watch=false`: el guard sobre la ruta `/admin` (ya cubierto indirectamente por los tests existentes de `RoleGuard`, pero agregar el caso específico de esta ruta si aporta valor) y los casos principales de `AdminInicioComponent`.
-4. Verificar que un `vendedor` autenticado NO vea el enlace "Administración" en el header, y que intentar navegar directo a `/admin` lo redirija (mismo comportamiento ya probado de `RoleGuard`).
-
-**Definition of done:**
-- [ ] `npm run build` y `npm test -- --watch=false` pasan sin errores
-- [ ] Tests unitarios cubren `AdminInicioComponent` y la visibilidad condicional del enlace en el header
-- [ ] Verificado manualmente contra `staging` (misma decisión de verificación que las tareas de frontend anteriores: combinar evidencia o pedir verificación manual al usuario)
-- [ ] Un `vendedor` no puede ver ni acceder a `/admin` (UX del header oculta el enlace, `RoleGuard` bloquea la navegación directa — recordando que la autorización real siempre vive en el backend, `CLAUDE.md` A01)
-
----
-
-## Tarea 2 — [FEATURE]: escaneo de código de barras con cámara en `CatalogarLibroComponent`
-
-**Origen:** `PRD.md` §5.2 ("Flujo de catalogación completo": escanear ISBN con la cámara es el primer paso, antes del autocompletado de metadatos), prioridad Alta en la tabla de roadmap (`PRD.md` §6). `tech-specs.md` línea 86 ya decide la librería (`@zxing/browser`, alternativa `html5-qrcode`) — no queda pendiente de diseño, solo de implementación. Independiente de la Tarea 1 (`/admin`): esta tarea solo toca `CatalogarLibroComponent`/`/catalogar`, ya existente y guardado con `RoleGuard(['vendedor', 'administrador'])`.
+**Origen:** `PRD.md` §5.2 ("Flujo de catalogación completo": escanear ISBN con la cámara es el primer paso, antes del autocompletado de metadatos), prioridad Alta en la tabla de roadmap (`PRD.md` §6). `tech-specs.md` línea 86 ya decide la librería (`@zxing/browser`, alternativa `html5-qrcode`) — no queda pendiente de diseño, solo de implementación. Independiente de la Tarea 2 (`GestionEstantesComponent`): esta tarea solo toca `CatalogarLibroComponent`/`/catalogar`, ya existente y guardado con `RoleGuard(['vendedor', 'administrador'])`.
 
 **Archivos:** `src/app/features/catalogar/catalogar-libro.component.ts` (extender: agregar botón "Escanear" + estado de escaneo activo/inactivo), `src/app/features/catalogar/catalogar-libro.component.html` (elemento de video/vista de cámara, visible solo mientras se escanea), `package.json` (agregar `@zxing/browser` + `@zxing/library` como dependencia de producción, `package-lock.json` actualizado — `CLAUDE.md` A08).
 
@@ -44,3 +24,23 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 - [ ] Tests unitarios cubren la activación/desactivación del escaneo y el autocompletado del campo `isbn` a partir de un resultado simulado
 - [ ] Verificado manualmente por el usuario en su propio navegador/celular contra `staging` (requiere cámara real y HTTPS — no automatizable en este entorno sandbox, mismo criterio que cualquier feature que dependa de `getUserMedia`)
 - [ ] El campo `isbn` sigue siendo editable manualmente aunque el escaneo falle o no esté disponible (no se vuelve un flujo obligatorio de cámara)
+
+---
+
+## Tarea 2 — [FEATURE]: `GestionEstantesComponent` — CRUD real de estantes en `/admin/estantes`
+
+**Origen:** `PRD.md` §6 ("Configuración de estantes (CRUD)", prioridad Media) y `tech-specs.md` §4.2 (ruta `/admin/estantes`, `AuthGuard` + `RoleGuard(admin)`). El backend (`CRUD /api/estantes`, administrador exclusivo para escritura) ya está implementado y verificado en vivo desde hace varias tareas — esta es la primera pantalla real de administración que lo consume, ahora que `/admin` existe como punto de entrada (`TODO.md` histórico, PR #29). Primer CRUD de los 3 pendientes (`estantes`, `usuarios`, `editoriales-descuentos`) — se elige `estantes` primero por ser el más simple (3 campos: `espacio`, `mueble`, `ubicacion`, sin relaciones con otras tablas) y porque `EstantesService` ya existe (hoy solo lectura).
+
+**Archivos:** `src/app/core/api/estantes.service.ts` (extender con métodos autenticados `crearEstante`/`actualizarEstante`/`eliminarEstante`, mismo patrón que `cargarEstantes`), `src/app/features/admin/gestion-estantes.component.ts` (nuevo), ruta nueva `/admin/estantes` en `app.routes.ts` (guardada con `RoleGuard('administrador')`, mismo patrón que `/admin`), `src/app/features/admin/admin-inicio.component.html` (cambiar la card "Estantes" de placeholder deshabilitado a `routerLink="/admin/estantes"` real).
+
+**Qué hacer:**
+1. Extender `EstantesService` con `crearEstante(datos)`/`actualizarEstante(estanteId, datos)`/`eliminarEstante(estanteId)` — peticiones autenticadas (`Authorization: Bearer <idToken>`) a `POST`/`PUT`/`DELETE /api/estantes`, mismo patrón de manejo de error que el resto de servicios de `core/api`. Recargar `estantes` (Signal existente) tras cada operación exitosa.
+2. Implementar `GestionEstantesComponent` (standalone, ruta `/admin/estantes`): lista los estantes existentes (reutilizando `cargarEstantes()`), formulario reactivo para crear uno nuevo, edición y borrado por fila, mensajes de éxito/error.
+3. Agregar la ruta a `app.routes.ts` (`RoleGuard('administrador')`) y a `app.routes.server.ts` (`RenderMode.Client`, mismo motivo que `/admin`/`/catalogar`). Activar el enlace real desde `AdminInicioComponent`.
+4. Cubrir con `npm test -- --watch=false`: los 3 métodos nuevos de `EstantesService` (éxito/error) y los casos principales de `GestionEstantesComponent` (lista, crea, edita, elimina, error).
+
+**Definition of done:**
+- [ ] `npm run build` y `npm test -- --watch=false` pasan sin errores
+- [ ] Tests unitarios cubren los métodos nuevos del servicio y los casos principales del componente
+- [ ] Verificado manualmente contra `staging` (misma decisión de verificación que las tareas de frontend anteriores: combinar evidencia o pedir verificación manual al usuario — ya existe una cuenta `administrador` real sembrada, `letiende.co@gmail.com`)
+- [ ] Un `vendedor` no puede acceder a `/admin/estantes` (`RoleGuard`, misma protección ya usada en `/admin`)
