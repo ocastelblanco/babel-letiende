@@ -12,7 +12,9 @@
  *   - Inestable: confirmado en vivo que responde `500`/`503` de forma
  *     intermitente incluso con ISBNs válidos (probable cuota/rate-limit de
  *     Google Books del lado de la API externa), y que reintentar segundos
- *     después puede responder `200` con datos correctos.
+ *     después puede responder `200` con datos correctos. Mitigación: esta
+ *     función reintenta UNA vez (con una espera corta) cuando el intento
+ *     falla por transporte/HTTP (error de red o no-200) antes de rendirse.
  *
  * Por eso esta función NUNCA lanza por un fallo de la API externa: cualquier
  * respuesta no-200, error de red o cuerpo inesperado se trata exactamente
@@ -51,19 +53,48 @@ function aHttps(url: string): string {
   return url.replace(/^http:/, 'https:');
 }
 
-export async function obtenerMetadatosPorIsbn(isbn: string): Promise<MetadatosLibro> {
-  const urlBase = process.env['API_LETIENDE_BASE_URL'];
+const DEMORA_REINTENTO_MS = 800;
 
+function esperar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type IntentoFetch = { ok: true; respuesta: Response } | { ok: false; status: number | 'error-red' };
+
+/** Un solo intento de `fetch` contra la API externa. Nunca lanza: los fallos de transporte/HTTP se reportan como `{ ok: false }`. */
+async function intentarFetchLibros(url: string): Promise<IntentoFetch> {
   let respuesta: Response;
   try {
-    respuesta = await fetch(`${urlBase}/libros?barcode=${encodeURIComponent(isbn)}`);
+    respuesta = await fetch(url);
   } catch {
-    return METADATOS_VACIOS;
+    return { ok: false, status: 'error-red' };
   }
 
   if (!respuesta.ok) {
+    return { ok: false, status: respuesta.status };
+  }
+
+  return { ok: true, respuesta };
+}
+
+export async function obtenerMetadatosPorIsbn(isbn: string): Promise<MetadatosLibro> {
+  const urlBase = process.env['API_LETIENDE_BASE_URL'];
+  const url = `${urlBase}/libros?barcode=${encodeURIComponent(isbn)}`;
+
+  let intento = await intentarFetchLibros(url);
+  if (!intento.ok) {
+    await esperar(DEMORA_REINTENTO_MS);
+    intento = await intentarFetchLibros(url);
+  }
+
+  if (!intento.ok) {
+    console.error(
+      `obtenerMetadatosPorIsbn: ambos intentos fallaron para isbn=${isbn} (último resultado: ${intento.status})`,
+    );
     return METADATOS_VACIOS;
   }
+
+  const respuesta = intento.respuesta;
 
   let cuerpo: RespuestaApiLetiende;
   try {

@@ -64,35 +64,74 @@ describe('obtenerMetadatosPorIsbn', () => {
     expect(resultado.autor).toBe('Autor Uno, Autor Dos');
   });
 
-  it('devuelve todos los campos en null cuando la respuesta es `{}` (no encontrado)', async () => {
+  it('reintenta una vez ante una respuesta no-200 y devuelve los datos del segundo intento si tiene éxito', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 503, json: () => Promise.resolve({}) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(respuestaGoogleBooks({ title: 'Recuperado en el reintento' })),
+        });
+
+      const promesa = obtenerMetadatosPorIsbn('9780000000004');
+      await vi.advanceTimersByTimeAsync(800);
+      const resultado = await promesa;
+
+      expect(resultado.titulo).toBe('Recuperado en el reintento');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('devuelve todos los campos en null si ambos intentos responden no-200 (ej. 500/503 intermitente de la API externa), sin un tercer intento', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
+
+      const promesa = obtenerMetadatosPorIsbn('9780000000004');
+      await vi.advanceTimersByTimeAsync(800);
+      const resultado = await promesa;
+
+      expect(resultado).toEqual(metadatosVacios);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('devuelve todos los campos en null si ambos intentos fallan por error de red, sin lanzar', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockRejectedValue(new Error('fetch failed'));
+
+      const promesa = obtenerMetadatosPorIsbn('9780000000005');
+      await vi.advanceTimersByTimeAsync(800);
+      const resultado = await promesa;
+
+      expect(resultado).toEqual(metadatosVacios);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('no reintenta cuando la respuesta es `200` sin `items` (no encontrado legítimo)', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
     const resultado = await obtenerMetadatosPorIsbn('9780000000003');
 
     expect(resultado).toEqual(metadatosVacios);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('devuelve todos los campos en null ante una respuesta no-200 (ej. 500/503 intermitente de la API externa)', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
-
-    const resultado = await obtenerMetadatosPorIsbn('9780000000004');
-
-    expect(resultado).toEqual(metadatosVacios);
-  });
-
-  it('devuelve todos los campos en null ante un error de red, sin lanzar', async () => {
-    fetchMock.mockRejectedValue(new Error('fetch failed'));
-
-    const resultado = await obtenerMetadatosPorIsbn('9780000000005');
-
-    expect(resultado).toEqual(metadatosVacios);
-  });
-
-  it('devuelve todos los campos en null si el cuerpo no es JSON válido, sin lanzar', async () => {
+  it('devuelve todos los campos en null si el cuerpo no es JSON válido, sin lanzar ni reintentar', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: () => Promise.reject(new Error('cuerpo inválido')) });
 
     const resultado = await obtenerMetadatosPorIsbn('9780000000006');
 
     expect(resultado).toEqual(metadatosVacios);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
