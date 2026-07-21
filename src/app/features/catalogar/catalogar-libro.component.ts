@@ -1,6 +1,9 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import type { IScannerControls } from '@zxing/browser';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { EstantesService } from '../../core/api/estantes.service';
@@ -24,7 +27,7 @@ const PVP_MAXIMO = 5_000_000;
   imports: [ReactiveFormsModule],
   templateUrl: './catalogar-libro.component.html',
 })
-export class CatalogarLibroComponent implements OnInit {
+export class CatalogarLibroComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
@@ -36,6 +39,13 @@ export class CatalogarLibroComponent implements OnInit {
   protected readonly guardando = signal(false);
   protected readonly mensajeExito = signal<string | null>(null);
   protected readonly mensajeError = signal<string | null>(null);
+
+  /** Referencia al `<video>` que muestra la vista de la cámara mientras se escanea. */
+  private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
+
+  protected readonly escaneando = signal(false);
+  protected readonly errorEscaneo = signal<string | null>(null);
+  private controlesEscaner: IScannerControls | null = null;
 
   protected readonly formulario = this.fb.nonNullable.group({
     isbn: [''],
@@ -51,6 +61,57 @@ export class CatalogarLibroComponent implements OnInit {
 
   ngOnInit(): void {
     void this.estantesService.cargarEstantes();
+  }
+
+  ngOnDestroy(): void {
+    this.detenerEscaneo();
+  }
+
+  /**
+   * Activa la cámara y comienza a buscar un código EAN-13 (ISBN-13) en el
+   * video. Se invoca únicamente desde el gesto de click/tap del botón
+   * "Escanear ISBN" — `getUserMedia` requiere una interacción explícita del
+   * usuario, en particular en iOS Safari (`CLAUDE.md` §7).
+   */
+  protected async iniciarEscaneo(): Promise<void> {
+    this.errorEscaneo.set(null);
+
+    const video = this.videoEscaner()?.nativeElement;
+    if (!video) {
+      this.errorEscaneo.set('No se pudo iniciar la cámara. Ingresa el ISBN manualmente.');
+      return;
+    }
+
+    this.escaneando.set(true);
+
+    const hints = new Map<DecodeHintType, BarcodeFormat[]>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13]);
+    const lector = new BrowserMultiFormatReader(hints);
+
+    try {
+      this.controlesEscaner = await lector.decodeFromConstraints(
+        { video: { facingMode: 'environment' } },
+        video,
+        (resultado) => {
+          if (resultado) {
+            this.formulario.controls.isbn.setValue(resultado.getText());
+            this.detenerEscaneo();
+          }
+          // Los errores de "no encontrado" se disparan en cada frame sin
+          // código detectado — no son errores reales, se ignoran.
+        },
+      );
+    } catch {
+      this.escaneando.set(false);
+      this.errorEscaneo.set('No se pudo acceder a la cámara. Verifica los permisos o ingresa el ISBN manualmente.');
+    }
+  }
+
+  /** Detiene el escaneo y libera la cámara. */
+  protected detenerEscaneo(): void {
+    this.controlesEscaner?.stop();
+    this.controlesEscaner = null;
+    this.escaneando.set(false);
   }
 
   protected async guardar(): Promise<void> {

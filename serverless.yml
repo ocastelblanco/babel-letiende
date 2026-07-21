@@ -79,6 +79,56 @@ functions:
         # lista manual confiable — se incluye node_modules completo para esta
         # función en vez de mantener un allowlist frágil.
         - 'node_modules/**'
+        # Recorta paquetes que SOLO usa el frontend Angular o las
+        # herramientas de desarrollo, nunca el backend — sin esto, el
+        # paquete de cada función Lambda supera el límite de AWS de
+        # 262.144.000 bytes descomprimidos (incidente real: el deploy a
+        # `staging` falló en `EstantesLambdaFunction` al agregar
+        # `@zxing/browser`, que solo tipeó la balanza porque `node_modules`
+        # ya rondaba ~570MB sin podar nada — ver MEMORY.md §7). Cada
+        # exclusión se verificó con `npm ls <paquete>` para confirmar que
+        # ninguna función de backend lo necesita en tiempo de ejecución —
+        # en particular `@firebase/**` se excluye casi entero pero se
+        # re-incluyen explícitamente los 9 subpaquetes que sí necesita
+        # `firebase-admin` a través de `@firebase/database-compat`
+        # (Realtime Database, arrastrado por `firebase-admin` aunque Babel
+        # no lo use — CLAUDE.md ya aclara que Babel usa Firebase únicamente
+        # para autenticación, no Firestore/RTDB). Esta misma lista se
+        # repite literal en cada función que empaqueta `node_modules/**`
+        # completo: Serverless Framework exige que cada patrón sea un
+        # string plano, así que un anchor de YAML referenciado como un solo
+        # elemento de la lista queda anidado y falla la validación
+        # ("must be string") — no hay forma de compartirla sin repetirla.
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/usuarios/me
@@ -109,6 +159,39 @@ functions:
         # dependencias transitivas de @aws-sdk/* (ver gotcha de jose/jwks-rsa
         # en MEMORY.md §7) — se incluye node_modules completo.
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/libros
@@ -134,6 +217,39 @@ functions:
         # además verifica tokens con firebase-admin — igual que usuariosMe,
         # se incluye node_modules completo en vez de un allowlist manual.
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/libros
@@ -160,6 +276,39 @@ functions:
         # arriba (MEMORY.md §7): un import nuevo a nivel superior afecta a
         # las 3 funciones Lambda que comparten este archivo, no solo esta.
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/libros/{bookId}/estante
@@ -185,6 +334,39 @@ functions:
         # catalogarLibro, se incluye node_modules completo en vez de un
         # allowlist manual (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/estantes
@@ -219,6 +401,39 @@ functions:
         # completo en vez de un allowlist manual (ver gotcha de jose/jwks-rsa
         # en MEMORY.md §7).
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/usuarios
@@ -254,6 +469,39 @@ functions:
         # node_modules completo en vez de un allowlist manual (ver gotcha de
         # jose/jwks-rsa en MEMORY.md §7).
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/editoriales-descuentos
@@ -289,6 +537,39 @@ functions:
         # catalogarLibro/estantes, se incluye node_modules completo en vez
         # de un allowlist manual (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/ventas
@@ -315,6 +596,39 @@ functions:
         # MEMORY.md §7: un import nuevo a nivel superior afecta a ambas
         # funciones Lambda que comparten este archivo, no solo esta.
         - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
           path: /api/ventas

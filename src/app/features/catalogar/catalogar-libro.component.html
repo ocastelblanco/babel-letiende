@@ -9,12 +9,34 @@
     >
       <div>
         <label for="isbn" class="mb-1 block text-sm font-semibold text-primary">ISBN (opcional)</label>
-        <input
-          id="isbn"
-          type="text"
-          formControlName="isbn"
-          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
-        />
+        <div class="flex gap-2">
+          <input
+            id="isbn"
+            type="text"
+            formControlName="isbn"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          <button
+            type="button"
+            (click)="escaneando() ? detenerEscaneo() : iniciarEscaneo()"
+            class="shrink-0 rounded-xl border border-primary/20 px-3 py-2 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            {{ escaneando() ? 'Detener' : 'Escanear ISBN' }}
+          </button>
+        </div>
+
+        <video
+          #videoEscaner
+          autoplay
+          muted
+          playsinline
+          class="mt-2 w-full rounded-xl"
+          [class.hidden]="!escaneando()"
+        ></video>
+
+        @if (errorEscaneo()) {
+          <p class="mt-1 text-xs text-danger">{{ errorEscaneo() }}</p>
+        }
       </div>
 
       <div>
