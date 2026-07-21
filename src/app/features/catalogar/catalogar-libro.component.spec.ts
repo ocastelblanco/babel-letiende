@@ -19,6 +19,29 @@ vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: vi.fn(),
 }));
 
+// No hay cámara real en CI/sandbox: se mockea `BrowserMultiFormatReader` para
+// controlar manualmente cuándo "llega" un resultado del scanner, sin
+// depender de `getUserMedia` real. `decodeFromConstraints` se resuelve con
+// los controles falsos y guarda el callback para que la prueba lo dispare.
+const detenerEscaneoMock = vi.fn();
+let callbackDecodificacion: ((resultado: { getText: () => string } | undefined) => void) | undefined;
+const decodeFromConstraintsMock = vi.fn(
+  (
+    _constraints: unknown,
+    _video: unknown,
+    callback: (resultado: { getText: () => string } | undefined) => void,
+  ) => {
+    callbackDecodificacion = callback;
+    return Promise.resolve({ stop: detenerEscaneoMock });
+  },
+);
+
+vi.mock('@zxing/browser', () => ({
+  BrowserMultiFormatReader: vi.fn(function BrowserMultiFormatReaderFalso() {
+    return { decodeFromConstraints: decodeFromConstraintsMock };
+  }),
+}));
+
 const estanteFalso: Estante = {
   estanteId: 'estante-1',
   espacio: 'Espacio principal',
@@ -74,6 +97,12 @@ function enviarFormulario(fixture: ComponentFixture<CatalogarLibroComponent>, da
 
 describe('CatalogarLibroComponent', () => {
   let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    callbackDecodificacion = undefined;
+    decodeFromConstraintsMock.mockClear();
+    detenerEscaneoMock.mockClear();
+  });
 
   afterEach(() => {
     httpMock.verify();
@@ -160,5 +189,96 @@ describe('CatalogarLibroComponent', () => {
     await Promise.resolve();
 
     httpMock.expectNone('/api/libros');
+  });
+
+  it('el botón "Escanear ISBN" activa el escaneo y muestra el video de la cámara', async () => {
+    const { fixture, httpMock: mock } = configurarPrueba();
+    httpMock = mock;
+
+    const botonEscanear = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+      (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Escanear ISBN',
+    ) as HTMLButtonElement;
+    expect(botonEscanear).toBeTruthy();
+
+    botonEscanear.click();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((fixture.componentInstance as any).escaneando()).toBe(true);
+    expect(decodeFromConstraintsMock).toHaveBeenCalledTimes(1);
+
+    const video = fixture.nativeElement.querySelector('video') as HTMLVideoElement;
+    expect(video.classList.contains('hidden')).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('Detener');
+  });
+
+  it('detiene el escaneo y libera la cámara al hacer click en "Detener"', async () => {
+    const { fixture, httpMock: mock } = configurarPrueba();
+    httpMock = mock;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const componente = fixture.componentInstance as any;
+    componente.escaneando.set(true);
+    await componente.iniciarEscaneo();
+    fixture.detectChanges();
+
+    const botonDetener = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+      (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Detener',
+    ) as HTMLButtonElement;
+    botonDetener.click();
+    fixture.detectChanges();
+
+    expect(detenerEscaneoMock).toHaveBeenCalledTimes(1);
+    expect(componente.escaneando()).toBe(false);
+    const video = fixture.nativeElement.querySelector('video') as HTMLVideoElement;
+    expect(video.classList.contains('hidden')).toBe(true);
+  });
+
+  it('un resultado simulado del scanner completa el campo isbn y detiene el escaneo', async () => {
+    const { fixture, httpMock: mock } = configurarPrueba();
+    httpMock = mock;
+
+    const botonEscanear = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+      (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Escanear ISBN',
+    ) as HTMLButtonElement;
+    botonEscanear.click();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(callbackDecodificacion).toBeTruthy();
+    callbackDecodificacion?.({ getText: () => '9780000000001' });
+    fixture.detectChanges();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const componente = fixture.componentInstance as any;
+    expect(componente.formulario.value.isbn).toBe('9780000000001');
+    expect(componente.escaneando()).toBe(false);
+    expect(detenerEscaneoMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('muestra un mensaje de error visible cuando no hay permiso/cámara disponible, sin romper el formulario', async () => {
+    decodeFromConstraintsMock.mockRejectedValueOnce(new Error('Permission denied'));
+    const { fixture, httpMock: mock } = configurarPrueba();
+    httpMock = mock;
+
+    const botonEscanear = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+      (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Escanear ISBN',
+    ) as HTMLButtonElement;
+    botonEscanear.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const componente = fixture.componentInstance as any;
+    expect(componente.escaneando()).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('No se pudo acceder a la cámara');
+
+    // El campo isbn sigue siendo editable manualmente aunque el escaneo falle.
+    const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+    campoIsbn.value = '9781234567897';
+    campoIsbn.dispatchEvent(new Event('input'));
+    expect(componente.formulario.value.isbn).toBe('9781234567897');
   });
 });
