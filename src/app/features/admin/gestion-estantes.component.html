@@ -1,0 +1,116 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="mb-2 text-2xl font-bold text-primary">Estantes</h1>
+    <p class="mb-6 text-sm text-primary/70">Gestiona los espacios, muebles y ubicaciones donde se catalogan los libros.</p>
+
+    <form
+      [formGroup]="formulario"
+      (ngSubmit)="guardar()"
+      class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+    >
+      <h2 class="text-sm font-semibold text-primary">
+        {{ estanteEditandoId() ? 'Editar estante' : 'Nuevo estante' }}
+      </h2>
+
+      <div>
+        <label for="espacio" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
+        <input
+          id="espacio"
+          type="text"
+          formControlName="espacio"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+        @if (formulario.controls.espacio.invalid && formulario.controls.espacio.touched) {
+          <p class="mt-1 text-xs text-danger">El espacio es requerido.</p>
+        }
+      </div>
+
+      <div>
+        <label for="mueble" class="mb-1 block text-sm font-semibold text-primary">Mueble</label>
+        <input
+          id="mueble"
+          type="text"
+          formControlName="mueble"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+        @if (formulario.controls.mueble.invalid && formulario.controls.mueble.touched) {
+          <p class="mt-1 text-xs text-danger">El mueble es requerido.</p>
+        }
+      </div>
+
+      <div>
+        <label for="ubicacion" class="mb-1 block text-sm font-semibold text-primary">Ubicación</label>
+        <input
+          id="ubicacion"
+          type="text"
+          formControlName="ubicacion"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+        @if (formulario.controls.ubicacion.invalid && formulario.controls.ubicacion.touched) {
+          <p class="mt-1 text-xs text-danger">La ubicación es requerida.</p>
+        }
+      </div>
+
+      <div class="flex gap-2">
+        <button
+          type="submit"
+          class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          [disabled]="guardando()"
+        >
+          {{ guardando() ? 'Guardando…' : estanteEditandoId() ? 'Guardar cambios' : 'Crear estante' }}
+        </button>
+        @if (estanteEditandoId()) {
+          <button
+            type="button"
+            (click)="cancelarEdicion()"
+            class="h-12 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            Cancelar
+          </button>
+        }
+      </div>
+
+      @if (mensajeExito()) {
+        <p class="text-center text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+      }
+      @if (mensajeError()) {
+        <p class="text-center text-sm text-danger">{{ mensajeError() }}</p>
+      }
+    </form>
+
+    <div class="rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <h2 class="mb-3 text-sm font-semibold text-primary">Estantes existentes</h2>
+
+      @if (errorCarga()) {
+        <p class="text-sm text-danger">No se pudieron cargar los estantes.</p>
+      } @else if (estantes().length === 0) {
+        <p class="text-sm text-primary/70">Todavía no hay estantes registrados.</p>
+      } @else {
+        <ul class="flex flex-col gap-2">
+          @for (estante of estantes(); track estante.estanteId) {
+            <li class="flex items-center justify-between gap-2 rounded-xl border border-primary/10 px-3 py-2">
+              <p class="text-sm text-primary">{{ estante.espacio }} — {{ estante.mueble }} — {{ estante.ubicacion }}</p>
+              <div class="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  (click)="editar(estante)"
+                  class="rounded-lg border border-primary/20 px-3 py-1 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  (click)="eliminar(estante)"
+                  class="rounded-lg border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  [disabled]="eliminandoId() === estante.estanteId"
+                >
+                  {{ eliminandoId() === estante.estanteId ? 'Eliminando…' : 'Eliminar' }}
+                </button>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+</div>
