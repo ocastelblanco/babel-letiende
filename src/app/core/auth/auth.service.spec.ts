@@ -8,13 +8,22 @@ const {
   onAuthStateChangedMock,
   signInWithPopupMock,
   signOutMock,
-} = vi.hoisted(() => ({
-  initializeAppMock: vi.fn(() => ({})),
-  getAuthMock: vi.fn(() => ({})),
-  onAuthStateChangedMock: vi.fn(),
-  signInWithPopupMock: vi.fn(),
-  signOutMock: vi.fn(),
-}));
+  setCustomParametersMock,
+  GoogleAuthProviderMock,
+} = vi.hoisted(() => {
+  const setCustomParametersMock = vi.fn();
+  return {
+    initializeAppMock: vi.fn(() => ({})),
+    getAuthMock: vi.fn(() => ({})),
+    onAuthStateChangedMock: vi.fn(),
+    signInWithPopupMock: vi.fn(),
+    signOutMock: vi.fn(),
+    setCustomParametersMock,
+    GoogleAuthProviderMock: vi.fn(function () {
+      return { setCustomParameters: setCustomParametersMock };
+    }),
+  };
+});
 
 vi.mock('firebase/app', () => ({
   initializeApp: initializeAppMock,
@@ -25,7 +34,7 @@ vi.mock('firebase/auth', () => ({
   onAuthStateChanged: onAuthStateChangedMock,
   signInWithPopup: signInWithPopupMock,
   signOut: signOutMock,
-  GoogleAuthProvider: vi.fn(),
+  GoogleAuthProvider: GoogleAuthProviderMock,
 }));
 
 describe('AuthService', () => {
@@ -47,6 +56,15 @@ describe('AuthService', () => {
     expect(signInWithPopupMock).toHaveBeenCalledTimes(1);
     expect(resultado).toEqual(usuarioFalso);
     expect(servicio.usuario()).toEqual(usuarioFalso);
+  });
+
+  it('iniciarSesionConGoogle fuerza el selector de cuentas de Google (prompt: select_account)', async () => {
+    signInWithPopupMock.mockResolvedValue({ user: usuarioFalso });
+
+    const servicio = TestBed.inject(AuthService);
+    await servicio.iniciarSesionConGoogle();
+
+    expect(setCustomParametersMock).toHaveBeenCalledWith({ prompt: 'select_account' });
   });
 
   it('cerrarSesion invoca signOut de Firebase y limpia el Signal de usuario', async () => {

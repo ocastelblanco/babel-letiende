@@ -77,6 +77,10 @@ export class AuthService {
       throw new Error('El inicio de sesión solo está disponible en el navegador.');
     }
     const proveedor = new GoogleAuthProvider();
+    // Sin este parámetro, Google decide si mostrar el selector de cuentas y en
+    // Chrome de escritorio suele auto-seleccionar la sesión "activa" sin
+    // preguntar — lo forzamos para poder elegir siempre entre varias cuentas.
+    proveedor.setCustomParameters({ prompt: 'select_account' });
     const credencial = await signInWithPopup(this.auth, proveedor);
     this.usuarioSignal.set(credencial.user);
     return credencial.user;
