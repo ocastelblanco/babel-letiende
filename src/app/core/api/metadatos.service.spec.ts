@@ -16,12 +16,13 @@ vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: vi.fn(),
 }));
 
-const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null };
+const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null, pvp: null };
 const metadatosEncontrados = {
   titulo: 'Cien años de soledad',
   autor: 'Gabriel García Márquez',
   editorial: 'Sudamericana',
   portadaUrl: 'https://books.google.com/portada.jpg',
+  pvp: 65_000,
 };
 
 describe('MetadatosService', () => {

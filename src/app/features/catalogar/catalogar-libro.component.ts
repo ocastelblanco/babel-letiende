@@ -16,10 +16,10 @@ const PVP_MAXIMO = 5_000_000;
  * libro contra `POST /api/libros`, ya verificado en vivo. El ISBN puede
  * llegar por escaneo con cámara (`@zxing/browser`) o entrada manual; en
  * ambos casos dispara la búsqueda de metadatos (`MetadatosService`) que
- * pre-carga título/autor/editorial/portada — siempre editables por el
- * vendedor. El autocompletado automático de PVP (scraping/Google Custom
- * Search) queda para una tarea futura independiente (superficie de
- * seguridad propia, `CLAUDE.md` A10).
+ * pre-carga título/autor/editorial/portada/pvp — siempre editables por el
+ * vendedor. El PVP llega desde el fallback de scraping que orquesta
+ * `GET /api/metadatos/:isbn` (`TODO.md`, Tarea 1 — Task C), nunca desde
+ * `api.letiende.co`.
  *
  * La validación del formulario es solo UX: `POST /api/libros` vuelve a
  * validar y recalcula `costo`/`utilidadCatalogo`/`bookId`/`creadoPor` en el
@@ -162,8 +162,17 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       if (controles.portadaUrl.value.trim() === '' && metadatos.portadaUrl) {
         controles.portadaUrl.setValue(metadatos.portadaUrl);
       }
+      // Criterio de "vacío" para un campo numérico: su valor por defecto (0)
+      // del formulario, no un string vacío — nunca pisa un PVP que el
+      // vendedor ya haya escrito a mano.
+      if (controles.pvp.value === 0 && metadatos.pvp) {
+        controles.pvp.setValue(metadatos.pvp);
+      }
 
-      if (!metadatos.titulo && !metadatos.autor && !metadatos.editorial && !metadatos.portadaUrl) {
+      if (
+        !metadatos.titulo && !metadatos.autor && !metadatos.editorial
+        && !metadatos.portadaUrl && !metadatos.pvp
+      ) {
         this.metadatosNoEncontrados.set(true);
       }
     } finally {

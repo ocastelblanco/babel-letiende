@@ -3,12 +3,17 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 
-/** Metadatos bibliográficos de un libro resueltos por ISBN — mismo contrato que `GET /api/metadatos/:isbn`. */
+/**
+ * Metadatos bibliográficos de un libro resueltos por ISBN — mismo contrato
+ * que `GET /api/metadatos/:isbn`. `pvp` proviene siempre del fallback de
+ * scraping (`TODO.md`, Tarea 1 — Task C): la API externa nunca lo resuelve.
+ */
 export interface MetadatosLibro {
   titulo: string | null;
   autor: string | null;
   editorial: string | null;
   portadaUrl: string | null;
+  pvp: number | null;
 }
 
 const METADATOS_VACIOS: MetadatosLibro = {
@@ -16,6 +21,7 @@ const METADATOS_VACIOS: MetadatosLibro = {
   autor: null,
   editorial: null,
   portadaUrl: null,
+  pvp: null,
 };
 
 /**
