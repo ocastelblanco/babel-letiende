@@ -5,121 +5,39 @@
       Administra los sitios usados como respaldo para obtener metadatos (info) y precio de venta al público (PVP) al catalogar un libro.
     </p>
 
-    <form
-      [formGroup]="formulario"
-      (ngSubmit)="guardar()"
-      class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
-    >
-      <h2 class="text-sm font-semibold text-primary">
-        {{ sitioEditandoDominio() ? 'Editar sitio de scraping' : 'Nuevo sitio de scraping' }}
-      </h2>
-
-      <div>
-        <label for="dominio" class="mb-1 block text-sm font-semibold text-primary">Dominio</label>
-        <input
-          id="dominio"
-          type="text"
-          formControlName="dominio"
-          placeholder="www.ejemplo.com"
-          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
-        />
-        @if (formulario.controls.dominio.invalid && formulario.controls.dominio.touched) {
-          <p class="mt-1 text-xs text-danger">El dominio es requerido.</p>
-        }
-        @if (sitioEditandoDominio()) {
-          <p class="mt-1 text-xs text-primary/60">El dominio no se puede cambiar tras crear el sitio.</p>
-        }
-      </div>
-
-      <div>
-        <label for="nombre" class="mb-1 block text-sm font-semibold text-primary">Nombre</label>
-        <input
-          id="nombre"
-          type="text"
-          formControlName="nombre"
-          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
-        />
-        @if (formulario.controls.nombre.invalid && formulario.controls.nombre.touched) {
-          <p class="mt-1 text-xs text-danger">El nombre es requerido.</p>
-        }
-      </div>
-
-      <div>
-        <label for="url" class="mb-1 block text-sm font-semibold text-primary">URL</label>
-        <input
-          id="url"
-          type="text"
-          formControlName="url"
-          placeholder="https://www.ejemplo.com"
-          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
-        />
-        @if (formulario.controls.url.invalid && formulario.controls.url.touched) {
-          <p class="mt-1 text-xs text-danger">La URL es requerida.</p>
-        }
-      </div>
-
-      <div class="flex gap-6">
-        <label class="flex items-center gap-2 text-sm text-primary">
-          <input type="checkbox" formControlName="info" class="h-4 w-4 rounded border-primary/20" />
-          Fuente de info
-        </label>
-        <label class="flex items-center gap-2 text-sm text-primary">
-          <input type="checkbox" formControlName="pvp" class="h-4 w-4 rounded border-primary/20" />
-          Fuente de PVP
-        </label>
-      </div>
-
-      <div>
-        <label for="prioridad" class="mb-1 block text-sm font-semibold text-primary">Prioridad</label>
-        <input
-          id="prioridad"
-          type="number"
-          formControlName="prioridad"
-          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
-        />
-        @if (formulario.controls.prioridad.invalid && formulario.controls.prioridad.touched) {
-          <p class="mt-1 text-xs text-danger">La prioridad es requerida.</p>
-        }
-      </div>
-
-      <div class="flex gap-2">
+    <div class="mb-6 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <div class="mb-3 flex items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold text-primary">Sitios registrados</h2>
         <button
-          type="submit"
-          class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          [disabled]="guardando()"
+          type="button"
+          (click)="agregar()"
+          class="rounded-lg bg-primary px-3 py-1 text-xs font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90"
         >
-          {{ guardando() ? 'Guardando…' : sitioEditandoDominio() ? 'Guardar cambios' : 'Crear sitio' }}
+          Agregar
         </button>
-        @if (sitioEditandoDominio()) {
-          <button
-            type="button"
-            (click)="cancelarEdicion()"
-            class="h-12 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
-          >
-            Cancelar
-          </button>
-        }
       </div>
+
+      <p class="mb-3 text-xs text-primary/60">Arrastra una fila para cambiar su prioridad en la cola de fallback.</p>
 
       @if (mensajeExito()) {
-        <p class="text-center text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+        <p class="mb-3 text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
       }
       @if (mensajeError()) {
-        <p class="text-center text-sm text-danger">{{ mensajeError() }}</p>
+        <p class="mb-3 text-sm text-danger">{{ mensajeError() }}</p>
       }
-    </form>
-
-    <div class="rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
-      <h2 class="mb-3 text-sm font-semibold text-primary">Sitios registrados</h2>
 
       @if (errorCarga()) {
         <p class="text-sm text-danger">No se pudieron cargar los sitios de scraping.</p>
       } @else if (sitios().length === 0) {
         <p class="text-sm text-primary/70">Todavía no hay sitios de scraping registrados.</p>
       } @else {
-        <ul class="flex flex-col gap-2">
+        <ul cdkDropList (cdkDropListDropped)="alSoltar($event)" class="flex flex-col gap-2">
           @for (sitio of sitios(); track sitio.dominio) {
-            <li class="flex items-center justify-between gap-2 rounded-xl border border-primary/10 px-3 py-2">
+            <li
+              cdkDrag
+              [cdkDragDisabled]="reordenando()"
+              class="flex cursor-move items-center justify-between gap-2 rounded-xl border border-primary/10 px-3 py-2"
+            >
               <div class="min-w-0">
                 <p class="text-sm text-primary">{{ sitio.nombre }} — {{ sitio.dominio }}</p>
                 <p class="truncate text-xs text-primary/60">{{ sitio.url }} · prioridad {{ sitio.prioridad }}</p>
@@ -149,5 +67,89 @@
         </ul>
       }
     </div>
+
+    @if (formularioVisible()) {
+      <form
+        [formGroup]="formulario"
+        (ngSubmit)="guardar()"
+        class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+      >
+        <h2 class="text-sm font-semibold text-primary">
+          {{ sitioEditandoDominio() ? 'Editar sitio de scraping' : 'Nuevo sitio de scraping' }}
+        </h2>
+
+        <div>
+          <label for="dominio" class="mb-1 block text-sm font-semibold text-primary">Dominio</label>
+          <input
+            id="dominio"
+            type="text"
+            formControlName="dominio"
+            placeholder="www.ejemplo.com"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          @if (formulario.controls.dominio.invalid && formulario.controls.dominio.touched) {
+            <p class="mt-1 text-xs text-danger">El dominio es requerido.</p>
+          }
+          @if (sitioEditandoDominio()) {
+            <p class="mt-1 text-xs text-primary/60">El dominio no se puede cambiar tras crear el sitio.</p>
+          }
+        </div>
+
+        <div>
+          <label for="nombre" class="mb-1 block text-sm font-semibold text-primary">Nombre</label>
+          <input
+            id="nombre"
+            type="text"
+            formControlName="nombre"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formulario.controls.nombre.invalid && formulario.controls.nombre.touched) {
+            <p class="mt-1 text-xs text-danger">El nombre es requerido.</p>
+          }
+        </div>
+
+        <div>
+          <label for="url" class="mb-1 block text-sm font-semibold text-primary">URL</label>
+          <input
+            id="url"
+            type="text"
+            formControlName="url"
+            placeholder="https://www.ejemplo.com"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formulario.controls.url.invalid && formulario.controls.url.touched) {
+            <p class="mt-1 text-xs text-danger">La URL es requerida.</p>
+          }
+        </div>
+
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 text-sm text-primary">
+            <input type="checkbox" formControlName="info" class="h-4 w-4 rounded border-primary/20" />
+            Fuente de info
+          </label>
+          <label class="flex items-center gap-2 text-sm text-primary">
+            <input type="checkbox" formControlName="pvp" class="h-4 w-4 rounded border-primary/20" />
+            Fuente de PVP
+          </label>
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            type="submit"
+            class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            [disabled]="guardando()"
+          >
+            {{ guardando() ? 'Guardando…' : sitioEditandoDominio() ? 'Guardar cambios' : 'Crear sitio' }}
+          </button>
+          <button
+            type="button"
+            (click)="cancelarEdicion()"
+            class="h-12 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    }
   </div>
 </div>
