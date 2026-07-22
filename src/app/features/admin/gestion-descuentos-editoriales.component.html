@@ -1,0 +1,149 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="mb-2 text-2xl font-bold text-primary">Editoriales</h1>
+    <p class="mb-6 text-sm text-primary/70">
+      Configura, por editorial, el porcentaje de descuento por defecto y los porcentajes alternativos disponibles al
+      catalogar. El 100% (libro propio de Le Tiende, sin consignación) siempre está disponible al catalogar,
+      independientemente de lo que configures aquí.
+    </p>
+
+    <div class="mb-6 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <h2 class="mb-3 text-sm font-semibold text-primary">Editoriales registradas</h2>
+
+      @if (mensajeExito()) {
+        <p class="mb-3 text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+      }
+      @if (mensajeError()) {
+        <p class="mb-3 text-sm text-danger">{{ mensajeError() }}</p>
+      }
+
+      @if (errorCarga()) {
+        <p class="text-sm text-danger">No se pudieron cargar las editoriales.</p>
+      } @else if (descuentos().length === 0) {
+        <p class="text-sm text-primary/70">Todavía no hay editoriales registradas.</p>
+      } @else {
+        <ul class="flex flex-col gap-2">
+          @for (descuento of descuentos(); track descuento.editorial) {
+            <li class="flex items-center justify-between gap-2 rounded-xl border border-primary/10 px-3 py-2">
+              <div class="min-w-0">
+                <p class="text-sm text-primary">{{ descuento.editorial }}</p>
+                <p class="text-xs text-primary/60">Por defecto: {{ descuento.porcentajePorDefecto }}%</p>
+                <p class="text-xs text-primary/60">
+                  Disponibles:
+                  {{ descuento.porcentajesDisponibles.length > 0 ? descuento.porcentajesDisponibles.join(', ') + '%' : 'Ninguno' }}
+                </p>
+              </div>
+              <div class="flex shrink-0 flex-col gap-2">
+                <button
+                  type="button"
+                  (click)="editar(descuento)"
+                  class="rounded-lg border border-primary/20 px-3 py-1 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  (click)="eliminar(descuento)"
+                  [disabled]="eliminandoEditorial() === descuento.editorial"
+                  class="rounded-lg border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {{ eliminandoEditorial() === descuento.editorial ? 'Eliminando…' : 'Eliminar' }}
+                </button>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    <div class="mb-6 flex justify-center">
+      <button
+        type="button"
+        (click)="agregar()"
+        [disabled]="formularioVisible()"
+        class="rounded-lg bg-primary px-4 py-2 text-xs font-semibold tracking-wider text-neutral uppercase shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Agregar
+      </button>
+    </div>
+
+    @if (formularioVisible()) {
+      <form
+        [formGroup]="formulario"
+        (ngSubmit)="guardar()"
+        class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+      >
+        <h2 class="text-sm font-semibold text-primary">
+          {{ editorialEditando() ? 'Editar editorial' : 'Nueva editorial' }}
+        </h2>
+
+        <div>
+          <label for="editorial" class="mb-1 block text-sm font-semibold text-primary">Editorial</label>
+          <input
+            id="editorial"
+            type="text"
+            formControlName="editorial"
+            placeholder="Planeta"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          @if (formulario.controls.editorial.invalid && formulario.controls.editorial.touched) {
+            <p class="mt-1 text-xs text-danger">La editorial es requerida.</p>
+          }
+          @if (editorialEditando()) {
+            <p class="mt-1 text-xs text-primary/60">La editorial no se puede cambiar tras crear el registro.</p>
+          }
+        </div>
+
+        <div>
+          <label for="porcentajePorDefecto" class="mb-1 block text-sm font-semibold text-primary">
+            Porcentaje por defecto
+          </label>
+          <input
+            id="porcentajePorDefecto"
+            type="number"
+            formControlName="porcentajePorDefecto"
+            placeholder="35"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formulario.controls.porcentajePorDefecto.invalid && formulario.controls.porcentajePorDefecto.touched) {
+            <p class="mt-1 text-xs text-danger">El porcentaje por defecto debe ser un número entre 0 y 100.</p>
+          }
+        </div>
+
+        <div>
+          <label for="porcentajesDisponibles" class="mb-1 block text-sm font-semibold text-primary">
+            Porcentajes disponibles
+          </label>
+          <input
+            id="porcentajesDisponibles"
+            type="text"
+            formControlName="porcentajesDisponibles"
+            placeholder="35, 40, 45"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          <p class="mt-1 text-xs text-primary/60">Números separados por coma. Puede dejarse vacío.</p>
+          @if (formulario.controls.porcentajesDisponibles.invalid && formulario.controls.porcentajesDisponibles.touched) {
+            <p class="mt-1 text-xs text-danger">Cada porcentaje debe ser un número entre 0 y 100.</p>
+          }
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            type="submit"
+            class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            [disabled]="guardando()"
+          >
+            {{ guardando() ? 'Guardando…' : editorialEditando() ? 'Guardar cambios' : 'Crear editorial' }}
+          </button>
+          <button
+            type="button"
+            (click)="cancelarEdicion()"
+            class="h-12 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    }
+  </div>
+</div>

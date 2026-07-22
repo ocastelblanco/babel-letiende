@@ -37,4 +37,9 @@ describe('AdminInicioComponent', () => {
     const enlace = fixture.nativeElement.querySelector('a[href="/admin/usuarios"]') as HTMLAnchorElement | null;
     expect(enlace).not.toBeNull();
   });
+
+  it('enlaza la sección Editoriales a /admin/editoriales', () => {
+    const enlace = fixture.nativeElement.querySelector('a[href="/admin/editoriales"]') as HTMLAnchorElement | null;
+    expect(enlace).not.toBeNull();
+  });
 });
