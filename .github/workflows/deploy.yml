@@ -122,6 +122,20 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
+    concurrency:
+      # Mismo motivo que el grupo `desplegar-staging`: si varios PRs se
+      # fusionan a `main` en sucesión rápida, cada merge dispara su propio
+      # push y su propio deploy a producción — sin este grupo, dos runs
+      # pueden intentar actualizar el mismo stack de CloudFormation a la vez
+      # y fallar con "Stack ... is in UPDATE_IN_PROGRESS state and can not be
+      # updated" (incidente real: PR #35/#36/#37 fusionados en <1 minuto,
+      # 2 de los 3 deploys a producción chocaron y fallaron — ver MEMORY.md
+      # §7). `cancel-in-progress: false` (a diferencia de staging) porque en
+      # producción preferimos que el run en curso termine en vez de
+      # cancelarlo a mitad de un `serverless deploy`; el siguiente run en
+      # cola simplemente espera su turno.
+      group: desplegar-produccion
+      cancel-in-progress: false
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
