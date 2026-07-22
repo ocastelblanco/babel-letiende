@@ -81,15 +81,18 @@ Vendedor → Escanea código de barras con la cámara
    └─ Sin código de barras → ingresa ISBN manualmente
         └─ Sin ISBN → ingresa nombre del libro y autor manualmente
 
-→ Sistema busca datos del libro (autor, portada, editorial, nombre) con el ISBN/datos disponibles
-   ├─ Datos encontrados → se muestran pre-cargados
+→ Sistema busca los datos del libro (título, autor, editorial, portada) por ISBN
+   ├─ 1.º api.letiende.co (proxy de Google Books), con un reintento ante fallas transitorias
+   ├─ 2.º si faltan datos: scraping de los sitios autorizados para «info» (lista única, por orden de prioridad)
+   ├─ Datos encontrados → se pre-cargan (siempre editables por el vendedor)
    └─ Datos no encontrados → el vendedor los completa manualmente
 
-→ Sistema busca el precio de venta al público (PVP)
-   ├─ Encontrado por nombre en sitios autorizados (lista blanca) → se pre-carga
-   ├─ No encontrado por nombre → reintenta con ISBN u otro dato
-   ├─ No encontrado en sitios autorizados → busca en Google (excluyendo sitios prohibidos), precio en pesos colombianos
-   └─ No encontrado por ningún medio → el vendedor ingresa el valor manualmente
+→ Sistema busca el precio de venta al público (PVP) por ISBN
+   ├─ Scraping de los sitios autorizados para «pvp» (misma lista única, por orden de prioridad), precio en pesos colombianos
+   ├─ Encontrado → se pre-carga como sugerencia editable (el backend valida que sea un número positivo dentro de un rango razonable)
+   └─ No encontrado → el vendedor ingresa el valor manualmente
+
+(Fallback futuro, aún no implementado: si el ISBN no resuelve, buscar por título/autor —en api.letiende.co o en los sitios de la lista— y presentar al vendedor una lista de candidatos para que elija el libro exacto por portada y datos.)
 
 → Vendedor confirma/ajusta el % de descuento editorial (si aplica uno distinto al de por defecto de esa editorial, lo elige de una lista; si el libro es propiedad de Le Tiende y no está en consignación, el descuento editorial es 100%)
 → Vendedor indica el número de ejemplares disponibles
@@ -132,6 +135,7 @@ El administrador visualiza y descarga en formato XLSX los libros vendidos, filtr
 - Gestión de usuarios: crear, editar, borrar vendedores y administradores.
 - Gestión de descuentos por editorial: definir, por editorial, el porcentaje por defecto y una lista de porcentajes alternativos disponibles (afecta el cálculo de costo y utilidad de cada libro catalogado con esa editorial). El valor 100% (libro propio de Le Tiende, sin consignación) está siempre disponible como opción para cualquier libro, independientemente de su editorial.
 - Gestión de estantes: crear, editar, borrar. Un estante se compone de: espacio dentro de la librería, mueble y ubicación precisa.
+- Gestión de sitios de scraping (fuentes automáticas de datos y precio): una lista única de sitios de librerías donde el sistema busca información del libro y/o su PVP por ISBN. Por cada sitio se define un nombre, su URL y dos permisos independientes: si está autorizado para extraer datos bibliográficos (`info`) y si está autorizado para extraer el precio (`pvp`) — un sitio puede servir para uno, ambos o ninguno. Reemplaza el antiguo modelo de dos listas separadas (autorizados vs. prohibidos). Por seguridad, aunque un sitio esté en la lista, el sistema solo hace peticiones a dominios públicos válidos (nunca a direcciones internas).
 
 ### 5.7 Catálogo público (sin autenticación)
 
@@ -148,6 +152,8 @@ Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, a
 | Registro de venta | Alta |
 | Catálogo público de consulta (SSR, sin autenticación) | Alta |
 | Cambio de estante de un libro ya catalogado | Media |
+| Obtención automática de PVP y metadatos por scraping (por ISBN, sobre una lista de sitios administrable) | Alta |
+| Configuración de sitios de scraping (CRUD, lista única con permisos info/pvp) | Media |
 | Configuración de estantes (CRUD) | Media |
 | Configuración de descuentos de editorial (CRUD) | Media |
 | Gestión de usuarios (CRUD) | Media |
@@ -189,7 +195,7 @@ Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, a
 - La infraestructura debe apuntar a costo $0; esto condiciona decisiones técnicas (ver tech-specs.md) como el tipo de scraping (sin navegador headless), el modo de capacidad de la base de datos y el uso de servicios siempre gratuitos de AWS.
 - La aplicación es una PWA responsive, no una app nativa empaquetada, en el alcance actual.
 - La API en `https://api.letiende.co` ya existe y es compartida entre aplicaciones de Le Tiende; Babel la consume para resolver metadatos de libros a partir del ISBN, pero no la construye ni la mantiene dentro de este repositorio.
-- La búsqueda de precio en sitios web usa una lista blanca de sitios autorizados como primera fuente, y excluye una lista negra de sitios prohibidos al buscar en Google como respaldo.
+- La búsqueda automática de datos y de precio en sitios web se gobierna con una lista única de sitios administrable por el administrador, donde cada sitio declara por separado si está autorizado para extraer información del libro (`info`) y/o su precio (`pvp`). Reemplaza el modelo anterior de dos listas separadas (autorizados vs. prohibidos). Por seguridad, el sistema solo hace peticiones salientes a dominios públicos válidos, nunca a direcciones internas, con independencia de lo que contenga la lista.
 - La filosofía visual (UX/UI) y el flujo de CI/CD (GitHub Actions) deben ser consistentes con los del proyecto Comandante.
 - Babel comparte el inicio de sesión de Google con Comandante (mismo proyecto de autenticación): un usuario puede tener cuenta en ambas aplicaciones sin registrarse dos veces, pero el rol (administrador/vendedor) se define de forma independiente en cada aplicación y en su propia base de datos — administrar usuarios en una no afecta a la otra.
 
@@ -203,8 +209,8 @@ Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, a
 | **ISBN** | Código identificador único de un libro (International Standard Book Number), normalmente impreso como código de barras. |
 | **Catalogar** | Registrar un libro en el sistema con sus datos, precio, cantidad de ejemplares y ubicación física. |
 | **Estante** | Ubicación física de un libro dentro de la librería, compuesta por espacio, mueble y posición precisa. |
-| **Lista blanca (sitios autorizados)** | Conjunto de sitios web de confianza donde el sistema busca primero el PVP de un libro. |
-| **Lista negra (sitios prohibidos)** | Conjunto de sitios excluidos al hacer la búsqueda de respaldo del PVP en Google. |
+| **Lista de sitios de scraping** | Lista única de sitios web (librerías) administrable por el administrador donde el sistema busca automáticamente los datos y/o el precio de un libro por ISBN. Cada sitio declara dos permisos independientes: `info` (extraer título/autor/editorial/portada) y `pvp` (extraer el precio). Reemplaza el par lista blanca / lista negra. |
+| **Permisos `info` / `pvp`** | Las dos banderas booleanas de cada sitio de la lista de scraping: `info` autoriza extraer datos bibliográficos; `pvp` autoriza extraer el precio. Un sitio con ambos en falso queda prohibido para todo. |
 | **Descuento editorial** | Porcentaje del PVP que la editorial reconoce a Le Tiende como margen en los libros que deja en consignación (típicamente 35%). Determina el costo (`PVP × (1 − % descuento editorial)`) y la utilidad de catalogación (`PVP × % descuento editorial`) de cada libro. Es 100% cuando el libro es propiedad de Le Tiende y no está en consignación con ninguna editorial. No debe confundirse con el descuento de venta. |
 | **Descuento de venta** | Descuento discrecional que el vendedor aplica al precio final al momento de vender un libro, acordado con el comprador (0% por defecto). Es independiente del descuento editorial: reduce lo que paga el cliente, no el costo del libro. |
 | **Consignación** | Modalidad en la que una editorial deja libros en Le Tiende para la venta sin transferir su propiedad; al venderse, Le Tiende paga a la editorial según el descuento editorial pactado. Un libro sin consignación es propiedad directa de Le Tiende. |

@@ -85,7 +85,7 @@ Esta sección define las reglas de seguridad obligatorias basadas en los riesgos
 
 #### A10:2021 — Server-Side Request Forgery (SSRF)
 *   **Riesgo:** el módulo de scraping/búsqueda de PVP construye y ejecuta peticiones HTTP salientes desde la Lambda hacia URLs derivadas de datos externos (resultados de búsqueda, nombre del libro); un actor malicioso podría intentar que el servidor haga peticiones a endpoints internos de AWS (ej. `169.254.169.254`, metadata service) o a otros destinos no previstos.
-*   **Regla:** el scraping SOLO hace peticiones a dominios que están explícitamente en la lista blanca (`server/api/services/scraping.ts`, config estática del repo). Los resultados de la Google Custom Search API se filtran contra la lista negra Y se valida que el dominio resultante sea un hostname público válido antes de hacer cualquier `fetch`. Prohibido construir URLs de destino a partir de redirecciones no verificadas o de rangos de IP privados/link-local.
+*   **Regla:** el scraping SOLO hace peticiones a sitios presentes en la lista administrable `babel-sitios-scraping` (ADR-010) y con el permiso correspondiente (`info`/`pvp`); y **además**, toda URL saliente pasa sin excepción por una guardia SSRF fija en `server/api/services/scraping.ts` (`validarHostSeguro`, ADR-011) que exige esquema HTTPS y valida que el hostname resuelva a una IP pública —rechazando rangos privados/loopback/link-local y `169.254.169.254` (metadata service)— antes de cualquier `fetch`, revalidando cada redirección (`redirect: 'manual'`). Como la lista de sitios es editable por el administrador (datos, no código), la garantía anti-SSRF es la **guardia estática**, no la lista. Prohibido construir URLs de destino a partir de redirecciones no verificadas o de rangos de IP privados/link-local. (Ya no se usa Google Custom Search: el fallback de PVP es el scraping de esta lista — ADR-010.)
 
 ### Prohibiciones absolutas en el código
 
@@ -94,7 +94,7 @@ Esta sección define las reglas de seguridad obligatorias basadas en los riesgos
 | Confiar en un campo `rol` enviado desde el cliente | Permite escalar privilegios a administrador |
 | Asumir/heredar el rol o acceso que un usuario tenga en Comandante | El proyecto Firebase es compartido, pero la autorización de cada app es independiente |
 | Reutilizar la cuenta de servicio de Firebase de Comandante (`FIREBASE_SERVICE_ACCOUNT_COMANDANTE_LETIENDE`) en el backend de Babel | Impide rotar/revocar credenciales de una app sin afectar la otra |
-| Hacer `fetch`/scraping a un dominio fuera de la lista blanca sin pasar por el filtro de lista negra + validación de host | Abre la puerta a SSRF |
+| Hacer `fetch`/scraping a un dominio que no esté en la lista administrable `babel-sitios-scraping`, o sin pasar por la guardia SSRF fija (`validarHostSeguro`: HTTPS + host público) | Abre la puerta a SSRF |
 | Renderizar HTML crudo obtenido de un tercero (`innerHTML`, `bypassSecurityTrustHtml` sin sanitizar) | Vector de XSS |
 | Commitear `firebase-service-account*.json`, `.env`, credenciales de AWS | Exposición de secretos |
 | Guardar el rol del usuario en `localStorage` para validar permisos | Los datos del cliente son manipulables con herramientas de desarrollador |

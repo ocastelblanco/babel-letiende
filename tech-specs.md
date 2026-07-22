@@ -80,8 +80,8 @@ Decisiones clave derivadas de esta visión (detalladas más abajo):
 | **Gateway HTTP** | Amazon API Gateway (HTTP API) | — | Expone los Lambdas bajo el dominio `babel.letiende.co`. | [API Gateway](https://aws.amazon.com/api-gateway) |
 | **Autenticación** | Firebase Authentication | SDK v10+ | Login con Google (Sign-In) en el cliente, sobre el **mismo proyecto Firebase que usa Comandante** (identidad compartida); verificación de ID token en el backend con `firebase-admin`, con una cuenta de servicio propia de Babel sobre ese mismo proyecto. Los roles no se comparten — ver §8. | [Firebase Auth](https://firebase.google.com/docs/auth) |
 | **Metadatos de libros** | API externa `api.letiende.co` | — | Servicio ya existente y compartido de Le Tiende; resuelve ISBN → título/autor/portada/editorial vía Google Books API. | (interno Le Tiende) |
-| **Scraping de PVP** | `fetch`/`undici` + `cheerio` | — | Consulta sitios de la lista blanca sin navegador headless (más liviano, más barato en Lambda). | [cheerio](https://cheerio.js.org) |
-| **Búsqueda de respaldo de precio** | Google Custom Search JSON API | — | Fallback cuando la lista blanca no encuentra el libro; excluye dominios de la lista negra. Cuota gratuita limitada (ver §6). | [Custom Search JSON API](https://developers.google.com/custom-search/v1/overview) |
+| **Scraping de datos y PVP** | `fetch` nativo + `cheerio` | — | Consulta, por ISBN, los sitios autorizados de la lista única administrable (`babel-sitios-scraping`, ADR-010) según sus permisos `info`/`pvp`, sin navegador headless. Toda URL saliente pasa por una guardia SSRF fija (ADR-011). | [cheerio](https://cheerio.js.org) |
+| **~~Búsqueda de respaldo de precio (Google Custom Search)~~** | — | Descartado | Se descartó como fallback de PVP en favor del scraping de la lista administrable (ADR-010). No se usa Google Custom Search. | — |
 | **Reportes** | `xlsx` | ^0.18.x | Generación de reportes descargables, mismo paquete usado en Comandante. | [SheetJS](https://docs.sheetjs.com) |
 | **Lectura de código de barras** | `@zxing/browser` (o `html5-qrcode`) | — | Lectura de ISBN vía cámara del navegador (`getUserMedia`), sin empaquetado nativo. | [zxing-js](https://github.com/zxing-js/browser) |
 | **Formato/Lint** | Prettier | ^3.x | Igual que Comandante, formato consistente. | [prettier.io](https://prettier.io) |
@@ -117,7 +117,7 @@ babel-letiende/
 ├── server/
 │   └── api/                       # Código de la Lambda "api" (Node.js 24.x)
 │       ├── handlers/              # Un archivo por grupo de endpoints (libros, ventas, estantes, usuarios, editoriales, metadatos)
-│       ├── services/              # Cliente DynamoDB, cliente api.letiende.co, scraping, Google Search fallback
+│       ├── services/              # Cliente DynamoDB, cliente api.letiende.co, scraping (con guardia SSRF)
 │       └── lib/                   # Verificación de Firebase ID token, utilidades comunes
 ├── serverless.yml                 # Definición de funciones, recursos DynamoDB, dominio personalizado
 ├── CLAUDE.md
@@ -248,7 +248,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 |---|---|---|---|---|
 | GET | `/api/libros` | Pública | Busca/filtra el catálogo (nombre, autor, tema, ISBN). | Query: `q`, `tema`, `pvpMin`, `pvpMax` |
 | GET | `/api/libros/:isbn` | Pública | Detalle de un libro disponible. | — |
-| GET | `/api/metadatos/:isbn` | Vendedor/Admin | Orquesta `api.letiende.co` (Google Books) + scraping de PVP (lista blanca → Google Search de respaldo). | — |
+| GET | `/api/metadatos/:isbn` | Vendedor/Admin | Orquesta la cadena de fuentes por ISBN: `api.letiende.co` (proxy de Google Books, con un reintento) → scraping de los sitios de `babel-sitios-scraping` para la info faltante y el PVP, según sus permisos `info`/`pvp` (ADR-010). Devuelve `{ titulo, autor, editorial, portadaUrl, pvp }` (todos nullables); siempre `200`. La búsqueda por título/autor es trabajo futuro. | — |
 | POST | `/api/libros` | Vendedor/Admin | Crea un libro catalogado. | `Libro` (sin `bookId`/`creadoEn`) |
 | PATCH | `/api/libros/:bookId/estante` | Vendedor/Admin | Cambia el estante de un libro (`bookId` es la clave primaria real de `babel-libros`, ver §5.1 — `isbn` puede ser `null`). | `{ estanteId }` |
 | POST | `/api/ventas` | Vendedor/Admin | Registra una venta; decrementa `cantidadDisponible`; calcula `precioFinal`/`utilidad` con snapshot de `costoLibro`. | `{ bookId, formaDePago, porcentajeDescuentoVenta }` |
@@ -258,6 +258,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | POST / PUT / DELETE | `/api/estantes` | Admin | Alta/edición/baja de estantes. | `Estante` |
 | GET / POST / PUT / DELETE | `/api/editoriales-descuentos` | Admin | CRUD de descuentos por editorial (porcentaje por defecto y alternativas para libros en consignación). | `DescuentoEditorial` |
 | GET / POST / PUT / DELETE | `/api/usuarios` | Admin | CRUD de usuarios (vendedores/administradores). | `Usuario` |
+| GET / POST / PUT / DELETE | `/api/sitios-scraping` | Admin | CRUD de la lista única de sitios de scraping (banderas `info`/`pvp`, `prioridad` — ADR-010). PUT/DELETE por `{dominio}`. | `SitioScraping` |
 
 ### 5.1 Tablas DynamoDB
 
@@ -268,6 +269,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | `babel-estantes` | `estanteId` (PK) | — |
 | `babel-editoriales-descuentos` | `editorial` (PK) | — |
 | `babel-usuarios` | `email` (PK) | Fuente de verdad del rol (`administrador`/`vendedor`). |
+| `babel-sitios-scraping` | `dominio` (PK) | Lista única administrable de sitios de scraping; cada fila con `nombre`, `url`, banderas `info`/`pvp` y `prioridad` (ADR-010). Sustituye el par lista blanca/lista negra. |
 
 **Decisión de diseño:** se usa una tabla `babel-ventas` separada (en vez de sobrescribir el estado del libro) porque los reportes requieren historial por transacción (fecha, forma de pago, utilidad) y un libro catalogado puede tener múltiples ejemplares vendidos en momentos distintos. `babel-libros.cantidadDisponible` se decrementa en cada venta; cuando llega a 0 el libro deja de aparecer como disponible en el catálogo público.
 
@@ -284,8 +286,8 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 |---|---|---|
 | `api.letiende.co` | Ya existente, compartido | Resolver metadatos de libro (título, autor, portada, editorial) a partir de ISBN u otros datos, vía Google Books API. |
 | Firebase Authentication | Ya existente, compartido con Comandante — `projectId` confirmado: **`comandante-letiende`** | Login con Google; Babel no crea un proyecto Firebase propio, reutiliza el de Comandante solo para autenticación. Los roles (administrador/vendedor) son independientes por app — ver §8. |
-| Sitios de la lista blanca (scraping) | Por definir | Fuente primaria de PVP por nombre del libro. Lista mantenida como configuración estática en el repo (no editable desde la UI de administración en el alcance actual). |
-| Google Custom Search JSON API | Por habilitar | Fallback de búsqueda de PVP cuando la lista blanca no encuentra el libro, excluyendo la lista negra. **Cuota gratuita limitada (100 consultas/día)** — riesgo de costo si el volumen de catalogación la supera; ver §9 y PRD §9. |
+| Sitios de scraping (datos + PVP) | Semilla inicial: 4 sitios | Fuente de datos bibliográficos y de PVP por ISBN. **Lista única administrable desde la UI de administración**, almacenada en `babel-sitios-scraping` (ADR-010) — supersede la decisión previa de mantenerla como configuración estática en el repo. Cada sitio declara permisos `info`/`pvp`. La mecánica de extracción por sitio (URL de búsqueda + selectores) vive en código (`scraping.ts`); toda petición saliente pasa por la guardia SSRF fija (ADR-011). |
+| ~~Google Custom Search JSON API~~ | Descartado | Se descartó como fallback de PVP en favor del scraping de la lista administrable (ADR-010). No se habilita ni se consume. |
 
 ---
 
@@ -309,7 +311,7 @@ Ver diagrama de §1. Componentes gestionados por Serverless Framework: 2 funcion
 - **DynamoDB:** capacidad aprovisionada 25 RCU/25 WCU por tabla (capa siempre gratuita), evitando el modo on-demand si el volumen de solicitudes pudiera generar cargos.
 - **Scraping sin navegador headless:** reduce tiempo de ejecución y memoria de Lambda frente a Puppeteer/Playwright.
 - **Route53/API Gateway/ACM:** se asume una hosted zone ya existente para `letiende.co` (reutilizada de Comandante/api.letiende.co); certificados ACM son gratuitos.
-- **Riesgo de costo no cero:** Google Custom Search API más allá de la cuota gratuita diaria, y API Gateway HTTP API más allá de los primeros 12 meses de capa gratuita (después: ~US$1 por millón de solicitudes). Dado el volumen esperado (uso interno + catálogo público de una sola librería), el costo estimado más allá del free tier es marginal, pero no está garantizado en $0 absoluto de forma indefinida — validar precios vigentes de AWS antes de lanzar a producción.
+- **Riesgo de costo no cero:** API Gateway HTTP API más allá de los primeros 12 meses de capa gratuita (después: ~US$1 por millón de solicitudes). Dado el volumen esperado (uso interno + catálogo público de una sola librería), el costo estimado más allá del free tier es marginal, pero no está garantizado en $0 absoluto de forma indefinida — validar precios vigentes de AWS antes de lanzar a producción.
 
 ---
 
@@ -341,7 +343,7 @@ Babel **no crea un proyecto Firebase propio**: reutiliza el mismo proyecto Fireb
 | `FIREBASE_PROJECT_ID` / config cliente Firebase | Inicializar el SDK cliente de Firebase Authentication — **mismo proyecto que Comandante**, copiado de su configuración pública | Frontend (`src/environments/`), no sensible (config pública de Firebase) |
 | `FIREBASE_SERVICE_ACCOUNT_BABEL` | Credenciales de una cuenta de servicio **propia de Babel** (distinta de `FIREBASE_SERVICE_ACCOUNT_COMANDANTE_LETIENDE`) sobre el proyecto Firebase compartido, para `firebase-admin` (verificar ID tokens) — ver §8.1 | Backend Lambda `api` — GitHub Secret, nunca en el repo |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (o rol OIDC) | Despliegue con Serverless Framework desde GitHub Actions | GitHub Secrets / OIDC federado |
-| `GOOGLE_CUSTOM_SEARCH_API_KEY` / `GOOGLE_CUSTOM_SEARCH_CX` | Fallback de búsqueda de PVP en Google | GitHub Secrets → variable de entorno de la Lambda `api` |
+| ~~`GOOGLE_CUSTOM_SEARCH_API_KEY` / `GOOGLE_CUSTOM_SEARCH_CX`~~ | Descartados (ADR-010) — el fallback de PVP ya no usa Google Custom Search sino el scraping de la lista administrable. No se requiere ninguna API key propia de Google (ni de Custom Search ni de Google Books: los metadatos siguen resolviéndose vía el proxy `api.letiende.co`, ADR-001). | — |
 | `API_LETIENDE_BASE_URL` | URL base de la API externa de metadatos | Variable de entorno por stage (no secreta) |
 
 **Regla:** ningún secreto se hardcodea en el repositorio ni en `serverless.yml`; todos se inyectan como variables de entorno de la Lambda a través de GitHub Actions Secrets.
