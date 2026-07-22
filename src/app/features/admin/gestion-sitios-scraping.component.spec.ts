@@ -66,9 +66,25 @@ function enviarFormulario(fixture: ComponentFixture<GestionSitiosScrapingCompone
   formulario.dispatchEvent(new Event('submit'));
 }
 
-/** Botón "Agregar" siempre es el primer `button[type="button"]` del panel de lista (antes de las filas). */
+/** Botón "Agregar" flota debajo del panel de lista — se ubica por texto, no por posición. */
 function botonAgregar(fixture: ComponentFixture<GestionSitiosScrapingComponent>): HTMLButtonElement {
-  return fixture.nativeElement.querySelector('button[type="button"]') as HTMLButtonElement;
+  return Array.from(fixture.nativeElement.querySelectorAll('button[type="button"]')).find(
+    (boton) => (boton as HTMLElement).textContent?.trim() === 'Agregar',
+  ) as HTMLButtonElement;
+}
+
+/** Botón "Editar" de una fila — se ubica por texto (los tests que lo usan solo tienen una fila visible). */
+function botonEditar(fixture: ComponentFixture<GestionSitiosScrapingComponent>): HTMLButtonElement {
+  return Array.from(fixture.nativeElement.querySelectorAll('button[type="button"]')).find(
+    (boton) => (boton as HTMLElement).textContent?.trim() === 'Editar',
+  ) as HTMLButtonElement;
+}
+
+/** Botón "Eliminar" de una fila — se ubica por texto (los tests que lo usan solo tienen una fila visible). */
+function botonEliminar(fixture: ComponentFixture<GestionSitiosScrapingComponent>): HTMLButtonElement {
+  return Array.from(fixture.nativeElement.querySelectorAll('button[type="button"]')).find(
+    (boton) => (boton as HTMLElement).textContent?.trim() === 'Eliminar',
+  ) as HTMLButtonElement;
 }
 
 describe('GestionSitiosScrapingComponent', () => {
@@ -118,11 +134,21 @@ describe('GestionSitiosScrapingComponent', () => {
     expect(instancia.formulario.getRawValue()).toEqual({ dominio: '', nombre: '', url: '', info: false, pvp: false });
   });
 
+  it('el botón "Agregar" se deshabilita mientras el formulario está abierto', () => {
+    const { fixture } = configurarPrueba();
+
+    expect(botonAgregar(fixture).disabled).toBe(false);
+
+    botonAgregar(fixture).click();
+    fixture.detectChanges();
+
+    expect(botonAgregar(fixture).disabled).toBe(true);
+  });
+
   it('el botón "Editar" abre el formulario precargado, sin campo de prioridad', () => {
     const { fixture } = configurarPrueba();
 
-    const botonEditar = fixture.nativeElement.querySelectorAll('button[type="button"]')[1] as HTMLButtonElement;
-    botonEditar.click();
+    botonEditar(fixture).click();
     fixture.detectChanges();
 
     const formulario = fixture.nativeElement.querySelector('form');
@@ -144,8 +170,7 @@ describe('GestionSitiosScrapingComponent', () => {
   it('"Cancelar" oculta el formulario y limpia el estado de edición', () => {
     const { fixture } = configurarPrueba();
 
-    const botonEditar = fixture.nativeElement.querySelectorAll('button[type="button"]')[1] as HTMLButtonElement;
-    botonEditar.click();
+    botonEditar(fixture).click();
     fixture.detectChanges();
 
     const botonCancelar = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
@@ -223,8 +248,7 @@ describe('GestionSitiosScrapingComponent', () => {
   it('al editar, reenvía la prioridad actual del sitio sin cambiarla y cierra el formulario', async () => {
     const { fixture, actualizarSitioMock } = configurarPrueba();
 
-    const botonEditar = fixture.nativeElement.querySelectorAll('button[type="button"]')[1] as HTMLButtonElement;
-    botonEditar.click();
+    botonEditar(fixture).click();
     fixture.detectChanges();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -250,9 +274,7 @@ describe('GestionSitiosScrapingComponent', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { fixture, eliminarSitioMock } = configurarPrueba();
 
-    const botones = fixture.nativeElement.querySelectorAll('button[type="button"]');
-    const botonEliminar = botones[botones.length - 1] as HTMLButtonElement;
-    botonEliminar.click();
+    botonEliminar(fixture).click();
     await Promise.resolve();
     await Promise.resolve();
     fixture.detectChanges();
@@ -265,9 +287,7 @@ describe('GestionSitiosScrapingComponent', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     const { fixture, eliminarSitioMock } = configurarPrueba();
 
-    const botones = fixture.nativeElement.querySelectorAll('button[type="button"]');
-    const botonEliminar = botones[botones.length - 1] as HTMLButtonElement;
-    botonEliminar.click();
+    botonEliminar(fixture).click();
     await Promise.resolve();
 
     expect(eliminarSitioMock).not.toHaveBeenCalled();
@@ -300,9 +320,7 @@ describe('GestionSitiosScrapingComponent', () => {
     const { fixture, eliminarSitioMock } = configurarPrueba();
     eliminarSitioMock.mockResolvedValue({ exito: false, error: 'No existe un sitio de scraping con ese dominio.' });
 
-    const botones = fixture.nativeElement.querySelectorAll('button[type="button"]');
-    const botonEliminar = botones[botones.length - 1] as HTMLButtonElement;
-    botonEliminar.click();
+    botonEliminar(fixture).click();
     await Promise.resolve();
     await Promise.resolve();
     fixture.detectChanges();
