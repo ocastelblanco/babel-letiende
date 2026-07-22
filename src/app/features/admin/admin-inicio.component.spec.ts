@@ -27,4 +27,9 @@ describe('AdminInicioComponent', () => {
     const enlace = fixture.nativeElement.querySelector('a[href="/admin/estantes"]') as HTMLAnchorElement | null;
     expect(enlace).not.toBeNull();
   });
+
+  it('enlaza la sección Sitios de scraping a /admin/sitios', () => {
+    const enlace = fixture.nativeElement.querySelector('a[href="/admin/sitios"]') as HTMLAnchorElement | null;
+    expect(enlace).not.toBeNull();
+  });
 });

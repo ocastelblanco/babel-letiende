@@ -24,6 +24,7 @@ custom:
     ventas: babel-ventas-${sls:stage}
     estantes: babel-estantes-${sls:stage}
     editorialesDescuentos: babel-editoriales-descuentos-${sls:stage}
+    sitiosScraping: babel-sitios-scraping-${sls:stage}
     usuarios: babel-usuarios-${sls:stage}
 
 functions:
@@ -40,6 +41,7 @@ functions:
       TABLA_VENTAS: ${self:custom.nombresTablas.ventas}
       TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
       TABLA_EDITORIALES_DESCUENTOS: ${self:custom.nombresTablas.editorialesDescuentos}
+      TABLA_SITIOS_SCRAPING: ${self:custom.nombresTablas.sitiosScraping}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       # Secretos/config externa (tech-specs.md §9) — nunca hardcodeados,
       # quedan vacíos si la variable de entorno no está definida.
@@ -577,6 +579,76 @@ functions:
           path: /api/editoriales-descuentos/{editorial}
           method: delete
 
+  sitiosScraping:
+    handler: dist-server/api/handlers/sitios-scraping.handler
+    role: !GetAtt SitiosScrapingLambdaRole.Arn
+    description: >-
+      CRUD /api/sitios-scraping — exige rol administrador exclusivamente
+      (CLAUDE.md A01, ADR-008, ADR-010). Solo administra datos; NUNCA hace
+      peticiones salientes a los sitios (eso es la Tarea 2, con la guardia
+      SSRF fija de ADR-011).
+    environment:
+      TABLA_SITIOS_SCRAPING: ${self:custom.nombresTablas.sitiosScraping}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/sitios-scraping.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Verifica tokens con firebase-admin — igual que usuariosMe/
+        # catalogarLibro/estantes/registrarVenta/usuarios/editorialesDescuentos,
+        # se incluye node_modules completo en vez de un allowlist manual (ver
+        # gotcha de jose/jwks-rsa en MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/sitios-scraping
+          method: get
+      - httpApi:
+          path: /api/sitios-scraping
+          method: post
+      - httpApi:
+          path: /api/sitios-scraping/{dominio}
+          method: put
+      - httpApi:
+          path: /api/sitios-scraping/{dominio}
+          method: delete
+
   registrarVenta:
     handler: dist-server/api/handlers/ventas.handler
     role: !GetAtt RegistrarVentaLambdaRole.Arn
@@ -759,6 +831,7 @@ resources:
                     - !GetAtt TablaVentas.Arn
                     - !GetAtt TablaEstantes.Arn
                     - !GetAtt TablaEditorialesDescuentos.Arn
+                    - !GetAtt TablaSitiosScraping.Arn
                     - !GetAtt TablaUsuarios.Arn
 
     UsuariosMeLambdaRole:
@@ -1010,6 +1083,41 @@ resources:
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
 
+    SitiosScrapingLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-sitios-scraping-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # CRUD completo sobre babel-sitios-scraping y solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token — sin acceso a
+          # ninguna otra tabla (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-sitios-scraping-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaSitiosScraping.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
     RegistrarVentaLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -1180,6 +1288,21 @@ resources:
             AttributeType: S
         KeySchema:
           - AttributeName: editorial
+            KeyType: HASH
+
+    TablaSitiosScraping:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.sitiosScraping}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: dominio
+            AttributeType: S
+        KeySchema:
+          - AttributeName: dominio
             KeyType: HASH
 
     TablaUsuarios:
