@@ -5,6 +5,7 @@ import { RoleGuard } from './core/auth/role.guard';
 import { AdminInicioComponent } from './features/admin/admin-inicio.component';
 import { GestionEstantesComponent } from './features/admin/gestion-estantes.component';
 import { GestionSitiosScrapingComponent } from './features/admin/gestion-sitios-scraping.component';
+import { GestionUsuariosComponent } from './features/admin/gestion-usuarios.component';
 import { CatalogarLibroComponent } from './features/catalogar/catalogar-libro.component';
 import { CatalogoPublicoComponent } from './features/catalogo-publico/catalogo-publico.component';
 import { LoginComponent } from './features/login/login.component';
@@ -52,6 +53,12 @@ export const routes: Routes = [
     // CRUD de sitios de scraping (plan-obtencion-info-libros.md §6 Task A, ADR-010) — solo administrador, mismo patrón que /admin/estantes.
     path: 'admin/sitios',
     component: GestionSitiosScrapingComponent,
+    canActivate: [RoleGuard('administrador')],
+  },
+  {
+    // CRUD de usuarios (PRD.md §5.6, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/estantes.
+    path: 'admin/usuarios',
+    component: GestionUsuariosComponent,
     canActivate: [RoleGuard('administrador')],
   },
   { path: '**', redirectTo: '' },

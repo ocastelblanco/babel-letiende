@@ -32,4 +32,9 @@ describe('AdminInicioComponent', () => {
     const enlace = fixture.nativeElement.querySelector('a[href="/admin/sitios"]') as HTMLAnchorElement | null;
     expect(enlace).not.toBeNull();
   });
+
+  it('enlaza la sección Usuarios a /admin/usuarios', () => {
+    const enlace = fixture.nativeElement.querySelector('a[href="/admin/usuarios"]') as HTMLAnchorElement | null;
+    expect(enlace).not.toBeNull();
+  });
 });
