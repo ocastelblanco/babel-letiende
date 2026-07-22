@@ -33,6 +33,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1090.0",
     "@codegenie/serverless-express": "^5.0.0",
     "@zxing/browser": "^0.2.1",
+    "cheerio": "^1.2.0",
     "express": "^5.1.0",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",

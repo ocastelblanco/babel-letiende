@@ -1,0 +1,217 @@
+[
+  {
+    "productId": "321290",
+    "productName": "Cien AÑos De Soledad",
+    "brand": "Random House Mondadori Colombia",
+    "brandId": 2000502,
+    "brandImageUrl": null,
+    "linkText": "321290",
+    "productReference": "321290",
+    "productReferenceCode": "321290",
+    "categoryId": "19",
+    "productTitle": "Cien AÑos De Soledad - Librería Nacional",
+    "metaTagDescription": "&lt;p&gt;«Muchos años después, frente al pelotón de fusilamiento, el coronel Aureliano Buendía había de recordar aquella tarde remota ...",
+    "releaseDate": "2024-10-13T00:00:00Z",
+    "clusterHighlights": {},
+    "productClusters": {
+      "248": "Nuevo capitulo tu felicidad",
+      "337": "Libros Compartidos"
+    },
+    "searchableClusters": {},
+    "categories": [
+      "/Libros/Literatura y Ficción/Literatura Colombiana/",
+      "/Libros/Literatura y Ficción/",
+      "/Libros/"
+    ],
+    "categoriesIds": [
+      "/4/10/19/",
+      "/4/10/",
+      "/4/"
+    ],
+    "link": "https://www.librerianacional.com/321290/p",
+    "lib_eb_isbn": [
+      "9789588894003"
+    ],
+    "Lenguaje": [
+      "Español"
+    ],
+    "Autor(es)": [
+      "Gabriel Garcia Marquez"
+    ],
+    "lib_formato": [
+      "Libro Impreso"
+    ],
+    "lib_presentacion": [
+      "Tapa Blanda"
+    ],
+    "lib_num_paginas": [
+      "510"
+    ],
+    "lib_eb_edicion_num": [
+      "1"
+    ],
+    "Capítulos": [
+      "No especificado"
+    ],
+    "Height": [
+      "23"
+    ],
+    "Width": [
+      "14"
+    ],
+    "Ids Autores": [
+      "62605667-3d9b-3cc6-5503-5e1e3ac053ca"
+    ],
+    "NIT Proveedor": [
+      "800040880"
+    ],
+    "InfoLibros": [
+      "lib_eb_isbn",
+      "Lenguaje",
+      "Autor(es)",
+      "lib_formato",
+      "lib_presentacion",
+      "lib_num_paginas",
+      "lib_eb_edicion_num",
+      "Capítulos",
+      "Height",
+      "Width",
+      "Ids Autores",
+      "NIT Proveedor"
+    ],
+    "allSpecifications": [
+      "lib_eb_isbn",
+      "Lenguaje",
+      "Autor(es)",
+      "lib_formato",
+      "lib_presentacion",
+      "lib_num_paginas",
+      "lib_eb_edicion_num",
+      "Capítulos",
+      "Height",
+      "Width",
+      "Ids Autores",
+      "NIT Proveedor"
+    ],
+    "allSpecificationsGroups": [
+      "InfoLibros"
+    ],
+    "description": "<p>«Muchos años después, frente al pelotón de fusilamiento, el coronel Aureliano Buendía había de recordar aquella tarde remota en que su padre lo llevó a conocer el hielo. Macondo era entonces una aldea de veinte casas de barro y cañabrava construidas a la orilla de un río de aguas diáfanas que se precipitaban por un lecho de piedras pulidas, blancas y enormes como huevos prehistóricos. El mundo era tan reciente, que muchas cosas carecían de nombre, y para mencionarlas había que señalarlas con el dedo.» Con estas palabras empieza una novela ya legendaria en los anales de la literatura universal, una de las aventuras literarias más fascinantes de nuestro siglo. Millones de ejemplares de Cien años de soledad leídos en todas las lenguas y el Premio Nobel de Literatura coronando una obra que se había abierto paso «boca a boca» -como gusta decir el escritor- son la más palpable demostración de que la aventura fabulosa de la familia Buendía-Iguarán, con sus milagros, fantasías, obsesiones, tragedias, incestos, adulterios, rebeldías, descubrimientos y condenas, representaba al mismo tiempo el mito y la historia, la tragedia y el amor del mundo entero.</p>",
+    "items": [
+      {
+        "itemId": "321290",
+        "name": "CIEN AÑOS DE SOLEDAD",
+        "nameComplete": "CIEN AÑOS DE SOLEDAD",
+        "complementName": "&lt;p&gt;«Muchos años después, frente al pelotón de fusilamiento, el coronel Aureliano Buendía había de recordar aquella tarde remota ...",
+        "ean": "",
+        "referenceId": [
+          {
+            "Key": "RefId",
+            "Value": "321290"
+          }
+        ],
+        "measurementUnit": "un",
+        "unitMultiplier": 1.0,
+        "modalType": null,
+        "isKit": false,
+        "images": [
+          {
+            "imageId": "244798",
+            "imageLabel": "portada",
+            "imageTag": "<img src=\"~/arquivos/ids/244798-#width#-#height#/Portada.jpg?v=638644376551230000\" width=\"#width#\" height=\"#height#\" alt=\"portada\" id=\"\" />",
+            "imageUrl": "https://b2clibrerianacional.vteximg.com.br/arquivos/ids/244798/Portada.jpg?v=638644376551230000",
+            "imageText": "portada",
+            "imageLastModified": "2024-10-13T17:34:15.1230000Z"
+          }
+        ],
+        "attachments": [
+          {
+            "id": 12,
+            "name": "Empaque de regalo",
+            "required": false,
+            "domainValues": "[{\"FieldName\":\"Empacar\",\"MaxCaracters\":\"\",\"DomainValues\":\"SI,NO\"},{\"FieldName\":\"De\",\"MaxCaracters\":\"100\",\"DomainValues\":\"\"},{\"FieldName\":\"Para\",\"MaxCaracters\":\"100\",\"DomainValues\":\"\"}]"
+          }
+        ],
+        "sellers": [
+          {
+            "sellerId": "1",
+            "sellerName": "Librería Nacional",
+            "addToCartLink": "https://www.librerianacional.com/checkout/cart/add?sku=321290&qty=1&seller=1&sc=1&price=7900000&cv=_&sc=1",
+            "sellerDefault": true,
+            "commertialOffer": {
+              "DeliverySlaSamplesPerRegion": {
+                "0": {
+                  "DeliverySlaPerTypes": [],
+                  "Region": null
+                }
+              },
+              "DiscountHighLight": [],
+              "GiftSkuIds": [],
+              "Teasers": [],
+              "PromotionTeasers": [],
+              "BuyTogether": [],
+              "Price": 79000.0,
+              "ListPrice": 79000.0,
+              "PriceWithoutDiscount": 79000.0,
+              "FullSellingPrice": 79000.0,
+              "RewardValue": 0.0,
+              "PriceValidUntil": "2027-07-22T16:57:38Z",
+              "AvailableQuantity": 99999,
+              "IsAvailable": true,
+              "Tax": 0.0,
+              "DeliverySlaSamples": [
+                {
+                  "DeliverySlaPerTypes": [],
+                  "Region": null
+                }
+              ],
+              "GetInfoErrorMessage": null,
+              "CacheVersionUsedToCallCheckout": "_"
+            }
+          }
+        ],
+        "Videos": [],
+        "estimatedDateArrival": null
+      }
+    ],
+    "itemMetadata": {
+      "items": [
+        {
+          "Name": "CIEN AÑOS DE SOLEDAD",
+          "NameComplete": "CIEN AÑOS DE SOLEDAD",
+          "MainImage": "https://b2clibrerianacional.vteximg.com.br/arquivos/ids/244798/Portada.jpg",
+          "BrandName": "Random House Mondadori Colombia",
+          "CategoryId": 19,
+          "ProductId": 321290,
+          "id": "321290",
+          "seller": "1",
+          "assemblyOptions": [
+            {
+              "id": "Empaque de regalo",
+              "name": "Empaque de regalo",
+              "required": false,
+              "inputValues": {
+                "Empacar": {
+                  "maximumNumberOfCharacters": 2,
+                  "domain": [
+                    "SI",
+                    "NO"
+                  ]
+                },
+                "De": {
+                  "maximumNumberOfCharacters": 100,
+                  "domain": []
+                },
+                "Para": {
+                  "maximumNumberOfCharacters": 100,
+                  "domain": []
+                }
+              },
+              "composition": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
