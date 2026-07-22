@@ -3,6 +3,7 @@ import { AuthGuard } from './core/auth/auth.guard';
 import { NoAuthGuard } from './core/auth/no-auth.guard';
 import { RoleGuard } from './core/auth/role.guard';
 import { AdminInicioComponent } from './features/admin/admin-inicio.component';
+import { GestionDescuentosEditorialesComponent } from './features/admin/gestion-descuentos-editoriales.component';
 import { GestionEstantesComponent } from './features/admin/gestion-estantes.component';
 import { GestionSitiosScrapingComponent } from './features/admin/gestion-sitios-scraping.component';
 import { GestionUsuariosComponent } from './features/admin/gestion-usuarios.component';
@@ -59,6 +60,12 @@ export const routes: Routes = [
     // CRUD de usuarios (PRD.md §5.6, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/estantes.
     path: 'admin/usuarios',
     component: GestionUsuariosComponent,
+    canActivate: [RoleGuard('administrador')],
+  },
+  {
+    // CRUD de descuentos por editorial (PRD.md §5.6, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/usuarios.
+    path: 'admin/editoriales',
+    component: GestionDescuentosEditorialesComponent,
     canActivate: [RoleGuard('administrador')],
   },
   { path: '**', redirectTo: '' },
