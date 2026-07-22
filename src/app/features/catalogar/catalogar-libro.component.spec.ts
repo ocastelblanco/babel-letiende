@@ -4,6 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AuthService } from '../../core/auth/auth.service';
 import { EstantesService } from '../../core/api/estantes.service';
+import { MetadatosService } from '../../core/api/metadatos.service';
 import type { Estante } from '../../core/models/estante.model';
 import { CatalogarLibroComponent } from './catalogar-libro.component';
 
@@ -61,9 +62,14 @@ const datosValidos = {
   estanteId: 'estante-1',
 };
 
+const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null };
+
 function configurarPrueba() {
   const cargarEstantesMock = vi.fn().mockResolvedValue(undefined);
   const obtenerIdTokenMock = vi.fn().mockResolvedValue('token-valido');
+  // Por defecto no encuentra nada — las pruebas de autocompletado sobrescriben
+  // esta resolución con `mockResolvedValueOnce`/`mockResolvedValue` según el caso.
+  const obtenerMetadatosMock = vi.fn().mockResolvedValue(metadatosVacios);
 
   TestBed.configureTestingModule({
     providers: [
@@ -78,6 +84,7 @@ function configurarPrueba() {
           cargarEstantes: cargarEstantesMock,
         },
       },
+      { provide: MetadatosService, useValue: { obtenerMetadatos: obtenerMetadatosMock } },
     ],
   });
 
@@ -85,7 +92,7 @@ function configurarPrueba() {
   const fixture: ComponentFixture<CatalogarLibroComponent> = TestBed.createComponent(CatalogarLibroComponent);
   fixture.detectChanges();
 
-  return { fixture, httpMock, obtenerIdTokenMock, cargarEstantesMock };
+  return { fixture, httpMock, obtenerIdTokenMock, cargarEstantesMock, obtenerMetadatosMock };
 }
 
 function enviarFormulario(fixture: ComponentFixture<CatalogarLibroComponent>, datos: typeof datosValidos): void {
@@ -280,5 +287,102 @@ describe('CatalogarLibroComponent', () => {
     campoIsbn.value = '9781234567897';
     campoIsbn.dispatchEvent(new Event('input'));
     expect(componente.formulario.value.isbn).toBe('9781234567897');
+  });
+
+  describe('autocompletado de metadatos a partir del ISBN', () => {
+    const metadatosEncontrados = {
+      titulo: 'Cien años de soledad',
+      autor: 'Gabriel García Márquez',
+      editorial: 'Sudamericana',
+      portadaUrl: 'https://books.google.com/portada.jpg',
+    };
+
+    it('un ISBN completado por escaneo dispara la búsqueda y pre-carga los campos vacíos', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      obtenerMetadatosMock.mockResolvedValue(metadatosEncontrados);
+
+      const botonEscanear = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+        (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Escanear ISBN',
+      ) as HTMLButtonElement;
+      botonEscanear.click();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      callbackDecodificacion?.({ getText: () => '9780000000001' });
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(obtenerMetadatosMock).toHaveBeenCalledWith('9780000000001');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.titulo).toBe(metadatosEncontrados.titulo);
+      expect(componente.formulario.value.autor).toBe(metadatosEncontrados.autor);
+      expect(componente.formulario.value.editorial).toBe(metadatosEncontrados.editorial);
+      expect(componente.formulario.value.portadaUrl).toBe(metadatosEncontrados.portadaUrl);
+    });
+
+    it('un ISBN ingresado manualmente dispara la búsqueda al perder el foco del campo', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      obtenerMetadatosMock.mockResolvedValue(metadatosEncontrados);
+
+      const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+      campoIsbn.value = '9780000000001';
+      campoIsbn.dispatchEvent(new Event('input'));
+      campoIsbn.dispatchEvent(new Event('blur'));
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(obtenerMetadatosMock).toHaveBeenCalledWith('9780000000001');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.titulo).toBe(metadatosEncontrados.titulo);
+    });
+
+    it('no sobrescribe un campo que el vendedor ya completó a mano', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      obtenerMetadatosMock.mockResolvedValue(metadatosEncontrados);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.formulario.controls.titulo.setValue('Título escrito a mano');
+
+      const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+      campoIsbn.value = '9780000000001';
+      campoIsbn.dispatchEvent(new Event('input'));
+      campoIsbn.dispatchEvent(new Event('blur'));
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(componente.formulario.value.titulo).toBe('Título escrito a mano');
+      // Los campos que sí estaban vacíos igual se pre-cargan.
+      expect(componente.formulario.value.autor).toBe(metadatosEncontrados.autor);
+    });
+
+    it('un fallo de la búsqueda de metadatos no bloquea la edición manual del formulario', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      obtenerMetadatosMock.mockResolvedValue(metadatosVacios);
+
+      const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+      campoIsbn.value = '0000000000000';
+      campoIsbn.dispatchEvent(new Event('input'));
+      campoIsbn.dispatchEvent(new Event('blur'));
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('No se encontraron datos');
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.formulario.controls.titulo.setValue('Escrito manualmente tras el fallo');
+      expect(componente.formulario.value.titulo).toBe('Escrito manualmente tras el fallo');
+    });
   });
 });
