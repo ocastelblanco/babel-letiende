@@ -1,11 +1,20 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenInvalidoError } from '../lib/verificar-token';
+import type { ResultadoScraping, SitioScraping } from '../services/scraping';
 
-const { verificarTokenDesdeHeaderMock, obtenerPorClaveMock, obtenerMetadatosPorIsbnMock } = vi.hoisted(() => ({
+const {
+  verificarTokenDesdeHeaderMock,
+  obtenerPorClaveMock,
+  escanearTodoMock,
+  obtenerMetadatosPorIsbnMock,
+  scrapearSitioMock,
+} = vi.hoisted(() => ({
   verificarTokenDesdeHeaderMock: vi.fn(),
   obtenerPorClaveMock: vi.fn(),
+  escanearTodoMock: vi.fn(),
   obtenerMetadatosPorIsbnMock: vi.fn(),
+  scrapearSitioMock: vi.fn(),
 }));
 
 vi.mock('../lib/verificar-token', async () => {
@@ -18,13 +27,27 @@ vi.mock('../lib/verificar-token', async () => {
 
 vi.mock('../services/dynamodb', () => ({
   obtenerPorClave: obtenerPorClaveMock,
+  escanearTodo: escanearTodoMock,
 }));
 
 vi.mock('../services/api-letiende', () => ({
   obtenerMetadatosPorIsbn: obtenerMetadatosPorIsbnMock,
 }));
 
+vi.mock('../services/scraping', () => ({
+  scrapearSitio: scrapearSitioMock,
+}));
+
 const { handler } = await import('./metadatos');
+
+/** Crea una promesa que solo se resuelve cuando el test invoca `resolve` explícitamente — usada para controlar el orden de llegada de red en los tests de paralelismo/prioridad. */
+function crearDiferida<T>(): { promise: Promise<T>; resolve: (valor: T) => void } {
+  let resolve!: (valor: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null };
 const metadatosEncontrados = {
@@ -33,6 +56,16 @@ const metadatosEncontrados = {
   editorial: 'Sudamericana',
   portadaUrl: 'https://books.google.com/portada.jpg',
 };
+
+function sitio(datos: Partial<SitioScraping> & { dominio: string; prioridad: number }): SitioScraping {
+  return {
+    nombre: datos.dominio,
+    url: `https://${datos.dominio}`,
+    info: false,
+    pvp: false,
+    ...datos,
+  };
+}
 
 function eventoFalso(opciones: { authorization?: string; isbn?: string } = {}): APIGatewayProxyEventV2 {
   return {
@@ -46,6 +79,13 @@ describe('handler (/api/metadatos/:isbn)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_SITIOS_SCRAPING'] = 'babel-sitios-scraping-test';
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    // Por defecto no hay sitios configurados — las pruebas de scraping
+    // sobrescriben esta resolución con `mockResolvedValueOnce`/`mockResolvedValue`.
+    escanearTodoMock.mockResolvedValue([]);
+    scrapearSitioMock.mockResolvedValue({});
   });
 
   it('responde 401 sin token válido', async () => {
@@ -58,7 +98,6 @@ describe('handler (/api/metadatos/:isbn)', () => {
   });
 
   it('responde 403 cuando el correo no tiene fila en babel-usuarios', async () => {
-    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'desconocido@letiende.co', uid: 'uid-1' });
     obtenerPorClaveMock.mockResolvedValue(undefined);
 
     const respuesta = await handler(
@@ -72,7 +111,6 @@ describe('handler (/api/metadatos/:isbn)', () => {
   });
 
   it('responde 403 cuando el rol no es vendedor ni administrador', async () => {
-    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'otro@letiende.co', uid: 'uid-1' });
     obtenerPorClaveMock.mockResolvedValue({ email: 'otro@letiende.co', rol: 'invitado' });
 
     const respuesta = await handler(
@@ -85,33 +123,156 @@ describe('handler (/api/metadatos/:isbn)', () => {
   });
 
   it('responde 400 cuando falta el isbn en la ruta', async () => {
-    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
-    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
-
     const respuesta = await handler(eventoFalso({ authorization: 'Bearer token' }), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 400 });
   });
 
-  it('un vendedor responde 200 con los metadatos encontrados', async () => {
-    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
-    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
-    obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
+  it(
+    'cuando api.letiende.co resuelve toda la info, igual dispara scraping en paralelo SOLO para los sitios ' +
+      'con pvp=true (nunca resuelve pvp por sí sola)',
+    async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
+      const sitioConInfoYPvp = sitio({ dominio: 'con-info-y-pvp.com', info: true, pvp: true, prioridad: 2 });
+      const sitioSoloInfo = sitio({ dominio: 'solo-info.com', info: true, pvp: false, prioridad: 1 });
+      const sitioSoloPvpMenorPrioridad = sitio({ dominio: 'solo-pvp.com', info: false, pvp: true, prioridad: 3 });
+      escanearTodoMock.mockResolvedValue([sitioConInfoYPvp, sitioSoloInfo, sitioSoloPvpMenorPrioridad]);
+      scrapearSitioMock.mockImplementation(async (s: SitioScraping): Promise<ResultadoScraping> => {
+        if (s.dominio === 'con-info-y-pvp.com') {
+          return { pvp: 50_000 };
+        }
+        if (s.dominio === 'solo-pvp.com') {
+          return { pvp: 60_000 };
+        }
+        return {};
+      });
+
+      const respuesta = await handler(
+        eventoFalso({ authorization: 'Bearer token', isbn: '9780000000001' }),
+        {} as never,
+        {} as never,
+      );
+
+      // El sitio "solo-info.com" no tiene pvp=true y toda la info ya estaba
+      // resuelta por api.letiende.co, así que NUNCA debió consultarse.
+      expect(scrapearSitioMock).not.toHaveBeenCalledWith(sitioSoloInfo, '9780000000001');
+      expect(scrapearSitioMock).toHaveBeenCalledWith(sitioConInfoYPvp, '9780000000001');
+      expect(scrapearSitioMock).toHaveBeenCalledWith(sitioSoloPvpMenorPrioridad, '9780000000001');
+      expect(scrapearSitioMock).toHaveBeenCalledTimes(2);
+
+      // Entre los dos sitios que sí resolvieron pvp, gana el de menor
+      // `prioridad` (con-info-y-pvp.com, prioridad 2 < solo-pvp.com, prioridad 3).
+      expect(respuesta).toMatchObject({
+        statusCode: 200,
+        body: JSON.stringify({ ...metadatosEncontrados, pvp: 50_000 }),
+      });
+    },
+  );
+
+  it('api.letiende.co no resuelve nada, el scraping paralelo llena los campos', async () => {
+    obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
+    const unicoSitio = sitio({ dominio: 'unico.com', info: true, pvp: true, prioridad: 1 });
+    escanearTodoMock.mockResolvedValue([unicoSitio]);
+    scrapearSitioMock.mockResolvedValue({
+      titulo: 'Título scrapeado',
+      autor: 'Autor scrapeado',
+      editorial: 'Editorial scrapeada',
+      portadaUrl: 'https://unico.com/portada.jpg',
+      pvp: 70_000,
+    });
 
     const respuesta = await handler(
-      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000001' }),
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000002' }),
       {} as never,
       {} as never,
     );
 
-    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify(metadatosEncontrados) });
-    expect(obtenerMetadatosPorIsbnMock).toHaveBeenCalledWith('9780000000001');
+    expect(respuesta).toMatchObject({
+      statusCode: 200,
+      body: JSON.stringify({
+        titulo: 'Título scrapeado',
+        autor: 'Autor scrapeado',
+        editorial: 'Editorial scrapeada',
+        portadaUrl: 'https://unico.com/portada.jpg',
+        pvp: 70_000,
+      }),
+    });
   });
 
-  it('un administrador responde 200 con campos en null cuando no se encuentra nada', async () => {
-    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-1' });
-    obtenerPorClaveMock.mockResolvedValue({ email: 'admin@letiende.co', rol: 'administrador' });
+  it(
+    'un empate de campo entre dos sitios se resuelve por prioridad ascendente, sin importar el orden en que ' +
+      'resuelven las promesas',
+    async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
+      const sitioMejorPrioridad = sitio({ dominio: 'mejor-prioridad.com', info: true, pvp: false, prioridad: 1 });
+      const sitioPeorPrioridad = sitio({ dominio: 'peor-prioridad.com', info: true, pvp: false, prioridad: 2 });
+      // Orden de la tabla deliberadamente invertido respecto a `prioridad` —
+      // tampoco debe importar.
+      escanearTodoMock.mockResolvedValue([sitioPeorPrioridad, sitioMejorPrioridad]);
+
+      const diferidaMejor = crearDiferida<ResultadoScraping>();
+      const diferidaPeor = crearDiferida<ResultadoScraping>();
+      scrapearSitioMock.mockImplementation((s: SitioScraping): Promise<ResultadoScraping> => {
+        return s.dominio === 'mejor-prioridad.com' ? diferidaMejor.promise : diferidaPeor.promise;
+      });
+
+      const promesaHandler = handler(
+        eventoFalso({ authorization: 'Bearer token', isbn: '9780000000003' }),
+        {} as never,
+        {} as never,
+      );
+
+      // Resuelve PRIMERO el sitio de peor prioridad (simulando que respondió
+      // antes por red) y DESPUÉS el de mejor prioridad — el resultado final
+      // no debe reflejar el orden de llegada, sino `prioridad`.
+      diferidaPeor.resolve({ titulo: 'Título de peor prioridad' });
+      await Promise.resolve();
+      await Promise.resolve();
+      diferidaMejor.resolve({ titulo: 'Título de mejor prioridad' });
+
+      const respuesta = await promesaHandler;
+      const cuerpo = JSON.parse(respuesta.body as string) as { titulo: string | null };
+      expect(cuerpo.titulo).toBe('Título de mejor prioridad');
+    },
+  );
+
+  it('los sitios aplicables se consultan en paralelo, sin esperar a que uno termine antes de invocar el siguiente', async () => {
     obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
+    const sitioA = sitio({ dominio: 'a.com', info: true, pvp: false, prioridad: 1 });
+    const sitioB = sitio({ dominio: 'b.com', info: true, pvp: false, prioridad: 2 });
+    escanearTodoMock.mockResolvedValue([sitioA, sitioB]);
+
+    const diferidaA = crearDiferida<ResultadoScraping>();
+    const diferidaB = crearDiferida<ResultadoScraping>();
+    scrapearSitioMock.mockImplementation((s: SitioScraping): Promise<ResultadoScraping> => {
+      return s.dominio === 'a.com' ? diferidaA.promise : diferidaB.promise;
+    });
+
+    const promesaHandler = handler(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000004' }),
+      {} as never,
+      {} as never,
+    );
+
+    // Espera (con reintentos, sin depender de contar microtasks a mano) hasta
+    // el punto donde el handler ya debió haber invocado `scrapearSitio` para
+    // AMBOS sitios — ninguna de las dos diferidas se ha resuelto todavía, así
+    // que si la invocación fuera secuencial por prioridad, `scrapearSitioMock`
+    // solo tendría 1 llamada en este punto.
+    await vi.waitFor(() => {
+      expect(scrapearSitioMock).toHaveBeenCalledTimes(2);
+    });
+
+    diferidaA.resolve({});
+    diferidaB.resolve({});
+    await promesaHandler;
+  });
+
+  it('ningún sitio resuelve nada → todo null, sigue 200', async () => {
+    obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
+    const unicoSitio = sitio({ dominio: 'vacio.com', info: true, pvp: true, prioridad: 1 });
+    escanearTodoMock.mockResolvedValue([unicoSitio]);
+    scrapearSitioMock.mockResolvedValue({});
 
     const respuesta = await handler(
       eventoFalso({ authorization: 'Bearer token', isbn: '0000000000000' }),
@@ -119,6 +280,43 @@ describe('handler (/api/metadatos/:isbn)', () => {
       {} as never,
     );
 
-    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify(metadatosVacios) });
+    expect(respuesta).toMatchObject({
+      statusCode: 200,
+      body: JSON.stringify({ ...metadatosVacios, pvp: null }),
+    });
+  });
+
+  it('la tabla de sitios de scraping vacía degrada a solo lo que ya tenía de api.letiende.co, sin lanzar', async () => {
+    obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
+    escanearTodoMock.mockResolvedValue([]);
+
+    const respuesta = await handler(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000005' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(scrapearSitioMock).not.toHaveBeenCalled();
+    expect(respuesta).toMatchObject({
+      statusCode: 200,
+      body: JSON.stringify({ ...metadatosEncontrados, pvp: null }),
+    });
+  });
+
+  it('el Scan de babel-sitios-scraping falla y no lanza, degrada a lo que ya tenía de api.letiende.co', async () => {
+    obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
+    escanearTodoMock.mockRejectedValue(new Error('DynamoDB no disponible'));
+
+    const respuesta = await handler(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000006' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(scrapearSitioMock).not.toHaveBeenCalled();
+    expect(respuesta).toMatchObject({
+      statusCode: 200,
+      body: JSON.stringify({ ...metadatosEncontrados, pvp: null }),
+    });
   });
 });

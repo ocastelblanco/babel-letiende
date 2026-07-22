@@ -62,7 +62,7 @@ const datosValidos = {
   estanteId: 'estante-1',
 };
 
-const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null };
+const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null, pvp: null };
 
 function configurarPrueba() {
   const cargarEstantesMock = vi.fn().mockResolvedValue(undefined);
@@ -295,6 +295,7 @@ describe('CatalogarLibroComponent', () => {
       autor: 'Gabriel García Márquez',
       editorial: 'Sudamericana',
       portadaUrl: 'https://books.google.com/portada.jpg',
+      pvp: 65_000,
     };
 
     it('un ISBN completado por escaneo dispara la búsqueda y pre-carga los campos vacíos', async () => {
@@ -321,6 +322,47 @@ describe('CatalogarLibroComponent', () => {
       expect(componente.formulario.value.autor).toBe(metadatosEncontrados.autor);
       expect(componente.formulario.value.editorial).toBe(metadatosEncontrados.editorial);
       expect(componente.formulario.value.portadaUrl).toBe(metadatosEncontrados.portadaUrl);
+      expect(componente.formulario.value.pvp).toBe(metadatosEncontrados.pvp);
+    });
+
+    it('pre-carga el pvp cuando el campo está en su valor por defecto (0)', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      obtenerMetadatosMock.mockResolvedValue(metadatosEncontrados);
+
+      const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+      campoIsbn.value = '9780000000001';
+      campoIsbn.dispatchEvent(new Event('input'));
+      campoIsbn.dispatchEvent(new Event('blur'));
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.pvp).toBe(metadatosEncontrados.pvp);
+    });
+
+    it('no sobrescribe un pvp que el vendedor ya escribió a mano', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      obtenerMetadatosMock.mockResolvedValue(metadatosEncontrados);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.formulario.controls.pvp.setValue(99_000);
+
+      const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+      campoIsbn.value = '9780000000001';
+      campoIsbn.dispatchEvent(new Event('input'));
+      campoIsbn.dispatchEvent(new Event('blur'));
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(componente.formulario.value.pvp).toBe(99_000);
+      // Los demás campos que sí estaban vacíos igual se pre-cargan.
+      expect(componente.formulario.value.titulo).toBe(metadatosEncontrados.titulo);
     });
 
     it('un ISBN ingresado manualmente dispara la búsqueda al perder el foco del campo', async () => {

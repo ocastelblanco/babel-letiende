@@ -387,11 +387,19 @@ functions:
     handler: dist-server/api/handlers/metadatos.handler
     role: !GetAtt MetadatosLambdaRole.Arn
     description: >-
-      GET /api/metadatos/:isbn — autocompleta título/autor/editorial/portada
-      desde api.letiende.co al catalogar, exige rol vendedor o administrador
-      (CLAUDE.md A01, ADR-008).
+      GET /api/metadatos/:isbn — autocompleta título/autor/editorial/portada/
+      pvp combinando api.letiende.co con scraping en paralelo, exige rol
+      vendedor o administrador (CLAUDE.md A01, ADR-008).
+    # provider.timeout (10s) no alcanza: hasta 4 sitios de scraping en
+    # paralelo, el más lento (Tornamesa, 2 peticiones internas de hasta
+    # TIMEOUT_MS=8000 cada una en scraping.ts) puede tardar ~16s. Al ser
+    # paralelo (no secuencial) el peor caso queda acotado al sitio más lento,
+    # no a la suma de todos — 25s da margen real sobre esos ~16s (TODO.md,
+    # Tarea 1).
+    timeout: 25
     environment:
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      TABLA_SITIOS_SCRAPING: ${self:custom.nombresTablas.sitiosScraping}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
       API_LETIENDE_BASE_URL: ${env:API_LETIENDE_BASE_URL, ''}
     package:
@@ -401,6 +409,7 @@ functions:
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         - 'dist-server/api/services/api-letiende.js'
+        - 'dist-server/api/services/scraping.js'
         # Verifica tokens con firebase-admin — igual que usuariosMe/
         # catalogarLibro/estantes/usuarios, se incluye node_modules completo
         # en vez de un allowlist manual (ver gotcha de jose/jwks-rsa en
@@ -1004,10 +1013,12 @@ resources:
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
-          # Solo lee (GetItem) babel-usuarios para resolver el rol del token
-          # — la búsqueda de metadatos en sí sale hacia api.letiende.co
-          # (HTTP, fuera de DynamoDB), sin acceso a ninguna otra tabla
-          # (CLAUDE.md A05, ADR-008).
+          # Lee (GetItem) babel-usuarios para resolver el rol del token, y
+          # solo lee (Scan) babel-sitios-scraping para el fallback de
+          # scraping (mínimo privilegio, solo lectura — CLAUDE.md A05,
+          # ADR-008). Sin acceso de escritura a ninguna tabla: la búsqueda de
+          # metadatos en sí sale hacia api.letiende.co y los sitios de
+          # scraping (HTTP, fuera de DynamoDB).
           - PolicyName: babel-metadatos-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
@@ -1017,6 +1028,11 @@ resources:
                     - dynamodb:GetItem
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaSitiosScraping.Arn
 
     UsuariosLambdaRole:
       Type: AWS::IAM::Role
