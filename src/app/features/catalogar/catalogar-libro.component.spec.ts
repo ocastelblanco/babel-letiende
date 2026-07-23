@@ -489,7 +489,7 @@ describe('CatalogarLibroComponent', () => {
       expect(botonBuscarCandidatos(fixture).disabled).toBe(true);
     });
 
-    it('busca candidatos y los muestra (portada + título + autor) al hacer click', async () => {
+    it('busca candidatos y los muestra (portada + título + autor + editorial + isbn) al hacer click', async () => {
       const { fixture, buscarCandidatosMock } = configurarPrueba();
       buscarCandidatosMock.mockResolvedValue([candidatoConIsbn, candidatoSinIsbn]);
 
@@ -506,6 +506,8 @@ describe('CatalogarLibroComponent', () => {
       expect(buscarCandidatosMock).toHaveBeenCalledWith('cien años de soledad', '');
       expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
       expect(fixture.nativeElement.textContent).toContain('Gabriel García Márquez');
+      expect(fixture.nativeElement.textContent).toContain('Sudamericana');
+      expect(fixture.nativeElement.textContent).toContain('9780307474728');
       expect(fixture.nativeElement.textContent).toContain('Otro libro');
       const imagenes = fixture.nativeElement.querySelectorAll('img[src="https://books.google.com/portada.jpg"]');
       expect(imagenes.length).toBe(1);
@@ -588,7 +590,7 @@ describe('CatalogarLibroComponent', () => {
       expect(componente.formulario.value.pvp).toBe(58_000);
     });
 
-    it('no pisa un pvp que el vendedor ya escribió a mano al seleccionar un candidato sin isbn', async () => {
+    it('sobrescribe un pvp que el vendedor ya había escrito a mano al seleccionar un candidato sin isbn', async () => {
       const { fixture, httpMock: mock, buscarCandidatosMock, buscarPvpMock } = configurarPrueba();
       httpMock = mock;
       buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
@@ -613,7 +615,37 @@ describe('CatalogarLibroComponent', () => {
       await Promise.resolve();
       fixture.detectChanges();
 
-      expect(buscarPvpMock).not.toHaveBeenCalled();
+      expect(buscarPvpMock).toHaveBeenCalledWith('Otro libro', '');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.pvp).toBe(58_000);
+    });
+
+    it('deja el pvp como estaba cuando la búsqueda por título/autor no encuentra precio', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, buscarPvpMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(null);
+
+      const campoPvp = fixture.nativeElement.querySelector('#pvp') as HTMLInputElement;
+      campoPvp.value = '40000';
+      campoPvp.dispatchEvent(new Event('input'));
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       expect(componente.formulario.value.pvp).toBe(40000);
@@ -656,8 +688,42 @@ describe('CatalogarLibroComponent', () => {
       expect(componente.formulario.value.pvp).toBe(65_000);
     });
 
-    it('no sobrescribe campos que el vendedor ya completó a mano al elegir un candidato', async () => {
-      const { fixture, buscarCandidatosMock } = configurarPrueba();
+    it('sobrescribe campos que el vendedor ya había completado a mano al elegir un candidato (selección explícita)', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.formulario.controls.editorial.setValue('Editorial escrita a mano');
+      componente.formulario.controls.autor.setValue('Autor escrito a mano');
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // `candidatoSinIsbn` no trae autor/editorial (ver fixture arriba) — al
+      // no haber dato nuevo que ofrecer, lo ya escrito a mano se conserva.
+      expect(componente.formulario.value.editorial).toBe('Editorial escrita a mano');
+      expect(componente.formulario.value.autor).toBe('Autor escrito a mano');
+      expect(componente.formulario.value.titulo).toBe('Otro libro');
+    });
+
+    it('sobrescribe título/autor/editorial ya escritos a mano cuando el candidato SÍ trae esos datos', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock } = configurarPrueba();
+      httpMock = mock;
       buscarCandidatosMock.mockResolvedValue([candidatoConIsbn]);
 
       const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
@@ -667,6 +733,7 @@ describe('CatalogarLibroComponent', () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
+      componente.formulario.controls.autor.setValue('Autor escrito a mano');
       componente.formulario.controls.editorial.setValue('Editorial escrita a mano');
 
       botonBuscarCandidatos(fixture).click();
@@ -677,11 +744,13 @@ describe('CatalogarLibroComponent', () => {
       const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
       botonCandidato.click();
       await Promise.resolve();
+      await Promise.resolve();
       fixture.detectChanges();
 
-      expect(componente.formulario.value.editorial).toBe('Editorial escrita a mano');
-      // El autor sí estaba vacío, se pre-carga con el candidato.
+      // `candidatoConIsbn` trae autor/editorial (ver fixture arriba) — se
+      // sobrescribe lo ya escrito a mano, es una selección explícita.
       expect(componente.formulario.value.autor).toBe('Gabriel García Márquez');
+      expect(componente.formulario.value.editorial).toBe('Sudamericana');
     });
   });
 });

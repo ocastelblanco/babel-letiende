@@ -117,6 +117,12 @@
                       @if (candidato.autor) {
                         <p class="truncate text-xs text-primary/70">{{ candidato.autor }}</p>
                       }
+                      @if (candidato.editorial) {
+                        <p class="truncate text-xs text-primary/60">{{ candidato.editorial }}</p>
+                      }
+                      @if (candidato.isbn) {
+                        <p class="truncate text-xs text-primary/60">ISBN {{ candidato.isbn }}</p>
+                      }
                     </div>
                   </button>
                 </li>
