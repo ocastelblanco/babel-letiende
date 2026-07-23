@@ -3,9 +3,9 @@ import type {
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
-import { obtenerMetadatosPorIsbn } from '../services/api-letiende';
+import { buscarLibrosPorTexto, obtenerMetadatosPorIsbn } from '../services/api-letiende';
 import { obtenerPorClave, escanearTodo } from '../services/dynamodb';
-import { scrapearSitio, type SitioScraping } from '../services/scraping';
+import { buscarLernerPorTexto, buscarNacionalPorTexto, scrapearSitio, type SitioScraping } from '../services/scraping';
 
 /** Copia local de `src/app/core/models/usuario.model.ts` — mismo motivo que `estantes.ts`/`usuarios-me.ts`. */
 interface Usuario {
@@ -170,6 +170,61 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
 
     const metadatos = await resolverMetadatosCompletos(isbn);
     return respuestaJson(200, metadatos);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/** Tope de candidatos devueltos por `handlerBuscar` — evita saturar la lista de selección en el frontend. */
+const LIMITE_CANDIDATOS = 20;
+
+/**
+ * `GET /api/metadatos/buscar?titulo=&autor=` — búsqueda por título/autor
+ * para cuando el vendedor no tiene el ISBN a mano (`TODO.md`, Tarea de
+ * búsqueda por título/autor). Exige rol `vendedor` **o** `administrador`,
+ * mismo criterio que `handler` (arriba): es de solo lectura, sin datos
+ * sensibles.
+ *
+ * Orquesta las 3 fuentes de candidatos EN PARALELO (`Promise.all`, mismo
+ * criterio que `resolverMetadatosCompletos`: nunca secuencial) y concatena
+ * los resultados SIN deduplicar — son fuentes distintas y el vendedor elige
+ * visualmente cuál tarjeta corresponde al libro real. Orden fijo:
+ * api.letiende.co primero, luego Lerner, luego Nacional. El total se limita
+ * a `LIMITE_CANDIDATOS`. Tornamesa y Busca Libre quedan fuera de esta
+ * búsqueda a propósito: a diferencia de Lerner/Nacional (VTEX) y
+ * api.letiende.co, sus páginas de búsqueda no traen título/autor/portada en
+ * la misma respuesta — requerirían una petición adicional por candidato
+ * (N+1), costo que no se justifica para una lista de sugerencias.
+ *
+ * Siempre responde `200` (con `candidatos: []` si nada se encontró o alguna
+ * fuente falla) — cada fuente ya nunca lanza (CLAUDE.md A08).
+ */
+export const handlerBuscar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (usuario?.rol !== 'vendedor' && usuario?.rol !== 'administrador') {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para consultar metadatos en Babel.' });
+    }
+
+    const titulo = event.queryStringParameters?.['titulo']?.trim() || null;
+    const autor = event.queryStringParameters?.['autor']?.trim() || null;
+    if (!titulo && !autor) {
+      return respuestaJson(400, { error: 'Debes indicar al menos titulo o autor.' });
+    }
+
+    const [deApiLetiende, deLerner, deNacional] = await Promise.all([
+      buscarLibrosPorTexto(titulo, autor),
+      buscarLernerPorTexto(titulo, autor),
+      buscarNacionalPorTexto(titulo, autor),
+    ]);
+
+    const candidatos = [...deApiLetiende, ...deLerner, ...deNacional].slice(0, LIMITE_CANDIDATOS);
+    return respuestaJson(200, { candidatos });
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

@@ -7,7 +7,7 @@ import type { IScannerControls } from '@zxing/browser';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { EstantesService } from '../../core/api/estantes.service';
-import { MetadatosService } from '../../core/api/metadatos.service';
+import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.service';
 
 const PVP_MAXIMO = 5_000_000;
 
@@ -49,6 +49,13 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   protected readonly buscandoMetadatos = signal(false);
   /** `true` cuando la última búsqueda de metadatos no encontró ningún dato — mensaje neutral, no bloqueante. */
   protected readonly metadatosNoEncontrados = signal(false);
+
+  /** Candidatos de la última búsqueda por título/autor (`GET /api/metadatos/buscar`) — para cuando el vendedor no tiene ISBN a mano. */
+  protected readonly candidatos = signal<CandidatoLibro[]>([]);
+  /** `true` mientras se consulta `MetadatosService.buscarCandidatos`. */
+  protected readonly buscandoCandidatos = signal(false);
+  /** `true` cuando la última búsqueda por título/autor no encontró ningún candidato — mensaje neutral, no bloqueante. */
+  protected readonly candidatosNoEncontrados = signal(false);
 
   /** Referencia al `<video>` que muestra la vista de la cámara mientras se escanea. */
   private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
@@ -180,6 +187,67 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Busca candidatos por título/autor (`MetadatosService.buscarCandidatos`)
+   * para cuando el vendedor no tiene el ISBN a mano (`TODO.md`, Tarea de
+   * búsqueda por título/autor). Se dispara desde el botón "Buscar por título
+   * y autor", visible solo mientras el campo `isbn` está vacío.
+   */
+  protected async buscarCandidatos(): Promise<void> {
+    const titulo = this.formulario.controls.titulo.value.trim();
+    const autor = this.formulario.controls.autor.value.trim();
+    if (titulo === '' && autor === '') {
+      return;
+    }
+
+    this.candidatosNoEncontrados.set(false);
+    this.candidatos.set([]);
+    this.buscandoCandidatos.set(true);
+    try {
+      const resultado = await this.metadatosService.buscarCandidatos(titulo, autor);
+      this.candidatos.set(resultado);
+      if (resultado.length === 0) {
+        this.candidatosNoEncontrados.set(true);
+      }
+    } finally {
+      this.buscandoCandidatos.set(false);
+    }
+  }
+
+  /**
+   * Pre-carga el candidato elegido en el formulario — mismo criterio "nunca
+   * pisa lo ya escrito" que `buscarYPrecargarMetadatos` (`CLAUDE.md` A08). Si
+   * el candidato trae `isbn`, además lo completa y reutiliza
+   * `buscarYPrecargarMetadatos` (ya existente) para resolver el PVP vía el
+   * fallback de scraping; si no trae `isbn`, el PVP queda manual, mismo
+   * criterio que cualquier "no encontrado" hoy. Cierra la lista de
+   * candidatos tras seleccionar uno.
+   */
+  protected async seleccionarCandidato(candidato: CandidatoLibro): Promise<void> {
+    const controles = this.formulario.controls;
+
+    if (controles.titulo.value.trim() === '' && candidato.titulo) {
+      controles.titulo.setValue(candidato.titulo);
+    }
+    if (controles.autor.value.trim() === '' && candidato.autor) {
+      controles.autor.setValue(candidato.autor);
+    }
+    if (controles.editorial.value.trim() === '' && candidato.editorial) {
+      controles.editorial.setValue(candidato.editorial);
+    }
+    if (controles.portadaUrl.value.trim() === '' && candidato.portadaUrl) {
+      controles.portadaUrl.setValue(candidato.portadaUrl);
+    }
+
+    this.candidatos.set([]);
+    this.candidatosNoEncontrados.set(false);
+
+    if (candidato.isbn) {
+      controles.isbn.setValue(candidato.isbn);
+      await this.buscarYPrecargarMetadatos(candidato.isbn);
+    }
+  }
+
   protected async guardar(): Promise<void> {
     this.mensajeExito.set(null);
     this.mensajeError.set(null);
@@ -235,6 +303,8 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * seguidos de la misma editorial) — agiliza la catalogación en serie.
    */
   private reiniciarFormulario(): void {
+    this.candidatos.set([]);
+    this.candidatosNoEncontrados.set(false);
     const porcentajeActual = this.formulario.controls.porcentajeDescuentoEditorial.value;
     this.formulario.reset({
       isbn: '',

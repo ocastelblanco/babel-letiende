@@ -72,6 +72,60 @@
         }
       </div>
 
+      @if (formulario.controls.isbn.value.trim() === '') {
+        <div>
+          <button
+            type="button"
+            (click)="buscarCandidatos()"
+            [disabled]="
+              buscandoCandidatos() ||
+              (formulario.controls.titulo.value.trim() === '' && formulario.controls.autor.value.trim() === '')
+            "
+            class="h-12 w-full rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {{ buscandoCandidatos() ? 'Buscando…' : 'Buscar por título y autor' }}
+          </button>
+
+          @if (candidatosNoEncontrados()) {
+            <p class="mt-1 text-xs text-primary/60">No se encontraron candidatos para esa búsqueda.</p>
+          }
+
+          @if (candidatos().length > 0) {
+            <ul class="mt-2 flex flex-col gap-2">
+              @for (candidato of candidatos(); track $index) {
+                <li>
+                  <button
+                    type="button"
+                    (click)="seleccionarCandidato(candidato)"
+                    class="flex w-full items-center gap-3 rounded-xl border border-primary/10 px-3 py-2 text-left transition-opacity hover:opacity-90"
+                  >
+                    @if (candidato.portadaUrl) {
+                      <img
+                        [src]="candidato.portadaUrl"
+                        [alt]="candidato.titulo"
+                        class="h-14 w-10 shrink-0 rounded object-cover"
+                      />
+                    } @else {
+                      <div
+                        class="flex h-14 w-10 shrink-0 items-center justify-center rounded bg-neutral text-[10px] text-primary/60"
+                      >
+                        Sin portada
+                      </div>
+                    }
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-semibold text-primary">{{ candidato.titulo }}</p>
+                      @if (candidato.autor) {
+                        <p class="truncate text-xs text-primary/70">{{ candidato.autor }}</p>
+                      }
+                    </div>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+
       <div>
         <label for="editorial" class="mb-1 block text-sm font-semibold text-primary">Editorial (opcional)</label>
         <input

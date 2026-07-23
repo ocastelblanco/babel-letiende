@@ -29,6 +29,7 @@
 
 import dns from 'node:dns';
 import * as cheerio from 'cheerio';
+import type { CandidatoLibro } from './api-letiende';
 
 /** Copia local de `src/app/core/models/sitio-scraping.model.ts` — mismo motivo que en los handlers (ver `sitios-scraping.ts`). Solo se lee `dominio`, pero se copia la forma completa por consistencia con el resto del backend. */
 export interface SitioScraping {
@@ -243,6 +244,8 @@ interface ProductoVtex {
   productName?: string;
   brand?: string;
   items?: Array<{
+    /** ISBN "sucio" — trae un sufijo de SKU de tienda (ej. `"9786287638716-1585"`), ver `extraerIsbnDeEan`. */
+    ean?: string;
     images?: Array<{ imageUrl?: string }>;
     sellers?: Array<{ commertialOffer?: { Price?: number } }>;
   }>;
@@ -300,6 +303,109 @@ async function scrapearLerner(isbn: string): Promise<ResultadoScraping> {
 
 async function scrapearNacional(isbn: string): Promise<ResultadoScraping> {
   return consultarApiVtex('https://www.librerianacional.com', isbn, {
+    campoAutor: 'Autor(es)',
+    campoEditorial: null,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Búsqueda por texto (título/autor) — Librería Lerner y Librería Nacional
+// (TODO.md, Tarea de búsqueda por título/autor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extrae el ISBN limpio del campo `ean` de un producto VTEX — gotcha
+ * confirmado en vivo: `ean` trae un sufijo de SKU de tienda (ej.
+ * `"9786287638716-1585"`), no un ISBN limpio. Solo se acepta el prefijo si,
+ * una vez aislado por el primer `-`, tiene exactamente 13 dígitos —
+ * cualquier otra forma se descarta como "sin ISBN" en vez de arriesgar un
+ * dato incorrecto (mismo criterio de `validarPvp`: ante la duda, `null`).
+ */
+function extraerIsbnDeEan(ean: string | undefined): string | null {
+  if (!ean) {
+    return null;
+  }
+  const prefijo = ean.split('-')[0] ?? '';
+  return /^\d{13}$/.test(prefijo) ? prefijo : null;
+}
+
+/**
+ * Búsqueda de texto libre contra la misma API pública VTEX que
+ * `consultarApiVtex` — confirmado en vivo que el endpoint `ft=` soporta
+ * consultas multi-palabra, no solo ISBN. VTEX no separa `titulo`/`autor` en
+ * parámetros distintos, así que ambos se combinan en un solo string `ft=`. A
+ * diferencia de `consultarApiVtex` (que solo usa `cuerpo[0]`, un único
+ * producto exacto), aquí se devuelven TODOS los productos como candidatos —
+ * el vendedor elige visualmente.
+ *
+ * Gotcha confirmado en vivo: si la query multi-palabra se codifica con `+`
+ * en vez de `%20` para los espacios, el WAF del sitio la rechaza con
+ * `400 Bad Request! Scripts are not allowed!`. Por eso se usa
+ * `encodeURIComponent` explícito (codifica espacios como `%20`, igual que
+ * `consultarApiVtex`) en vez de `URLSearchParams`, cuyo serializador usa `+`.
+ *
+ * Nunca lanza — cualquier fallo (red, SSRF rechazado, parseo, sin `titulo`
+ * ni `autor`) degrada a `[]`, mismo criterio que el resto de este archivo.
+ */
+async function buscarEnVtexPorTexto(
+  urlBase: string,
+  titulo: string | null,
+  autor: string | null,
+  opciones: OpcionesVtex,
+): Promise<CandidatoLibro[]> {
+  const query = [titulo, autor]
+    .filter((valor): valor is string => !!valor && valor.trim() !== '')
+    .map((valor) => valor.trim())
+    .join(' ');
+  if (query === '') {
+    return [];
+  }
+
+  const url = `${urlBase}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(query)}`;
+  const respuesta = await fetchSeguro(url);
+  if (!respuesta) {
+    return [];
+  }
+
+  let cuerpo: ProductoVtex[];
+  try {
+    cuerpo = (await respuesta.json()) as ProductoVtex[];
+  } catch {
+    return [];
+  }
+
+  const candidatos: CandidatoLibro[] = [];
+  for (const producto of cuerpo) {
+    if (!producto.productName) {
+      continue;
+    }
+    const autorArray = producto[opciones.campoAutor] as string[] | undefined;
+    const editorialArray = opciones.campoEditorial
+      ? (producto[opciones.campoEditorial] as string[] | undefined)
+      : undefined;
+    const item = producto.items?.[0];
+
+    candidatos.push({
+      titulo: producto.productName,
+      autor: autorArray?.[0] ?? null,
+      editorial: editorialArray?.[0] ?? producto.brand ?? null,
+      portadaUrl: item?.images?.[0]?.imageUrl ?? null,
+      isbn: extraerIsbnDeEan(item?.ean),
+    });
+  }
+
+  return candidatos;
+}
+
+export async function buscarLernerPorTexto(titulo: string | null, autor: string | null): Promise<CandidatoLibro[]> {
+  return buscarEnVtexPorTexto('https://www.librerialerner.com.co', titulo, autor, {
+    campoAutor: 'Autor',
+    campoEditorial: 'Editorial',
+  });
+}
+
+export async function buscarNacionalPorTexto(titulo: string | null, autor: string | null): Promise<CandidatoLibro[]> {
+  return buscarEnVtexPorTexto('https://www.librerianacional.com', titulo, autor, {
     campoAutor: 'Autor(es)',
     campoEditorial: null,
   });

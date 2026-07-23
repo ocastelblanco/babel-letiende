@@ -42,10 +42,29 @@ interface VolumeInfoGoogleBooks {
   authors?: string[];
   publisher?: string;
   imageLinks?: { thumbnail?: string; smallThumbnail?: string };
+  industryIdentifiers?: Array<{ type?: string; identifier?: string }>;
 }
 
 interface RespuestaApiLetiende {
   items?: Array<{ volumeInfo?: VolumeInfoGoogleBooks }>;
+}
+
+/**
+ * Un candidato de la búsqueda por texto (`buscarLibrosPorTexto` y
+ * `buscarEnVtexPorTexto` en `scraping.ts`) — a diferencia de
+ * `MetadatosLibro`, que representa el resultado YA elegido/fusionado de un
+ * ISBN puntual, un candidato es una de varias sugerencias que el vendedor
+ * elige visualmente (TODO.md, Tarea de búsqueda por título/autor). `isbn` es
+ * `null` cuando la fuente no lo expone — la mayoría de resultados de
+ * búsqueda por texto de Google Books no traen `industryIdentifiers` con
+ * `type: "ISBN_13"`.
+ */
+export interface CandidatoLibro {
+  titulo: string;
+  autor: string | null;
+  editorial: string | null;
+  portadaUrl: string | null;
+  isbn: string | null;
 }
 
 /** Google Books sirve la portada en `http://` — el resto del sitio es HTTPS y es el mismo recurso en ambos esquemas. */
@@ -114,4 +133,83 @@ export async function obtenerMetadatosPorIsbn(isbn: string): Promise<MetadatosLi
     editorial: volumeInfo.publisher ?? null,
     portadaUrl: volumeInfo.imageLinks?.thumbnail ? aHttps(volumeInfo.imageLinks.thumbnail) : null,
   };
+}
+
+/**
+ * Búsqueda por `titulo`/`autor` contra `api.letiende.co` (TODO.md, Tarea de
+ * búsqueda por título/autor — para cuando el vendedor no tiene el ISBN a
+ * mano) — mismo endpoint pass-through de Google Books que
+ * `obtenerMetadatosPorIsbn`, pero con `titulo`/`autor` en vez de `barcode` y
+ * devolviendo TODOS los candidatos (`items`), no solo el primero. Al menos
+ * uno de los dos parámetros debe venir no vacío; si ninguno viene, devuelve
+ * `[]` sin llamar a la red.
+ *
+ * Gotcha confirmado en vivo: sin resultados o sin parámetros reconocidos, la
+ * API externa responde `200` con cuerpo `null` (no `{}` como en la búsqueda
+ * por `barcode`) — se trata explícitamente como "sin candidatos", igual que
+ * la ausencia de `items`.
+ *
+ * Reutiliza el mismo patrón de reintento único que `obtenerMetadatosPorIsbn`
+ * (misma inestabilidad intermitente de la API externa) y NUNCA lanza:
+ * cualquier fallo definitivo (tras el reintento), cuerpo no-JSON o `null`
+ * degrada a `[]`.
+ */
+export async function buscarLibrosPorTexto(titulo: string | null, autor: string | null): Promise<CandidatoLibro[]> {
+  const parametros = new URLSearchParams();
+  if (titulo && titulo.trim() !== '') {
+    parametros.set('titulo', titulo.trim());
+  }
+  if (autor && autor.trim() !== '') {
+    parametros.set('autor', autor.trim());
+  }
+  if ([...parametros.keys()].length === 0) {
+    return [];
+  }
+
+  const urlBase = process.env['API_LETIENDE_BASE_URL'];
+  const url = `${urlBase}/libros?${parametros.toString()}`;
+
+  let intento = await intentarFetchLibros(url);
+  if (!intento.ok) {
+    await esperar(DEMORA_REINTENTO_MS);
+    intento = await intentarFetchLibros(url);
+  }
+
+  if (!intento.ok) {
+    console.error(
+      `buscarLibrosPorTexto: ambos intentos fallaron para titulo=${titulo ?? ''} autor=${autor ?? ''} (último resultado: ${intento.status})`,
+    );
+    return [];
+  }
+
+  let cuerpo: RespuestaApiLetiende | null;
+  try {
+    cuerpo = (await intento.respuesta.json()) as RespuestaApiLetiende | null;
+  } catch {
+    return [];
+  }
+
+  const items = cuerpo?.items;
+  if (!items || items.length === 0) {
+    return [];
+  }
+
+  const candidatos: CandidatoLibro[] = [];
+  for (const item of items) {
+    const volumeInfo = item.volumeInfo;
+    if (!volumeInfo?.title) {
+      continue;
+    }
+    candidatos.push({
+      titulo: volumeInfo.title,
+      autor: volumeInfo.authors && volumeInfo.authors.length > 0 ? volumeInfo.authors.join(', ') : null,
+      editorial: volumeInfo.publisher ?? null,
+      portadaUrl: volumeInfo.imageLinks?.thumbnail ? aHttps(volumeInfo.imageLinks.thumbnail) : null,
+      isbn:
+        volumeInfo.industryIdentifiers?.find((identificador) => identificador.type === 'ISBN_13')?.identifier
+        ?? null,
+    });
+  }
+
+  return candidatos;
 }

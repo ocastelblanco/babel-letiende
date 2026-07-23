@@ -14,7 +14,7 @@ vi.mock('node:dns', () => ({
 
 // `vi.mock('node:dns', ...)` se hoistea por encima de este import, así que
 // `scraping.ts` ya ve el mock cuando hace `import dns from 'node:dns'`.
-import { esUrlSegura, scrapearSitio, type SitioScraping } from './scraping';
+import { buscarLernerPorTexto, buscarNacionalPorTexto, esUrlSegura, scrapearSitio, type SitioScraping } from './scraping';
 
 const RUTA_FIXTURES = join(__dirname, '__fixtures__/scraping');
 
@@ -316,5 +316,127 @@ describe('scrapearSitio', () => {
       const resultado = await scrapearSitio(sitio('www.librerialerner.com.co'), ISBN);
       expect(resultado).toEqual({});
     });
+  });
+});
+
+describe('buscarLernerPorTexto / buscarNacionalPorTexto (búsqueda por título/autor, TODO.md)', () => {
+  const fetchOriginal = global.fetch;
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    dnsLookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    global.fetch = fetchOriginal;
+  });
+
+  function respuestaJson(cuerpo: unknown) {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: () => Promise.resolve(cuerpo),
+      text: () => Promise.resolve(JSON.stringify(cuerpo)),
+    } as unknown as Response;
+  }
+
+  it('combina titulo+autor en un único parámetro `ft=`, codificado con %20 (nunca +)', async () => {
+    fetchMock.mockResolvedValue(respuestaJson([]));
+
+    await buscarLernerPorTexto('Cien años de soledad', 'Gabriel García Márquez');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://www.librerialerner.com.co/api/catalog_system/pub/products/search?ft=Cien%20a%C3%B1os%20de%20soledad%20Gabriel%20Garc%C3%ADa%20M%C3%A1rquez',
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+  });
+
+  it('construye la query solo con el parámetro que venga (titulo o autor)', async () => {
+    fetchMock.mockResolvedValue(respuestaJson([]));
+
+    await buscarNacionalPorTexto(null, 'Houellebecq');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://www.librerianacional.com/api/catalog_system/pub/products/search?ft=Houellebecq',
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+  });
+
+  it('devuelve [] sin hacer ninguna petición cuando titulo y autor vienen vacíos/null', async () => {
+    const resultado = await buscarLernerPorTexto(null, '   ');
+    expect(resultado).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('mapea TODOS los productos de la respuesta (no solo el primero) a CandidatoLibro, extrayendo el isbn limpio del `ean` con sufijo de SKU', async () => {
+    const fixture = JSON.parse(leerFixture('librerialerner-api-encontrado.json'));
+    const segundoProducto = {
+      ...fixture[0],
+      productName: 'Otro libro',
+      Autor: ['Otro Autor'],
+      items: [{ ...fixture[0].items[0], ean: '9780000000001-999' }],
+    };
+    fetchMock.mockResolvedValue(respuestaJson([fixture[0], segundoProducto]));
+
+    const resultado = await buscarLernerPorTexto('aniquilacion', null);
+
+    expect(resultado).toEqual([
+      {
+        titulo: 'ANIQUILACION',
+        autor: 'HOUELLEBECQ, MICHEL',
+        editorial: 'ANAGRAMA PANORAMA DE NARRATIVAS',
+        portadaUrl:
+          'https://librerialerner.vteximg.com.br/arquivos/ids/1419260/principal_9788433981219-1585.jpg?v=638464929451500000',
+        // ean "9788433981219-1585" -> se descarta el sufijo "-1585" de SKU.
+        isbn: '9788433981219',
+      },
+      {
+        titulo: 'Otro libro',
+        autor: 'Otro Autor',
+        editorial: 'ANAGRAMA PANORAMA DE NARRATIVAS',
+        portadaUrl:
+          'https://librerialerner.vteximg.com.br/arquivos/ids/1419260/principal_9788433981219-1585.jpg?v=638464929451500000',
+        isbn: '9780000000001',
+      },
+    ]);
+  });
+
+  it('devuelve isbn null cuando el `ean` no tiene 13 dígitos numéricos en el prefijo (ej. vacío)', async () => {
+    const fixture = JSON.parse(leerFixture('libreria-nacional-api-encontrado.json'));
+    fetchMock.mockResolvedValue(respuestaJson(fixture));
+
+    const resultado = await buscarNacionalPorTexto('cien años de soledad', null);
+
+    expect(resultado).toEqual([
+      {
+        titulo: 'Cien AÑos De Soledad',
+        autor: 'Gabriel Garcia Marquez',
+        editorial: 'Random House Mondadori Colombia',
+        portadaUrl: 'https://b2clibrerianacional.vteximg.com.br/arquivos/ids/244798/Portada.jpg?v=638644376551230000',
+        isbn: null,
+      },
+    ]);
+  });
+
+  it('devuelve [] cuando la API responde un array vacío (sin candidatos)', async () => {
+    fetchMock.mockResolvedValue(respuestaJson([]));
+    const resultado = await buscarLernerPorTexto('libro inexistente', null);
+    expect(resultado).toEqual([]);
+  });
+
+  it('nunca lanza: un error de red degrada a []', async () => {
+    fetchMock.mockRejectedValue(new Error('fetch failed'));
+    const resultado = await buscarLernerPorTexto('cualquier cosa', null);
+    expect(resultado).toEqual([]);
+  });
+
+  it('nunca lanza: la guardia SSRF rechazando el host degrada a [] (aunque los dominios sean fijos)', async () => {
+    dnsLookupMock.mockResolvedValue([{ address: '169.254.169.254', family: 4 }]);
+    const resultado = await buscarLernerPorTexto('cualquier cosa', null);
+    expect(resultado).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

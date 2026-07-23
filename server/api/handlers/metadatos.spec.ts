@@ -8,13 +8,19 @@ const {
   obtenerPorClaveMock,
   escanearTodoMock,
   obtenerMetadatosPorIsbnMock,
+  buscarLibrosPorTextoMock,
   scrapearSitioMock,
+  buscarLernerPorTextoMock,
+  buscarNacionalPorTextoMock,
 } = vi.hoisted(() => ({
   verificarTokenDesdeHeaderMock: vi.fn(),
   obtenerPorClaveMock: vi.fn(),
   escanearTodoMock: vi.fn(),
   obtenerMetadatosPorIsbnMock: vi.fn(),
+  buscarLibrosPorTextoMock: vi.fn(),
   scrapearSitioMock: vi.fn(),
+  buscarLernerPorTextoMock: vi.fn(),
+  buscarNacionalPorTextoMock: vi.fn(),
 }));
 
 vi.mock('../lib/verificar-token', async () => {
@@ -32,13 +38,16 @@ vi.mock('../services/dynamodb', () => ({
 
 vi.mock('../services/api-letiende', () => ({
   obtenerMetadatosPorIsbn: obtenerMetadatosPorIsbnMock,
+  buscarLibrosPorTexto: buscarLibrosPorTextoMock,
 }));
 
 vi.mock('../services/scraping', () => ({
   scrapearSitio: scrapearSitioMock,
+  buscarLernerPorTexto: buscarLernerPorTextoMock,
+  buscarNacionalPorTexto: buscarNacionalPorTextoMock,
 }));
 
-const { handler } = await import('./metadatos');
+const { handler, handlerBuscar } = await import('./metadatos');
 
 /** Crea una promesa que solo se resuelve cuando el test invoca `resolve` explícitamente — usada para controlar el orden de llegada de red en los tests de paralelismo/prioridad. */
 function crearDiferida<T>(): { promise: Promise<T>; resolve: (valor: T) => void } {
@@ -67,10 +76,13 @@ function sitio(datos: Partial<SitioScraping> & { dominio: string; prioridad: num
   };
 }
 
-function eventoFalso(opciones: { authorization?: string; isbn?: string } = {}): APIGatewayProxyEventV2 {
+function eventoFalso(
+  opciones: { authorization?: string; isbn?: string; query?: Record<string, string> } = {},
+): APIGatewayProxyEventV2 {
   return {
     headers: opciones.authorization ? { authorization: opciones.authorization } : {},
     pathParameters: opciones.isbn ? { isbn: opciones.isbn } : undefined,
+    queryStringParameters: opciones.query,
     requestContext: { http: { method: 'GET' } },
   } as unknown as APIGatewayProxyEventV2;
 }
@@ -86,6 +98,9 @@ describe('handler (/api/metadatos/:isbn)', () => {
     // sobrescriben esta resolución con `mockResolvedValueOnce`/`mockResolvedValue`.
     escanearTodoMock.mockResolvedValue([]);
     scrapearSitioMock.mockResolvedValue({});
+    buscarLibrosPorTextoMock.mockResolvedValue([]);
+    buscarLernerPorTextoMock.mockResolvedValue([]);
+    buscarNacionalPorTextoMock.mockResolvedValue([]);
   });
 
   it('responde 401 sin token válido', async () => {
@@ -318,5 +333,148 @@ describe('handler (/api/metadatos/:isbn)', () => {
       statusCode: 200,
       body: JSON.stringify({ ...metadatosEncontrados, pvp: null }),
     });
+  });
+});
+
+describe('handlerBuscar (/api/metadatos/buscar)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    buscarLibrosPorTextoMock.mockResolvedValue([]);
+    buscarLernerPorTextoMock.mockResolvedValue([]);
+    buscarNacionalPorTextoMock.mockResolvedValue([]);
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerBuscar(
+      eventoFalso({ query: { titulo: 'cien años de soledad' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(buscarLibrosPorTextoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el rol no es vendedor ni administrador', async () => {
+    obtenerPorClaveMock.mockResolvedValue({ email: 'otro@letiende.co', rol: 'invitado' });
+
+    const respuesta = await handlerBuscar(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'cien años de soledad' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(buscarLibrosPorTextoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 400 cuando faltan tanto titulo como autor', async () => {
+    const respuesta = await handlerBuscar(eventoFalso({ authorization: 'Bearer token' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+    expect(buscarLibrosPorTextoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 400 cuando titulo y autor vienen vacíos', async () => {
+    const respuesta = await handlerBuscar(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: '  ', autor: '' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+  });
+
+  it('orquesta las 3 fuentes EN PARALELO y concatena api.letiende.co + Lerner + Nacional en ese orden', async () => {
+    buscarLibrosPorTextoMock.mockResolvedValue([
+      { titulo: 'De api.letiende.co', autor: null, editorial: null, portadaUrl: null, isbn: null },
+    ]);
+    buscarLernerPorTextoMock.mockResolvedValue([
+      { titulo: 'De Lerner', autor: null, editorial: null, portadaUrl: null, isbn: null },
+    ]);
+    buscarNacionalPorTextoMock.mockResolvedValue([
+      { titulo: 'De Nacional', autor: null, editorial: null, portadaUrl: null, isbn: null },
+    ]);
+
+    const respuesta = await handlerBuscar(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'cien años de soledad' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(buscarLibrosPorTextoMock).toHaveBeenCalledWith('cien años de soledad', null);
+    const cuerpo = JSON.parse(respuesta.body as string) as { candidatos: Array<{ titulo: string }> };
+    expect(cuerpo.candidatos.map((c) => c.titulo)).toEqual(['De api.letiende.co', 'De Lerner', 'De Nacional']);
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+  });
+
+  it('pasa titulo y autor a las 3 fuentes cuando ambos vienen', async () => {
+    await handlerBuscar(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'titulo', autor: 'autor' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(buscarLibrosPorTextoMock).toHaveBeenCalledWith('titulo', 'autor');
+    expect(buscarLernerPorTextoMock).toHaveBeenCalledWith('titulo', 'autor');
+    expect(buscarNacionalPorTextoMock).toHaveBeenCalledWith('titulo', 'autor');
+  });
+
+  it('cero candidatos en las 3 fuentes → 200 con candidatos: []', async () => {
+    const respuesta = await handlerBuscar(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'libro inexistente' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ candidatos: [] }) });
+  });
+
+  it('si una fuente rechaza su promesa, Promise.all hace caer toda la respuesta a 500 (no degrada a 200)', async () => {
+    buscarLernerPorTextoMock.mockRejectedValue(new Error('fallo inesperado de Lerner'));
+    buscarLibrosPorTextoMock.mockResolvedValue([
+      { titulo: 'De api.letiende.co', autor: null, editorial: null, portadaUrl: null, isbn: null },
+    ]);
+
+    const respuesta = await handlerBuscar(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'titulo' } }),
+      {} as never,
+      {} as never,
+    );
+
+    // Como Promise.all rechaza si CUALQUIERA de las 3 promesas rechaza, el
+    // handler cae en su catch genérico y responde 500 — documentado aquí
+    // como comportamiento real: cada función de búsqueda YA nunca lanza por
+    // contrato (CLAUDE.md A08), así que este caso solo ocurriría ante un bug
+    // de programación en una de las 3, no ante un fallo normal de red/sitio.
+    expect(respuesta).toMatchObject({ statusCode: 500 });
+  });
+
+  it('limita el total de candidatos a 20', async () => {
+    const generarCandidatos = (prefijo: string, cantidad: number) =>
+      Array.from({ length: cantidad }, (_valor, indice) => ({
+        titulo: `${prefijo}-${indice}`,
+        autor: null,
+        editorial: null,
+        portadaUrl: null,
+        isbn: null,
+      }));
+    buscarLibrosPorTextoMock.mockResolvedValue(generarCandidatos('api', 10));
+    buscarLernerPorTextoMock.mockResolvedValue(generarCandidatos('lerner', 10));
+    buscarNacionalPorTextoMock.mockResolvedValue(generarCandidatos('nacional', 10));
+
+    const respuesta = await handlerBuscar(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'titulo' } }),
+      {} as never,
+      {} as never,
+    );
+
+    const cuerpo = JSON.parse(respuesta.body as string) as { candidatos: unknown[] };
+    expect(cuerpo.candidatos).toHaveLength(20);
   });
 });
