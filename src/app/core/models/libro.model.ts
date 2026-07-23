@@ -33,3 +33,13 @@ export interface Libro {
   /** Fecha ISO. */
   actualizadoEn: string;
 }
+
+/**
+ * Un libro con su ubicación física ya resuelta — contrato de
+ * `GET /api/libros/:bookId` (ficha pública, `TODO.md`). `estante` es `null`
+ * si el `estanteId` referenciado ya no existe (dato inconsistente que no
+ * debe romper la ficha, `CLAUDE.md` A08).
+ */
+export interface LibroConEstante extends Libro {
+  estante: { espacio: string; mueble: string; ubicacion: string } | null;
+}

@@ -199,6 +199,65 @@ functions:
           path: /api/libros
           method: get
 
+  librosDetalle:
+    handler: dist-server/api/handlers/libros.handlerDetalle
+    role: !GetAtt LibrosDetalleLambdaRole.Arn
+    description: >-
+      GET /api/libros/:bookId — ficha pública de un libro puntual, sin
+      autenticación, resuelve la ubicación física vía babel-estantes
+      (tech-specs.md, TODO.md ficha de libro).
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST/PATCH — mismo cuidado
+        # documentado arriba (MEMORY.md §7): un import nuevo a nivel
+        # superior afecta a las 4 funciones Lambda que comparten este
+        # archivo, no solo esta.
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/libros/{bookId}
+          method: get
+
   catalogarLibro:
     handler: dist-server/api/handlers/libros.handlerCrear
     role: !GetAtt CatalogarLibroLambdaRole.Arn
@@ -1082,6 +1141,36 @@ resources:
                     - dynamodb:Scan
                   Resource:
                     - !GetAtt TablaLibros.Arn
+
+    LibrosDetalleLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-libros-detalle-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lectura puntual (GetItem) sobre babel-libros y babel-estantes
+          # — endpoint público de solo consulta, sin necesidad de escribir ni
+          # leer ninguna otra tabla (CLAUDE.md A05). A diferencia de
+          # LibrosLambdaRole (el listado, que hace un Scan completo), acá
+          # basta GetItem porque se resuelve un bookId puntual.
+          - PolicyName: babel-libros-detalle-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                    - !GetAtt TablaEstantes.Arn
 
     CatalogarLibroLambdaRole:
       Type: AWS::IAM::Role

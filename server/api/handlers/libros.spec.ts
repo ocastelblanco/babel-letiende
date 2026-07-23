@@ -25,7 +25,7 @@ vi.mock('../services/dynamodb', () => ({
   escanearMayorQue: escanearMayorQueMock,
 }));
 
-const { handlerCrear, handlerCambiarEstante, validarDatosNuevoLibro } = await import('./libros');
+const { handlerCrear, handlerCambiarEstante, handlerDetalle, validarDatosNuevoLibro } = await import('./libros');
 
 const datosValidos = {
   isbn: '9780000000000',
@@ -43,6 +43,13 @@ function eventoFalso(body: unknown, authorization?: string): APIGatewayProxyEven
   return {
     headers: authorization ? { authorization } : {},
     body: body === undefined ? undefined : JSON.stringify(body),
+  } as unknown as APIGatewayProxyEventV2;
+}
+
+function eventoDetalle(bookId?: string): APIGatewayProxyEventV2 {
+  return {
+    headers: {},
+    pathParameters: bookId ? { bookId } : undefined,
   } as unknown as APIGatewayProxyEventV2;
 }
 
@@ -270,5 +277,68 @@ describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
       expect(libroGuardado['bookId']).toBe('libro-1');
       expect(libroGuardado['actualizadoEn']).not.toBe(libroFalso.actualizadoEn);
     });
+  });
+});
+
+describe('handlerDetalle (GET /api/libros/:bookId)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_ESTANTES'] = 'babel-estantes-test';
+  });
+
+  it('responde 400 sin bookId en la ruta', async () => {
+    const respuesta = await handlerDetalle(eventoDetalle(), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+    expect(obtenerPorClaveMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 404 cuando el bookId no existe — sin exigir ningún token (endpoint público)', async () => {
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerDetalle(eventoDetalle('no-existe'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 404 });
+    expect(verificarTokenDesdeHeaderMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 200 con el libro y su ubicación física resuelta', async () => {
+    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso).mockResolvedValueOnce(estanteFalso);
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo['titulo']).toBe(libroFalso.titulo);
+    expect(cuerpo['estante']).toEqual({
+      espacio: estanteFalso.espacio,
+      mueble: estanteFalso.mueble,
+      ubicacion: estanteFalso.ubicacion,
+    });
+    expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(1, 'babel-libros-test', { bookId: 'libro-1' });
+    expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(2, 'babel-estantes-test', {
+      estanteId: libroFalso.estanteId,
+    });
+  });
+
+  it('devuelve estante: null (sin romper la ficha) cuando el estanteId ya no existe', async () => {
+    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso).mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo['estante']).toBeNull();
+  });
+
+  it('responde 200 aunque el libro esté agotado (cantidadDisponible: 0) — a diferencia del listado', async () => {
+    obtenerPorClaveMock.mockResolvedValueOnce({ ...libroFalso, cantidadDisponible: 0 }).mockResolvedValueOnce(
+      estanteFalso,
+    );
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
   });
 });

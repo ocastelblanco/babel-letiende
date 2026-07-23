@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
 import type { Libro } from '../../core/models/libro.model';
 import { CatalogoPublicoComponent } from './catalogo-publico.component';
@@ -27,6 +28,7 @@ function configurarPrueba(estado: { libros: Libro[]; cargando: boolean; error: b
   const cargarCatalogoMock = vi.fn().mockResolvedValue(undefined);
   TestBed.configureTestingModule({
     providers: [
+      provideRouter([]),
       {
         provide: LibrosService,
         useValue: {

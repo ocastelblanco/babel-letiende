@@ -1,0 +1,46 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-xl">
+    <a routerLink="/" class="mb-6 inline-block text-sm text-secondary underline">← Volver al catálogo</a>
+
+    @if (cargando()) {
+      <p class="text-center text-primary/70">Cargando…</p>
+    } @else if (noEncontrado()) {
+      <p class="text-center text-danger">No se encontró este libro en el catálogo.</p>
+    } @else if (libro(); as libro) {
+      <div class="rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <div class="flex gap-4">
+          @if (libro.portadaUrl) {
+            <img
+              [src]="libro.portadaUrl"
+              [alt]="libro.titulo"
+              class="aspect-[2/3] w-32 shrink-0 rounded-xl object-cover"
+            />
+          } @else {
+            <div
+              class="flex aspect-[2/3] w-32 shrink-0 items-center justify-center rounded-xl bg-neutral text-xs text-primary/60"
+            >
+              Sin portada
+            </div>
+          }
+          <div class="min-w-0">
+            <h1 class="text-xl font-bold text-primary">{{ libro.titulo }}</h1>
+            <p class="text-sm text-primary/70">{{ libro.autor }}</p>
+            @if (libro.editorial) {
+              <p class="text-xs text-primary/60">{{ libro.editorial }}</p>
+            }
+            <p class="mt-2 text-lg font-bold text-secondary">{{ libro.pvp | pvp }}</p>
+          </div>
+        </div>
+
+        @if (libro.estante) {
+          <div class="mt-6 rounded-xl border border-primary/10 px-3 py-2">
+            <p class="mb-1 text-sm font-semibold text-primary">Ubicación en la librería</p>
+            <p class="text-sm text-primary/70">
+              {{ libro.estante.espacio }} — {{ libro.estante.mueble }} — {{ libro.estante.ubicacion }}
+            </p>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import type { Libro } from '../models/libro.model';
+import type { Libro, LibroConEstante } from '../models/libro.model';
 import { LibrosService } from './libros.service';
 
 const libroFalso: Libro = {
@@ -62,5 +62,43 @@ describe('LibrosService', () => {
     expect(servicio.libros()).toEqual([]);
     expect(servicio.error()).toBe(true);
     expect(servicio.cargando()).toBe(false);
+  });
+
+  describe('obtenerDetalle', () => {
+    const libroConEstanteFalso: LibroConEstante = {
+      ...libroFalso,
+      estante: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
+    };
+
+    it('resuelve el libro cuando /api/libros/:bookId responde 200', async () => {
+      const servicio = configurarPrueba();
+
+      const promesa = servicio.obtenerDetalle('book-1');
+      httpMock.expectOne('/api/libros/book-1').flush(libroConEstanteFalso);
+
+      expect(await promesa).toEqual(libroConEstanteFalso);
+    });
+
+    it('devuelve null, sin lanzar, cuando /api/libros/:bookId responde 404', async () => {
+      const servicio = configurarPrueba();
+
+      const promesa = servicio.obtenerDetalle('no-existe');
+      httpMock
+        .expectOne('/api/libros/no-existe')
+        .flush({ error: 'El libro no existe.' }, { status: 404, statusText: 'Not Found' });
+
+      expect(await promesa).toBeNull();
+    });
+
+    it('devuelve null, sin lanzar, cuando /api/libros/:bookId falla', async () => {
+      const servicio = configurarPrueba();
+
+      const promesa = servicio.obtenerDetalle('book-1');
+      httpMock
+        .expectOne('/api/libros/book-1')
+        .flush({ error: 'Error interno del servidor.' }, { status: 500, statusText: 'Internal Server Error' });
+
+      expect(await promesa).toBeNull();
+    });
   });
 });

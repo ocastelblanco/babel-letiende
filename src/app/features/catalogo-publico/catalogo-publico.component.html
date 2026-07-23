@@ -30,23 +30,28 @@
     } @else {
       <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
         @for (libro of librosFiltrados(); track libro.bookId) {
-          <li class="flex flex-col rounded-2xl bg-white p-3 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
-            @if (libro.portadaUrl) {
-              <img
-                [src]="libro.portadaUrl"
-                [alt]="libro.titulo"
-                class="mb-2 aspect-[2/3] w-full rounded-xl object-cover"
-              />
-            } @else {
-              <div
-                class="mb-2 flex aspect-[2/3] w-full items-center justify-center rounded-xl bg-neutral text-xs text-primary/60"
-              >
-                Sin portada
-              </div>
-            }
-            <p class="line-clamp-2 text-sm font-semibold text-primary">{{ libro.titulo }}</p>
-            <p class="line-clamp-1 text-xs text-primary/70">{{ libro.autor }}</p>
-            <p class="mt-auto pt-2 text-sm font-bold text-secondary">{{ libro.pvp | pvp }}</p>
+          <li>
+            <a
+              [routerLink]="['/libro', libro.bookId]"
+              class="flex h-full flex-col rounded-2xl bg-white p-3 shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90"
+            >
+              @if (libro.portadaUrl) {
+                <img
+                  [src]="libro.portadaUrl"
+                  [alt]="libro.titulo"
+                  class="mb-2 aspect-[2/3] w-full rounded-xl object-cover"
+                />
+              } @else {
+                <div
+                  class="mb-2 flex aspect-[2/3] w-full items-center justify-center rounded-xl bg-neutral text-xs text-primary/60"
+                >
+                  Sin portada
+                </div>
+              }
+              <p class="line-clamp-2 text-sm font-semibold text-primary">{{ libro.titulo }}</p>
+              <p class="line-clamp-1 text-xs text-primary/70">{{ libro.autor }}</p>
+              <p class="mt-auto pt-2 text-sm font-bold text-secondary">{{ libro.pvp | pvp }}</p>
+            </a>
           </li>
         }
       </ul>
