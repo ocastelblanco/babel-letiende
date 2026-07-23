@@ -15,11 +15,12 @@ describe('AdminInicioComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Administración');
   });
 
-  it('lista las 4 secciones', () => {
+  it('lista las 5 secciones', () => {
     const texto = fixture.nativeElement.textContent as string;
     expect(texto).toContain('Estantes');
     expect(texto).toContain('Usuarios');
     expect(texto).toContain('Editoriales');
+    expect(texto).toContain('Sitios de scraping');
     expect(texto).toContain('Reportes');
   });
 
@@ -40,6 +41,11 @@ describe('AdminInicioComponent', () => {
 
   it('enlaza la sección Editoriales a /admin/editoriales', () => {
     const enlace = fixture.nativeElement.querySelector('a[href="/admin/editoriales"]') as HTMLAnchorElement | null;
+    expect(enlace).not.toBeNull();
+  });
+
+  it('enlaza la sección Reportes a /admin/reportes', () => {
+    const enlace = fixture.nativeElement.querySelector('a[href="/admin/reportes"]') as HTMLAnchorElement | null;
     expect(enlace).not.toBeNull();
   });
 });

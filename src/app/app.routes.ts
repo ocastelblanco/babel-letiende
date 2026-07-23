@@ -7,6 +7,7 @@ import { GestionDescuentosEditorialesComponent } from './features/admin/gestion-
 import { GestionEstantesComponent } from './features/admin/gestion-estantes.component';
 import { GestionSitiosScrapingComponent } from './features/admin/gestion-sitios-scraping.component';
 import { GestionUsuariosComponent } from './features/admin/gestion-usuarios.component';
+import { ReportesVentasComponent } from './features/admin/reportes-ventas.component';
 import { CatalogarLibroComponent } from './features/catalogar/catalogar-libro.component';
 import { CatalogoPublicoComponent } from './features/catalogo-publico/catalogo-publico.component';
 import { LoginComponent } from './features/login/login.component';
@@ -66,6 +67,12 @@ export const routes: Routes = [
     // CRUD de descuentos por editorial (PRD.md §5.6, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/usuarios.
     path: 'admin/editoriales',
     component: GestionDescuentosEditorialesComponent,
+    canActivate: [RoleGuard('administrador')],
+  },
+  {
+    // Exportación de reportes de ventas (PRD.md §5.5, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/usuarios.
+    path: 'admin/reportes',
+    component: ReportesVentasComponent,
     canActivate: [RoleGuard('administrador')],
   },
   { path: '**', redirectTo: '' },

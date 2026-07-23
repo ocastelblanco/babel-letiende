@@ -1,4 +1,5 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
+import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenInvalidoError } from '../lib/verificar-token';
 
@@ -26,7 +27,7 @@ vi.mock('../services/dynamodb', () => ({
   escanearTodo: escanearTodoMock,
 }));
 
-const { handler, handlerListar, validarDatosNuevaVenta, validarFiltrosVentas } = await import('./ventas');
+const { handler, handlerListar, handlerExportar, validarDatosNuevaVenta, validarFiltrosVentas } = await import('./ventas');
 
 const datosValidos = { bookId: 'book-1', formaDePago: 'efectivo', porcentajeDescuentoVenta: 0 };
 
@@ -327,6 +328,128 @@ describe('handlerListar (GET /api/ventas)', () => {
       );
 
       expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify([ventaFalsa2]) });
+    });
+  });
+});
+
+/** Decodifica el `body` base64 de `handlerExportar` a filas planas, para verificar columnas/datos sin acoplarse al formato binario exacto. */
+function filasDelXlsx(bodyBase64: string): Record<string, unknown>[] {
+  const libro = XLSX.read(bodyBase64, { type: 'base64' });
+  const hoja = libro.Sheets[libro.SheetNames[0] as string];
+  return XLSX.utils.sheet_to_json(hoja as XLSX.WorkSheet);
+}
+
+describe('handlerExportar (GET /api/ventas/exportar)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_VENTAS'] = 'babel-ventas-test';
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerExportar(eventoListar(), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+  });
+
+  it('responde 403 cuando el rol no es administrador', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+
+    const respuesta = await handlerExportar(eventoListar({ authorization: 'Bearer token' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+  });
+
+  describe('con un administrador autenticado', () => {
+    beforeEach(() => {
+      verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-1' });
+      obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+    });
+
+    it('responde 400 con un filtro inválido', async () => {
+      const respuesta = await handlerExportar(
+        eventoListar({ authorization: 'Bearer token', query: { formaDePago: 'bitcoin' } }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 400 });
+    });
+
+    it('genera un archivo XLSX no vacío con las columnas esperadas cuando hay ventas', async () => {
+      escanearTodoMock.mockResolvedValue([ventaFalsa1, ventaFalsa2]);
+      obtenerPorClaveMock
+        .mockResolvedValueOnce({ bookId: 'book-1', titulo: 'Cien años de soledad', editorial: 'Sudamericana' })
+        .mockResolvedValueOnce({ bookId: 'book-2', titulo: 'Rayuela', editorial: 'Alfaguara' });
+
+      const respuesta = await handlerExportar(eventoListar({ authorization: 'Bearer token' }), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({
+        statusCode: 200,
+        isBase64Encoded: true,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': 'attachment; filename="reporte-ventas.xlsx"',
+        },
+      });
+      expect(typeof respuesta.body).toBe('string');
+      expect((respuesta.body as string).length).toBeGreaterThan(0);
+
+      const filas = filasDelXlsx(respuesta.body as string);
+      expect(filas).toHaveLength(2);
+      expect(filas[0]).toMatchObject({
+        'Fecha de venta': ventaFalsa1.vendidoEn,
+        Título: 'Cien años de soledad',
+        Editorial: 'Sudamericana',
+        ISBN: ventaFalsa1.isbn,
+        PVP: ventaFalsa1.pvp,
+        Costo: ventaFalsa1.costoLibro,
+        Utilidad: ventaFalsa1.utilidad,
+        'Forma de pago': ventaFalsa1.formaDePago,
+      });
+    });
+
+    it('genera un archivo XLSX válido con 0 filas cuando no hay ventas (no un error)', async () => {
+      escanearTodoMock.mockResolvedValue([]);
+
+      const respuesta = await handlerExportar(eventoListar({ authorization: 'Bearer token' }), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 200, isBase64Encoded: true });
+      expect((respuesta.body as string).length).toBeGreaterThan(0);
+      expect(filasDelXlsx(respuesta.body as string)).toHaveLength(0);
+    });
+
+    it('usa valores de respaldo cuando el Libro de un bookId ya no existe, sin romper el reporte', async () => {
+      escanearTodoMock.mockResolvedValue([ventaFalsa1]);
+      obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+      const respuesta = await handlerExportar(eventoListar({ authorization: 'Bearer token' }), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 200, isBase64Encoded: true });
+      const filas = filasDelXlsx(respuesta.body as string);
+      expect(filas).toHaveLength(1);
+      expect(filas[0]).toMatchObject({ Título: '—', Editorial: '—' });
+    });
+
+    it('aplica los mismos filtros de desde/hasta/formaDePago/editorial que handlerListar', async () => {
+      escanearTodoMock.mockResolvedValue([ventaFalsa1, ventaFalsa2]);
+      obtenerPorClaveMock
+        .mockResolvedValueOnce({ bookId: 'book-1', titulo: 'Cien años de soledad', editorial: 'Sudamericana' })
+        .mockResolvedValueOnce({ bookId: 'book-2', titulo: 'Rayuela', editorial: 'Alfaguara' });
+
+      const respuesta = await handlerExportar(
+        eventoListar({ authorization: 'Bearer token', query: { formaDePago: 'tarjeta' } }),
+        {} as never,
+        {} as never,
+      );
+
+      const filas = filasDelXlsx(respuesta.body as string);
+      expect(filas).toHaveLength(1);
+      expect(filas[0]).toMatchObject({ 'Forma de pago': 'tarjeta' });
     });
   });
 });
