@@ -133,4 +133,49 @@ describe('MetadatosService', () => {
       expect(await promesa).toEqual([]);
     });
   });
+
+  describe('buscarPvp', () => {
+    it('devuelve null sin llamar a la API cuando no hay ID Token', async () => {
+      const servicio = configurarPrueba(null);
+
+      const resultado = await servicio.buscarPvp('aniquilación', 'houellebecq');
+
+      expect(resultado).toBeNull();
+    });
+
+    it('envía titulo y autor como parámetros de query con el ID Token real', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPvp('aniquilación', 'houellebecq');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/metadatos/buscar-pvp?titulo=aniquilaci%C3%B3n&autor=houellebecq');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-valido');
+      peticion.flush({ pvp: 120000 });
+
+      expect(await promesa).toBe(120000);
+    });
+
+    it('omite el parámetro de query vacío', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPvp('libro raro', '  ');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/metadatos/buscar-pvp?titulo=libro+raro');
+      peticion.flush({ pvp: null });
+
+      expect(await promesa).toBeNull();
+    });
+
+    it('devuelve null, sin lanzar, cuando /api/metadatos/buscar-pvp falla', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPvp('titulo', '');
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/metadatos/buscar-pvp?titulo=titulo')
+        .flush({ error: 'Error interno del servidor.' }, { status: 500, statusText: 'Internal Server Error' });
+
+      expect(await promesa).toBeNull();
+    });
+  });
 });

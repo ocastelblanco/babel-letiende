@@ -5,7 +5,15 @@ import type {
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import { buscarLibrosPorTexto, obtenerMetadatosPorIsbn } from '../services/api-letiende';
 import { obtenerPorClave, escanearTodo } from '../services/dynamodb';
-import { buscarLernerPorTexto, buscarNacionalPorTexto, scrapearSitio, type SitioScraping } from '../services/scraping';
+import {
+  buscarLernerPorTexto,
+  buscarNacionalPorTexto,
+  buscarPvpEnLernerPorTexto,
+  buscarPvpEnNacionalPorTexto,
+  buscarPvpEnTornamesaPorTexto,
+  scrapearSitio,
+  type SitioScraping,
+} from '../services/scraping';
 
 /** Copia local de `src/app/core/models/usuario.model.ts` — mismo motivo que `estantes.ts`/`usuarios-me.ts`. */
 interface Usuario {
@@ -225,6 +233,65 @@ export const handlerBuscar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
 
     const candidatos = [...deApiLetiende, ...deLerner, ...deNacional].slice(0, LIMITE_CANDIDATOS);
     return respuestaJson(200, { candidatos });
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * PVP de un candidato SIN ISBN elegido en la búsqueda por título/autor
+ * (`TODO.md`, búsqueda por título/autor — un candidato CON ISBN no usa esta
+ * función: ya resuelve PVP reutilizando `GET /api/metadatos/:isbn` vía
+ * `resolverMetadatosCompletos`, que también consulta los sitios marcados
+ * `pvp=true` en `babel-sitios-scraping`). Busca en Lerner y Nacional EN
+ * PARALELO (mismo criterio de paralelismo del resto de este archivo); si
+ * ninguno de los dos resuelve precio, intenta Tornamesa como último recurso
+ * (más costoso: 2 peticiones HTML en vez de 1 llamada JSON). Nunca lanza —
+ * si ninguna de las 3 fuentes encuentra precio, devuelve `null` y el
+ * vendedor lo completa manualmente (CLAUDE.md A08).
+ */
+async function buscarPvpPorTexto(titulo: string | null, autor: string | null): Promise<number | null> {
+  const [pvpLerner, pvpNacional] = await Promise.all([
+    buscarPvpEnLernerPorTexto(titulo, autor),
+    buscarPvpEnNacionalPorTexto(titulo, autor),
+  ]);
+
+  const pvpPrincipal = pvpLerner ?? pvpNacional;
+  if (pvpPrincipal !== null) {
+    return pvpPrincipal;
+  }
+
+  return buscarPvpEnTornamesaPorTexto(titulo, autor);
+}
+
+/**
+ * `GET /api/metadatos/buscar-pvp?titulo=&autor=` — resuelve el PVP de un
+ * candidato SIN ISBN tras elegirlo en la lista de la búsqueda por
+ * título/autor (`TODO.md`). Exige rol `vendedor` **o** `administrador`,
+ * mismo criterio que `handler`/`handlerBuscar`. Siempre responde `200` con
+ * `{ pvp: number | null }` — `null` únicamente cuando ninguna de las 3
+ * fuentes encontró un precio, nunca un error que bloquee al vendedor.
+ */
+export const handlerBuscarPvp: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (usuario?.rol !== 'vendedor' && usuario?.rol !== 'administrador') {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para consultar metadatos en Babel.' });
+    }
+
+    const titulo = event.queryStringParameters?.['titulo']?.trim() || null;
+    const autor = event.queryStringParameters?.['autor']?.trim() || null;
+    if (!titulo && !autor) {
+      return respuestaJson(400, { error: 'Debes indicar al menos titulo o autor.' });
+    }
+
+    const pvp = await buscarPvpPorTexto(titulo, autor);
+    return respuestaJson(200, { pvp });
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

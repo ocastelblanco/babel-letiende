@@ -347,16 +347,26 @@ function extraerIsbnDeEan(ean: string | undefined): string | null {
  * Nunca lanza — cualquier fallo (red, SSRF rechazado, parseo, sin `titulo`
  * ni `autor`) degrada a `[]`, mismo criterio que el resto de este archivo.
  */
-async function buscarEnVtexPorTexto(
-  urlBase: string,
-  titulo: string | null,
-  autor: string | null,
-  opciones: OpcionesVtex,
-): Promise<CandidatoLibro[]> {
-  const query = [titulo, autor]
+/** Combina `titulo`/`autor` en el único string `ft=` que acepta VTEX (no separa parámetros) — compartido por la búsqueda de candidatos y la de PVP. Cadena vacía si ninguno de los dos viene. */
+function construirQueryVtex(titulo: string | null, autor: string | null): string {
+  return [titulo, autor]
     .filter((valor): valor is string => !!valor && valor.trim() !== '')
     .map((valor) => valor.trim())
     .join(' ');
+}
+
+/**
+ * Fetch + parseo compartido de la búsqueda de texto libre VTEX — usado por
+ * `buscarEnVtexPorTexto` (candidatos completos) y `buscarPvpEnVtexPorTexto`
+ * (solo precio del primer resultado). Nunca lanza: cualquier fallo (sin
+ * query, red, SSRF rechazado, parseo) devuelve `[]`.
+ */
+async function buscarProductosVtexPorTexto(
+  urlBase: string,
+  titulo: string | null,
+  autor: string | null,
+): Promise<ProductoVtex[]> {
+  const query = construirQueryVtex(titulo, autor);
   if (query === '') {
     return [];
   }
@@ -367,12 +377,20 @@ async function buscarEnVtexPorTexto(
     return [];
   }
 
-  let cuerpo: ProductoVtex[];
   try {
-    cuerpo = (await respuesta.json()) as ProductoVtex[];
+    return (await respuesta.json()) as ProductoVtex[];
   } catch {
     return [];
   }
+}
+
+async function buscarEnVtexPorTexto(
+  urlBase: string,
+  titulo: string | null,
+  autor: string | null,
+  opciones: OpcionesVtex,
+): Promise<CandidatoLibro[]> {
+  const cuerpo = await buscarProductosVtexPorTexto(urlBase, titulo, autor);
 
   const candidatos: CandidatoLibro[] = [];
   for (const producto of cuerpo) {
@@ -411,6 +429,32 @@ export async function buscarNacionalPorTexto(titulo: string | null, autor: strin
   });
 }
 
+/**
+ * PVP del primer resultado (mejor match) de una búsqueda de texto libre en
+ * la API pública VTEX — usado para resolver el PVP de un candidato SIN ISBN
+ * elegido en la búsqueda por título/autor (`metadatos.ts`,
+ * `buscarPvpPorTexto`). A diferencia de `buscarEnVtexPorTexto` (que arma
+ * toda la lista de candidatos), aquí solo interesa el precio del primero.
+ * Nunca lanza — cualquier fallo o ausencia de precio devuelve `null`.
+ */
+async function buscarPvpEnVtexPorTexto(
+  urlBase: string,
+  titulo: string | null,
+  autor: string | null,
+): Promise<number | null> {
+  const cuerpo = await buscarProductosVtexPorTexto(urlBase, titulo, autor);
+  const item = cuerpo[0]?.items?.[0];
+  return parsearPrecioPlano(item?.sellers?.[0]?.commertialOffer?.Price) ?? null;
+}
+
+export async function buscarPvpEnLernerPorTexto(titulo: string | null, autor: string | null): Promise<number | null> {
+  return buscarPvpEnVtexPorTexto('https://www.librerialerner.com.co', titulo, autor);
+}
+
+export async function buscarPvpEnNacionalPorTexto(titulo: string | null, autor: string | null): Promise<number | null> {
+  return buscarPvpEnVtexPorTexto('https://www.librerianacional.com', titulo, autor);
+}
+
 // ---------------------------------------------------------------------------
 // Adaptador Tornamesa — búsqueda HTML (paso 1) + JSON-LD de producto (paso 2)
 // ---------------------------------------------------------------------------
@@ -439,8 +483,15 @@ function comoString(valor: unknown): string | undefined {
   return typeof valor === 'string' ? valor : undefined;
 }
 
-async function scrapearTornamesa(isbn: string): Promise<ResultadoScraping> {
-  const urlBusqueda = `https://www.tornamesa.co/busqueda/listaLibros.php?tipoBus=full&palabrasBusqueda=${encodeURIComponent(isbn)}`;
+/**
+ * Búsqueda en Tornamesa (HTML, 2 peticiones: listado + producto) — recibe
+ * cualquier texto de búsqueda, no solo ISBN: confirmado en vivo que
+ * `palabrasBusqueda=` acepta consultas multi-palabra igual que un ISBN
+ * (mismo endpoint). Compartida por `scrapearTornamesa` (por ISBN) y
+ * `buscarPvpEnTornamesaPorTexto` (por título/autor, fallback de PVP).
+ */
+async function consultarTornamesa(query: string): Promise<ResultadoScraping> {
+  const urlBusqueda = `https://www.tornamesa.co/busqueda/listaLibros.php?tipoBus=full&palabrasBusqueda=${encodeURIComponent(query)}`;
   const respuestaBusqueda = await fetchSeguro(urlBusqueda);
   if (!respuestaBusqueda) {
     return RESULTADO_VACIO;
@@ -494,6 +545,27 @@ async function scrapearTornamesa(isbn: string): Promise<ResultadoScraping> {
     portadaUrl: comoString(datosLibro['image']),
     pvp: parsearPrecioConCentavos(ofertas?.price),
   };
+}
+
+async function scrapearTornamesa(isbn: string): Promise<ResultadoScraping> {
+  return consultarTornamesa(isbn);
+}
+
+/**
+ * PVP en Tornamesa buscando por título/autor — último recurso de
+ * `buscarPvpPorTexto` (`metadatos.ts`) cuando ni Lerner ni Nacional
+ * resolvieron precio para un candidato SIN ISBN: 2 peticiones HTML
+ * (listado + producto) en vez de 1 llamada JSON, por eso solo se intenta
+ * si las otras dos fuentes ya fallaron. Nunca lanza — sin resultado
+ * devuelve `null`.
+ */
+export async function buscarPvpEnTornamesaPorTexto(titulo: string | null, autor: string | null): Promise<number | null> {
+  const query = construirQueryVtex(titulo, autor);
+  if (query === '') {
+    return null;
+  }
+  const resultado = await consultarTornamesa(query);
+  return resultado.pvp ?? null;
 }
 
 // ---------------------------------------------------------------------------

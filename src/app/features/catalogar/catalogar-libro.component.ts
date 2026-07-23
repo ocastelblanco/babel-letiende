@@ -56,6 +56,8 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   protected readonly buscandoCandidatos = signal(false);
   /** `true` cuando la última búsqueda por título/autor no encontró ningún candidato — mensaje neutral, no bloqueante. */
   protected readonly candidatosNoEncontrados = signal(false);
+  /** `true` mientras se busca el PVP por título/autor (`MetadatosService.buscarPvp`) tras elegir un candidato sin ISBN. */
+  protected readonly buscandoPvpCandidato = signal(false);
 
   /** Referencia al `<video>` que muestra la vista de la cámara mientras se escanea. */
   private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
@@ -219,9 +221,12 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * pisa lo ya escrito" que `buscarYPrecargarMetadatos` (`CLAUDE.md` A08). Si
    * el candidato trae `isbn`, además lo completa y reutiliza
    * `buscarYPrecargarMetadatos` (ya existente) para resolver el PVP vía el
-   * fallback de scraping; si no trae `isbn`, el PVP queda manual, mismo
-   * criterio que cualquier "no encontrado" hoy. Cierra la lista de
-   * candidatos tras seleccionar uno.
+   * fallback de scraping por ISBN. Si NO trae `isbn`, busca el PVP
+   * directamente por título/autor (`buscarPvpCandidatoSinIsbn`, abajo) —
+   * Lerner y Nacional primero, Tornamesa como último recurso; si ninguno
+   * encuentra precio, el campo queda en 0 (criterio "vacío" ya establecido,
+   * el vendedor lo completa manualmente). Cierra la lista de candidatos tras
+   * seleccionar uno.
    */
   protected async seleccionarCandidato(candidato: CandidatoLibro): Promise<void> {
     const controles = this.formulario.controls;
@@ -245,6 +250,34 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     if (candidato.isbn) {
       controles.isbn.setValue(candidato.isbn);
       await this.buscarYPrecargarMetadatos(candidato.isbn);
+      return;
+    }
+
+    await this.buscarPvpCandidatoSinIsbn(candidato);
+  }
+
+  /**
+   * Busca el PVP por título/autor (`MetadatosService.buscarPvp`) para un
+   * candidato SIN ISBN — a diferencia del flujo por ISBN, esta búsqueda solo
+   * resuelve precio, nunca título/autor/editorial/portada (ya precargados
+   * desde el propio candidato en `seleccionarCandidato`). Nunca pisa un PVP
+   * que el vendedor ya haya escrito a mano (mismo criterio de "vacío" que
+   * `buscarYPrecargarMetadatos`: el valor por defecto `0`).
+   */
+  private async buscarPvpCandidatoSinIsbn(candidato: CandidatoLibro): Promise<void> {
+    const controles = this.formulario.controls;
+    if (controles.pvp.value !== 0) {
+      return;
+    }
+
+    this.buscandoPvpCandidato.set(true);
+    try {
+      const pvp = await this.metadatosService.buscarPvp(candidato.titulo, candidato.autor ?? '');
+      if (pvp && controles.pvp.value === 0) {
+        controles.pvp.setValue(pvp);
+      }
+    } finally {
+      this.buscandoPvpCandidato.set(false);
     }
   }
 

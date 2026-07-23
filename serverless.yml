@@ -515,6 +515,69 @@ functions:
           path: /api/metadatos/buscar
           method: get
 
+  metadatosBuscarPvp:
+    handler: dist-server/api/handlers/metadatos.handlerBuscarPvp
+    role: !GetAtt MetadatosBuscarPvpLambdaRole.Arn
+    description: >-
+      GET /api/metadatos/buscar-pvp?titulo=&autor= — resuelve el PVP de un
+      candidato SIN ISBN (Lerner + Nacional en paralelo, Tornamesa como
+      último recurso), exige rol vendedor o administrador (CLAUDE.md A01,
+      ADR-008).
+    # Peor caso NO es totalmente paralelo (a diferencia de `metadatos`/
+    # `metadatosBuscar`): Lerner+Nacional en paralelo (~8s) y, solo si
+    # ninguno resolvió precio, Tornamesa después (2 peticiones HTML
+    # secuenciales internas, ~16s) — hasta ~24s en el peor caso real.
+    timeout: 28
+    environment:
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'dist-server/api/services/api-letiende.js'
+        - 'dist-server/api/services/scraping.js'
+        # Verifica tokens con firebase-admin — mismo criterio que `metadatos`.
+        - 'node_modules/**'
+        # Mismo recorte de paquetes solo-frontend/dev-tooling que `metadatos`
+        # (MEMORY.md §7).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/metadatos/buscar-pvp
+          method: get
+
   usuarios:
     handler: dist-server/api/handlers/usuarios.handler
     role: !GetAtt UsuariosLambdaRole.Arn
@@ -1178,6 +1241,34 @@ resources:
           # (Lerner/Nacional se llaman directo por dominio fijo, no por la
           # lista administrable) — sin acceso de escritura a ninguna tabla.
           - PolicyName: babel-metadatos-buscar-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
+    MetadatosBuscarPvpLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-metadatos-buscar-pvp-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Mismo criterio que MetadatosBuscarLambdaRole: solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token — Lerner/Nacional/
+          # Tornamesa se llaman por dominio fijo, sin acceso a ninguna tabla
+          # de datos del negocio.
+          - PolicyName: babel-metadatos-buscar-pvp-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
               Statement:

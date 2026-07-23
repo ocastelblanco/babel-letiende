@@ -12,6 +12,9 @@ const {
   scrapearSitioMock,
   buscarLernerPorTextoMock,
   buscarNacionalPorTextoMock,
+  buscarPvpEnLernerPorTextoMock,
+  buscarPvpEnNacionalPorTextoMock,
+  buscarPvpEnTornamesaPorTextoMock,
 } = vi.hoisted(() => ({
   verificarTokenDesdeHeaderMock: vi.fn(),
   obtenerPorClaveMock: vi.fn(),
@@ -21,6 +24,9 @@ const {
   scrapearSitioMock: vi.fn(),
   buscarLernerPorTextoMock: vi.fn(),
   buscarNacionalPorTextoMock: vi.fn(),
+  buscarPvpEnLernerPorTextoMock: vi.fn(),
+  buscarPvpEnNacionalPorTextoMock: vi.fn(),
+  buscarPvpEnTornamesaPorTextoMock: vi.fn(),
 }));
 
 vi.mock('../lib/verificar-token', async () => {
@@ -45,9 +51,12 @@ vi.mock('../services/scraping', () => ({
   scrapearSitio: scrapearSitioMock,
   buscarLernerPorTexto: buscarLernerPorTextoMock,
   buscarNacionalPorTexto: buscarNacionalPorTextoMock,
+  buscarPvpEnLernerPorTexto: buscarPvpEnLernerPorTextoMock,
+  buscarPvpEnNacionalPorTexto: buscarPvpEnNacionalPorTextoMock,
+  buscarPvpEnTornamesaPorTexto: buscarPvpEnTornamesaPorTextoMock,
 }));
 
-const { handler, handlerBuscar } = await import('./metadatos');
+const { handler, handlerBuscar, handlerBuscarPvp } = await import('./metadatos');
 
 /** Crea una promesa que solo se resuelve cuando el test invoca `resolve` explícitamente — usada para controlar el orden de llegada de red en los tests de paralelismo/prioridad. */
 function crearDiferida<T>(): { promise: Promise<T>; resolve: (valor: T) => void } {
@@ -476,5 +485,135 @@ describe('handlerBuscar (/api/metadatos/buscar)', () => {
 
     const cuerpo = JSON.parse(respuesta.body as string) as { candidatos: unknown[] };
     expect(cuerpo.candidatos).toHaveLength(20);
+  });
+});
+
+describe('handlerBuscarPvp (/api/metadatos/buscar-pvp)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    buscarPvpEnLernerPorTextoMock.mockResolvedValue(null);
+    buscarPvpEnNacionalPorTextoMock.mockResolvedValue(null);
+    buscarPvpEnTornamesaPorTextoMock.mockResolvedValue(null);
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerBuscarPvp(
+      eventoFalso({ query: { titulo: 'cien años de soledad' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(buscarPvpEnLernerPorTextoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el rol no es vendedor ni administrador', async () => {
+    obtenerPorClaveMock.mockResolvedValue({ email: 'otro@letiende.co', rol: 'invitado' });
+
+    const respuesta = await handlerBuscarPvp(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'cien años de soledad' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(buscarPvpEnLernerPorTextoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 400 cuando faltan tanto titulo como autor', async () => {
+    const respuesta = await handlerBuscarPvp(
+      eventoFalso({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+  });
+
+  it('usa el precio de Lerner cuando lo encuentra, sin siquiera consultar Tornamesa', async () => {
+    buscarPvpEnLernerPorTextoMock.mockResolvedValue(120000);
+    buscarPvpEnNacionalPorTextoMock.mockResolvedValue(95000);
+
+    const respuesta = await handlerBuscarPvp(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'aniquilacion', autor: 'houellebecq' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(buscarPvpEnLernerPorTextoMock).toHaveBeenCalledWith('aniquilacion', 'houellebecq');
+    expect(buscarPvpEnNacionalPorTextoMock).toHaveBeenCalledWith('aniquilacion', 'houellebecq');
+    expect(buscarPvpEnTornamesaPorTextoMock).not.toHaveBeenCalled();
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ pvp: 120000 }) });
+  });
+
+  it('usa el precio de Nacional cuando Lerner no lo encuentra', async () => {
+    buscarPvpEnLernerPorTextoMock.mockResolvedValue(null);
+    buscarPvpEnNacionalPorTextoMock.mockResolvedValue(79000);
+
+    const respuesta = await handlerBuscarPvp(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'cien años de soledad' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(buscarPvpEnTornamesaPorTextoMock).not.toHaveBeenCalled();
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ pvp: 79000 }) });
+  });
+
+  it('cae a Tornamesa solo cuando ni Lerner ni Nacional encontraron precio', async () => {
+    buscarPvpEnLernerPorTextoMock.mockResolvedValue(null);
+    buscarPvpEnNacionalPorTextoMock.mockResolvedValue(null);
+    buscarPvpEnTornamesaPorTextoMock.mockResolvedValue(65000);
+
+    const respuesta = await handlerBuscarPvp(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'libro raro' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(buscarPvpEnTornamesaPorTextoMock).toHaveBeenCalledWith('libro raro', null);
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ pvp: 65000 }) });
+  });
+
+  it('responde pvp: null cuando ninguna de las 3 fuentes encuentra precio', async () => {
+    const respuesta = await handlerBuscarPvp(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'libro inexistente' } }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ pvp: null }) });
+  });
+
+  it('busca Lerner y Nacional EN PARALELO, sin esperar a que uno termine antes de invocar el otro', async () => {
+    const diferidaLerner = crearDiferida<number | null>();
+    const diferidaNacional = crearDiferida<number | null>();
+    buscarPvpEnLernerPorTextoMock.mockReturnValue(diferidaLerner.promise);
+    buscarPvpEnNacionalPorTextoMock.mockReturnValue(diferidaNacional.promise);
+
+    const promesaHandler = handlerBuscarPvp(
+      eventoFalso({ authorization: 'Bearer token', query: { titulo: 'titulo' } }),
+      {} as never,
+      {} as never,
+    );
+
+    // Ninguna de las 2 diferidas se ha resuelto todavía — si la invocación
+    // fuera secuencial, `buscarPvpEnNacionalPorTextoMock` no se habría
+    // llamado aún en este punto.
+    await vi.waitFor(() => {
+      expect(buscarPvpEnLernerPorTextoMock).toHaveBeenCalledTimes(1);
+      expect(buscarPvpEnNacionalPorTextoMock).toHaveBeenCalledTimes(1);
+    });
+
+    diferidaLerner.resolve(null);
+    diferidaNacional.resolve(85000);
+    const respuesta = await promesaHandler;
+
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ pvp: 85000 }) });
   });
 });

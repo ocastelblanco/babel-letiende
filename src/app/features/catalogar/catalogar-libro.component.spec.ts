@@ -73,6 +73,9 @@ function configurarPrueba() {
   // Por defecto no encuentra candidatos — las pruebas de búsqueda por
   // título/autor sobrescriben esta resolución.
   const buscarCandidatosMock = vi.fn().mockResolvedValue([]);
+  // Por defecto no encuentra precio — las pruebas de PVP de un candidato sin
+  // ISBN sobrescriben esta resolución.
+  const buscarPvpMock = vi.fn().mockResolvedValue(null);
 
   TestBed.configureTestingModule({
     providers: [
@@ -89,7 +92,11 @@ function configurarPrueba() {
       },
       {
         provide: MetadatosService,
-        useValue: { obtenerMetadatos: obtenerMetadatosMock, buscarCandidatos: buscarCandidatosMock },
+        useValue: {
+          obtenerMetadatos: obtenerMetadatosMock,
+          buscarCandidatos: buscarCandidatosMock,
+          buscarPvp: buscarPvpMock,
+        },
       },
     ],
   });
@@ -98,7 +105,15 @@ function configurarPrueba() {
   const fixture: ComponentFixture<CatalogarLibroComponent> = TestBed.createComponent(CatalogarLibroComponent);
   fixture.detectChanges();
 
-  return { fixture, httpMock, obtenerIdTokenMock, cargarEstantesMock, obtenerMetadatosMock, buscarCandidatosMock };
+  return {
+    fixture,
+    httpMock,
+    obtenerIdTokenMock,
+    cargarEstantesMock,
+    obtenerMetadatosMock,
+    buscarCandidatosMock,
+    buscarPvpMock,
+  };
 }
 
 function enviarFormulario(fixture: ComponentFixture<CatalogarLibroComponent>, datos: typeof datosValidos): void {
@@ -513,10 +528,12 @@ describe('CatalogarLibroComponent', () => {
       expect(fixture.nativeElement.textContent).toContain('No se encontraron candidatos');
     });
 
-    it('seleccionar un candidato SIN isbn pre-carga los campos sin tocar el pvp/isbn', async () => {
-      const { fixture, httpMock: mock, buscarCandidatosMock, obtenerMetadatosMock } = configurarPrueba();
+    it('seleccionar un candidato SIN isbn pre-carga los campos y busca el pvp por título/autor (sin resultado → 0)', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, obtenerMetadatosMock, buscarPvpMock } =
+        configurarPrueba();
       httpMock = mock;
       buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(null);
 
       const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
       campoTitulo.value = 'otro libro';
@@ -531,19 +548,80 @@ describe('CatalogarLibroComponent', () => {
       const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
       botonCandidato.click();
       await Promise.resolve();
+      await Promise.resolve();
       fixture.detectChanges();
 
+      expect(buscarPvpMock).toHaveBeenCalledWith('Otro libro', '');
+      expect(obtenerMetadatosMock).not.toHaveBeenCalled();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       expect(componente.formulario.value.isbn).toBe('');
       expect(componente.formulario.value.pvp).toBe(0);
-      expect(obtenerMetadatosMock).not.toHaveBeenCalled();
       // La lista de candidatos se cierra tras seleccionar uno.
       expect(fixture.nativeElement.querySelectorAll('ul button').length).toBe(0);
     });
 
+    it('seleccionar un candidato SIN isbn completa el pvp cuando la búsqueda por título/autor sí encuentra precio', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, buscarPvpMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(58_000);
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.pvp).toBe(58_000);
+    });
+
+    it('no pisa un pvp que el vendedor ya escribió a mano al seleccionar un candidato sin isbn', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, buscarPvpMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(58_000);
+
+      const campoPvp = fixture.nativeElement.querySelector('#pvp') as HTMLInputElement;
+      campoPvp.value = '40000';
+      campoPvp.dispatchEvent(new Event('input'));
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(buscarPvpMock).not.toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.pvp).toBe(40000);
+    });
+
     it('seleccionar un candidato CON isbn completa el campo isbn y dispara el autocompletado de pvp existente', async () => {
-      const { fixture, httpMock: mock, buscarCandidatosMock, obtenerMetadatosMock } = configurarPrueba();
+      const { fixture, httpMock: mock, buscarCandidatosMock, obtenerMetadatosMock, buscarPvpMock } =
+        configurarPrueba();
       httpMock = mock;
       buscarCandidatosMock.mockResolvedValue([candidatoConIsbn]);
       obtenerMetadatosMock.mockResolvedValue({
@@ -571,6 +649,7 @@ describe('CatalogarLibroComponent', () => {
       fixture.detectChanges();
 
       expect(obtenerMetadatosMock).toHaveBeenCalledWith('9780307474728');
+      expect(buscarPvpMock).not.toHaveBeenCalled();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       expect(componente.formulario.value.isbn).toBe('9780307474728');

@@ -14,7 +14,16 @@ vi.mock('node:dns', () => ({
 
 // `vi.mock('node:dns', ...)` se hoistea por encima de este import, así que
 // `scraping.ts` ya ve el mock cuando hace `import dns from 'node:dns'`.
-import { buscarLernerPorTexto, buscarNacionalPorTexto, esUrlSegura, scrapearSitio, type SitioScraping } from './scraping';
+import {
+  buscarLernerPorTexto,
+  buscarNacionalPorTexto,
+  buscarPvpEnLernerPorTexto,
+  buscarPvpEnNacionalPorTexto,
+  buscarPvpEnTornamesaPorTexto,
+  esUrlSegura,
+  scrapearSitio,
+  type SitioScraping,
+} from './scraping';
 
 const RUTA_FIXTURES = join(__dirname, '__fixtures__/scraping');
 
@@ -437,6 +446,134 @@ describe('buscarLernerPorTexto / buscarNacionalPorTexto (búsqueda por título/a
     dnsLookupMock.mockResolvedValue([{ address: '169.254.169.254', family: 4 }]);
     const resultado = await buscarLernerPorTexto('cualquier cosa', null);
     expect(resultado).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('buscarPvpEnLernerPorTexto / buscarPvpEnNacionalPorTexto (PVP por título/autor de un candidato sin ISBN)', () => {
+  const fetchOriginal = global.fetch;
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    dnsLookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    global.fetch = fetchOriginal;
+  });
+
+  function respuestaJson(cuerpo: unknown) {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: () => Promise.resolve(cuerpo),
+      text: () => Promise.resolve(JSON.stringify(cuerpo)),
+    } as unknown as Response;
+  }
+
+  it('devuelve el precio del primer resultado (mejor match) desde el fixture real de Lerner', async () => {
+    const fixture = JSON.parse(leerFixture('librerialerner-api-encontrado.json'));
+    fetchMock.mockResolvedValue(respuestaJson(fixture));
+
+    const resultado = await buscarPvpEnLernerPorTexto('Aniquilación', 'Houellebecq');
+
+    expect(resultado).toBe(120000);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://www.librerialerner.com.co/api/catalog_system/pub/products/search?ft=Aniquilaci%C3%B3n%20Houellebecq',
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+  });
+
+  it('devuelve el precio del primer resultado desde el fixture real de Nacional', async () => {
+    const fixture = JSON.parse(leerFixture('libreria-nacional-api-encontrado.json'));
+    fetchMock.mockResolvedValue(respuestaJson(fixture));
+
+    const resultado = await buscarPvpEnNacionalPorTexto('Cien años de soledad', null);
+
+    expect(resultado).toBe(79000);
+  });
+
+  it('devuelve null cuando la API responde un array vacío (sin resultados)', async () => {
+    fetchMock.mockResolvedValue(respuestaJson([]));
+    const resultado = await buscarPvpEnLernerPorTexto('libro inexistente', null);
+    expect(resultado).toBeNull();
+  });
+
+  it('devuelve null sin hacer ninguna petición cuando titulo y autor vienen vacíos/null', async () => {
+    const resultado = await buscarPvpEnLernerPorTexto(null, '   ');
+    expect(resultado).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('nunca lanza: un error de red degrada a null', async () => {
+    fetchMock.mockRejectedValue(new Error('fetch failed'));
+    const resultado = await buscarPvpEnNacionalPorTexto('cualquier cosa', null);
+    expect(resultado).toBeNull();
+  });
+
+  it('un precio inválido (por encima de PVP_MAXIMO) se trata como ausente (null)', async () => {
+    const fixture = JSON.parse(leerFixture('librerialerner-api-encontrado.json'));
+    fixture[0].items[0].sellers[0].commertialOffer.Price = 9_000_000;
+    fetchMock.mockResolvedValue(respuestaJson(fixture));
+
+    const resultado = await buscarPvpEnLernerPorTexto('cualquier cosa', null);
+
+    expect(resultado).toBeNull();
+  });
+});
+
+describe('buscarPvpEnTornamesaPorTexto (fallback de PVP por título/autor)', () => {
+  const fetchOriginal = global.fetch;
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    dnsLookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    global.fetch = fetchOriginal;
+  });
+
+  function respuestaHtml(html: string) {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: () => Promise.reject(new Error('no es JSON')),
+      text: () => Promise.resolve(html),
+    } as unknown as Response;
+  }
+
+  it('encadena búsqueda (palabrasBusqueda=texto libre) y producto, igual que por ISBN', async () => {
+    const htmlBusqueda = leerFixture('tornamesa-busqueda.html');
+    const htmlProducto = leerFixture('tornamesa-producto.html');
+    fetchMock.mockResolvedValueOnce(respuestaHtml(htmlBusqueda)).mockResolvedValueOnce(respuestaHtml(htmlProducto));
+
+    const resultado = await buscarPvpEnTornamesaPorTexto('Aniquilación', 'Houellebecq');
+
+    expect(resultado).toBe(120000);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('palabrasBusqueda=Aniquilaci%C3%B3n%20Houellebecq'),
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+  });
+
+  it('devuelve null cuando la búsqueda no contiene ningún link de producto', async () => {
+    fetchMock.mockResolvedValue(respuestaHtml('<html><body>sin resultados</body></html>'));
+    const resultado = await buscarPvpEnTornamesaPorTexto('libro inexistente', null);
+    expect(resultado).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('devuelve null sin hacer ninguna petición cuando titulo y autor vienen vacíos/null', async () => {
+    const resultado = await buscarPvpEnTornamesaPorTexto(null, null);
+    expect(resultado).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -158,6 +158,9 @@
           @if (formulario.controls.pvp.invalid && formulario.controls.pvp.touched) {
             <p class="mt-1 text-xs text-danger">El PVP debe ser mayor a 0.</p>
           }
+          @if (buscandoPvpCandidato()) {
+            <p class="mt-1 text-xs text-primary/60">Buscando precio…</p>
+          }
         </div>
 
         <div>
