@@ -70,6 +70,12 @@ function configurarPrueba() {
   // Por defecto no encuentra nada — las pruebas de autocompletado sobrescriben
   // esta resolución con `mockResolvedValueOnce`/`mockResolvedValue` según el caso.
   const obtenerMetadatosMock = vi.fn().mockResolvedValue(metadatosVacios);
+  // Por defecto no encuentra candidatos — las pruebas de búsqueda por
+  // título/autor sobrescriben esta resolución.
+  const buscarCandidatosMock = vi.fn().mockResolvedValue([]);
+  // Por defecto no encuentra precio — las pruebas de PVP de un candidato sin
+  // ISBN sobrescriben esta resolución.
+  const buscarPvpMock = vi.fn().mockResolvedValue(null);
 
   TestBed.configureTestingModule({
     providers: [
@@ -84,7 +90,14 @@ function configurarPrueba() {
           cargarEstantes: cargarEstantesMock,
         },
       },
-      { provide: MetadatosService, useValue: { obtenerMetadatos: obtenerMetadatosMock } },
+      {
+        provide: MetadatosService,
+        useValue: {
+          obtenerMetadatos: obtenerMetadatosMock,
+          buscarCandidatos: buscarCandidatosMock,
+          buscarPvp: buscarPvpMock,
+        },
+      },
     ],
   });
 
@@ -92,7 +105,15 @@ function configurarPrueba() {
   const fixture: ComponentFixture<CatalogarLibroComponent> = TestBed.createComponent(CatalogarLibroComponent);
   fixture.detectChanges();
 
-  return { fixture, httpMock, obtenerIdTokenMock, cargarEstantesMock, obtenerMetadatosMock };
+  return {
+    fixture,
+    httpMock,
+    obtenerIdTokenMock,
+    cargarEstantesMock,
+    obtenerMetadatosMock,
+    buscarCandidatosMock,
+    buscarPvpMock,
+  };
 }
 
 function enviarFormulario(fixture: ComponentFixture<CatalogarLibroComponent>, datos: typeof datosValidos): void {
@@ -425,6 +446,311 @@ describe('CatalogarLibroComponent', () => {
       const componente = fixture.componentInstance as any;
       componente.formulario.controls.titulo.setValue('Escrito manualmente tras el fallo');
       expect(componente.formulario.value.titulo).toBe('Escrito manualmente tras el fallo');
+    });
+  });
+
+  describe('búsqueda de candidatos por título/autor (sin ISBN)', () => {
+    const candidatoConIsbn = {
+      titulo: 'Cien años de soledad',
+      autor: 'Gabriel García Márquez',
+      editorial: 'Sudamericana',
+      portadaUrl: 'https://books.google.com/portada.jpg',
+      isbn: '9780307474728',
+    };
+    const candidatoSinIsbn = {
+      titulo: 'Otro libro',
+      autor: null,
+      editorial: null,
+      portadaUrl: null,
+      isbn: null,
+    };
+
+    function botonBuscarCandidatos(fixture: ComponentFixture<CatalogarLibroComponent>): HTMLButtonElement {
+      return Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+        (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Buscar por título y autor',
+      ) as HTMLButtonElement;
+    }
+
+    it('el botón "Buscar por título y autor" solo aparece cuando el ISBN está vacío', async () => {
+      const { fixture } = configurarPrueba();
+
+      expect(botonBuscarCandidatos(fixture)).toBeTruthy();
+
+      const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+      campoIsbn.value = '9780000000001';
+      campoIsbn.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      expect(botonBuscarCandidatos(fixture)).toBeFalsy();
+    });
+
+    it('el botón está deshabilitado sin título ni autor escritos', () => {
+      const { fixture } = configurarPrueba();
+      expect(botonBuscarCandidatos(fixture).disabled).toBe(true);
+    });
+
+    it('busca candidatos y los muestra (portada + título + autor + editorial + isbn) al hacer click', async () => {
+      const { fixture, buscarCandidatosMock } = configurarPrueba();
+      buscarCandidatosMock.mockResolvedValue([candidatoConIsbn, candidatoSinIsbn]);
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'cien años de soledad';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(buscarCandidatosMock).toHaveBeenCalledWith('cien años de soledad', '');
+      expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
+      expect(fixture.nativeElement.textContent).toContain('Gabriel García Márquez');
+      expect(fixture.nativeElement.textContent).toContain('Sudamericana');
+      expect(fixture.nativeElement.textContent).toContain('9780307474728');
+      expect(fixture.nativeElement.textContent).toContain('Otro libro');
+      const imagenes = fixture.nativeElement.querySelectorAll('img[src="https://books.google.com/portada.jpg"]');
+      expect(imagenes.length).toBe(1);
+    });
+
+    it('muestra un mensaje neutral cuando la búsqueda no encuentra candidatos', async () => {
+      const { fixture, buscarCandidatosMock } = configurarPrueba();
+      buscarCandidatosMock.mockResolvedValue([]);
+
+      const campoAutor = fixture.nativeElement.querySelector('#autor') as HTMLInputElement;
+      campoAutor.value = 'autor sin resultados';
+      campoAutor.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('No se encontraron candidatos');
+    });
+
+    it('seleccionar un candidato SIN isbn pre-carga los campos y busca el pvp por título/autor (sin resultado → 0)', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, obtenerMetadatosMock, buscarPvpMock } =
+        configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(null);
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(buscarPvpMock).toHaveBeenCalledWith('Otro libro', '');
+      expect(obtenerMetadatosMock).not.toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.isbn).toBe('');
+      expect(componente.formulario.value.pvp).toBe(0);
+      // La lista de candidatos se cierra tras seleccionar uno.
+      expect(fixture.nativeElement.querySelectorAll('ul button').length).toBe(0);
+    });
+
+    it('seleccionar un candidato SIN isbn completa el pvp cuando la búsqueda por título/autor sí encuentra precio', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, buscarPvpMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(58_000);
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.pvp).toBe(58_000);
+    });
+
+    it('sobrescribe un pvp que el vendedor ya había escrito a mano al seleccionar un candidato sin isbn', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, buscarPvpMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(58_000);
+
+      const campoPvp = fixture.nativeElement.querySelector('#pvp') as HTMLInputElement;
+      campoPvp.value = '40000';
+      campoPvp.dispatchEvent(new Event('input'));
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(buscarPvpMock).toHaveBeenCalledWith('Otro libro', '');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.pvp).toBe(58_000);
+    });
+
+    it('deja el pvp como estaba cuando la búsqueda por título/autor no encuentra precio', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, buscarPvpMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+      buscarPvpMock.mockResolvedValue(null);
+
+      const campoPvp = fixture.nativeElement.querySelector('#pvp') as HTMLInputElement;
+      campoPvp.value = '40000';
+      campoPvp.dispatchEvent(new Event('input'));
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.pvp).toBe(40000);
+    });
+
+    it('seleccionar un candidato CON isbn completa el campo isbn y dispara el autocompletado de pvp existente', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock, obtenerMetadatosMock, buscarPvpMock } =
+        configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoConIsbn]);
+      obtenerMetadatosMock.mockResolvedValue({
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        editorial: 'Sudamericana',
+        portadaUrl: 'https://books.google.com/portada.jpg',
+        pvp: 65_000,
+      });
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'cien años de soledad';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(obtenerMetadatosMock).toHaveBeenCalledWith('9780307474728');
+      expect(buscarPvpMock).not.toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.formulario.value.isbn).toBe('9780307474728');
+      expect(componente.formulario.value.pvp).toBe(65_000);
+    });
+
+    it('sobrescribe campos que el vendedor ya había completado a mano al elegir un candidato (selección explícita)', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoSinIsbn]);
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'otro libro';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.formulario.controls.editorial.setValue('Editorial escrita a mano');
+      componente.formulario.controls.autor.setValue('Autor escrito a mano');
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // `candidatoSinIsbn` no trae autor/editorial (ver fixture arriba) — al
+      // no haber dato nuevo que ofrecer, lo ya escrito a mano se conserva.
+      expect(componente.formulario.value.editorial).toBe('Editorial escrita a mano');
+      expect(componente.formulario.value.autor).toBe('Autor escrito a mano');
+      expect(componente.formulario.value.titulo).toBe('Otro libro');
+    });
+
+    it('sobrescribe título/autor/editorial ya escritos a mano cuando el candidato SÍ trae esos datos', async () => {
+      const { fixture, httpMock: mock, buscarCandidatosMock } = configurarPrueba();
+      httpMock = mock;
+      buscarCandidatosMock.mockResolvedValue([candidatoConIsbn]);
+
+      const campoTitulo = fixture.nativeElement.querySelector('#titulo') as HTMLInputElement;
+      campoTitulo.value = 'cien años de soledad';
+      campoTitulo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.formulario.controls.autor.setValue('Autor escrito a mano');
+      componente.formulario.controls.editorial.setValue('Editorial escrita a mano');
+
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // `candidatoConIsbn` trae autor/editorial (ver fixture arriba) — se
+      // sobrescribe lo ya escrito a mano, es una selección explícita.
+      expect(componente.formulario.value.autor).toBe('Gabriel García Márquez');
+      expect(componente.formulario.value.editorial).toBe('Sudamericana');
     });
   });
 });

@@ -7,7 +7,7 @@ import type { IScannerControls } from '@zxing/browser';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { EstantesService } from '../../core/api/estantes.service';
-import { MetadatosService } from '../../core/api/metadatos.service';
+import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.service';
 
 const PVP_MAXIMO = 5_000_000;
 
@@ -49,6 +49,15 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   protected readonly buscandoMetadatos = signal(false);
   /** `true` cuando la última búsqueda de metadatos no encontró ningún dato — mensaje neutral, no bloqueante. */
   protected readonly metadatosNoEncontrados = signal(false);
+
+  /** Candidatos de la última búsqueda por título/autor (`GET /api/metadatos/buscar`) — para cuando el vendedor no tiene ISBN a mano. */
+  protected readonly candidatos = signal<CandidatoLibro[]>([]);
+  /** `true` mientras se consulta `MetadatosService.buscarCandidatos`. */
+  protected readonly buscandoCandidatos = signal(false);
+  /** `true` cuando la última búsqueda por título/autor no encontró ningún candidato — mensaje neutral, no bloqueante. */
+  protected readonly candidatosNoEncontrados = signal(false);
+  /** `true` mientras se busca el PVP por título/autor (`MetadatosService.buscarPvp`) tras elegir un candidato sin ISBN. */
+  protected readonly buscandoPvpCandidato = signal(false);
 
   /** Referencia al `<video>` que muestra la vista de la cámara mientras se escanea. */
   private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
@@ -131,18 +140,31 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Consulta `MetadatosService` con el ISBN disponible (por escaneo o
-   * entrada manual) y pre-carga título/autor/editorial/portada SOLO en los
-   * campos que el vendedor todavía no completó a mano — nunca pisa un valor
-   * ya escrito (`CLAUDE.md` A08). Si no se encuentra nada o la API falla, el
-   * formulario sigue siendo 100% editable manualmente: no hay ningún
-   * mensaje bloqueante, solo un aviso neutral opcional.
+   * Consulta `MetadatosService` con el ISBN disponible y pre-carga
+   * título/autor/editorial/portada/pvp. Por defecto (`sobrescribir: false`,
+   * usado por el escaneo con cámara y la entrada manual de ISBN) SOLO
+   * completa los campos que el vendedor todavía no llenó a mano — nunca pisa
+   * un valor ya escrito (`CLAUDE.md` A08), porque ahí la búsqueda se dispara
+   * automáticamente sin que el vendedor haya confirmado nada.
+   *
+   * `sobrescribir: true` (usado por `seleccionarCandidato` al elegir un
+   * candidato CON ISBN) SÍ reemplaza todos los campos, incluidos los que ya
+   * tenían un valor: a diferencia del escaneo/entrada manual, aquí el
+   * vendedor ya eligió explícitamente ESTE libro exacto de una lista — la
+   * ficha confirmada por ISBN es más confiable que lo que haya en el
+   * formulario (que pudo venir de otro candidato de texto libre, con datos
+   * menos precisos).
+   *
+   * Si no se encuentra nada o la API falla, el formulario sigue siendo 100%
+   * editable manualmente: no hay ningún mensaje bloqueante, solo un aviso
+   * neutral opcional.
    */
-  private async buscarYPrecargarMetadatos(isbn: string): Promise<void> {
+  private async buscarYPrecargarMetadatos(isbn: string, opciones: { sobrescribir?: boolean } = {}): Promise<void> {
     const isbnLimpio = isbn.trim();
     if (isbnLimpio === '') {
       return;
     }
+    const sobrescribir = opciones.sobrescribir ?? false;
 
     this.metadatosNoEncontrados.set(false);
     this.buscandoMetadatos.set(true);
@@ -150,22 +172,21 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       const metadatos = await this.metadatosService.obtenerMetadatos(isbnLimpio);
       const controles = this.formulario.controls;
 
-      if (controles.titulo.value.trim() === '' && metadatos.titulo) {
+      if ((sobrescribir || controles.titulo.value.trim() === '') && metadatos.titulo) {
         controles.titulo.setValue(metadatos.titulo);
       }
-      if (controles.autor.value.trim() === '' && metadatos.autor) {
+      if ((sobrescribir || controles.autor.value.trim() === '') && metadatos.autor) {
         controles.autor.setValue(metadatos.autor);
       }
-      if (controles.editorial.value.trim() === '' && metadatos.editorial) {
+      if ((sobrescribir || controles.editorial.value.trim() === '') && metadatos.editorial) {
         controles.editorial.setValue(metadatos.editorial);
       }
-      if (controles.portadaUrl.value.trim() === '' && metadatos.portadaUrl) {
+      if ((sobrescribir || controles.portadaUrl.value.trim() === '') && metadatos.portadaUrl) {
         controles.portadaUrl.setValue(metadatos.portadaUrl);
       }
       // Criterio de "vacío" para un campo numérico: su valor por defecto (0)
-      // del formulario, no un string vacío — nunca pisa un PVP que el
-      // vendedor ya haya escrito a mano.
-      if (controles.pvp.value === 0 && metadatos.pvp) {
+      // del formulario, no un string vacío.
+      if ((sobrescribir || controles.pvp.value === 0) && metadatos.pvp) {
         controles.pvp.setValue(metadatos.pvp);
       }
 
@@ -177,6 +198,96 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       }
     } finally {
       this.buscandoMetadatos.set(false);
+    }
+  }
+
+  /**
+   * Busca candidatos por título/autor (`MetadatosService.buscarCandidatos`)
+   * para cuando el vendedor no tiene el ISBN a mano (`TODO.md`, Tarea de
+   * búsqueda por título/autor). Se dispara desde el botón "Buscar por título
+   * y autor", visible solo mientras el campo `isbn` está vacío.
+   */
+  protected async buscarCandidatos(): Promise<void> {
+    const titulo = this.formulario.controls.titulo.value.trim();
+    const autor = this.formulario.controls.autor.value.trim();
+    if (titulo === '' && autor === '') {
+      return;
+    }
+
+    this.candidatosNoEncontrados.set(false);
+    this.candidatos.set([]);
+    this.buscandoCandidatos.set(true);
+    try {
+      const resultado = await this.metadatosService.buscarCandidatos(titulo, autor);
+      this.candidatos.set(resultado);
+      if (resultado.length === 0) {
+        this.candidatosNoEncontrados.set(true);
+      }
+    } finally {
+      this.buscandoCandidatos.set(false);
+    }
+  }
+
+  /**
+   * Pre-carga el candidato elegido en el formulario — a diferencia del
+   * escaneo/entrada manual de ISBN, aquí el vendedor ya confirmó
+   * explícitamente ESTE libro exacto de una lista, así que se SOBRESCRIBEN
+   * todos los campos (título/autor/editorial/portada), incluso los que ya
+   * tenían un valor (ej. lo que el vendedor haya escrito para buscar). Si el
+   * candidato trae `isbn`, además lo completa y reutiliza
+   * `buscarYPrecargarMetadatos` con `sobrescribir: true` (ya existente) para
+   * refinar esos mismos campos y resolver el PVP con la ficha confirmada por
+   * ISBN — más precisa que los datos de la búsqueda de texto libre (ver
+   * ejemplo real: título/autor en mayúsculas correctas, editorial exacta).
+   * Si NO trae `isbn`, busca el PVP directamente por título/autor
+   * (`buscarPvpCandidatoSinIsbn`, abajo) — Lerner y Nacional primero,
+   * Tornamesa como último recurso; si ninguno encuentra precio, el PVP
+   * queda como estaba. Cierra la lista de candidatos tras seleccionar uno.
+   */
+  protected async seleccionarCandidato(candidato: CandidatoLibro): Promise<void> {
+    const controles = this.formulario.controls;
+
+    controles.titulo.setValue(candidato.titulo);
+    if (candidato.autor) {
+      controles.autor.setValue(candidato.autor);
+    }
+    if (candidato.editorial) {
+      controles.editorial.setValue(candidato.editorial);
+    }
+    if (candidato.portadaUrl) {
+      controles.portadaUrl.setValue(candidato.portadaUrl);
+    }
+
+    this.candidatos.set([]);
+    this.candidatosNoEncontrados.set(false);
+
+    if (candidato.isbn) {
+      controles.isbn.setValue(candidato.isbn);
+      await this.buscarYPrecargarMetadatos(candidato.isbn, { sobrescribir: true });
+      return;
+    }
+
+    await this.buscarPvpCandidatoSinIsbn(candidato);
+  }
+
+  /**
+   * Busca el PVP por título/autor (`MetadatosService.buscarPvp`) para un
+   * candidato SIN ISBN — a diferencia del flujo por ISBN, esta búsqueda solo
+   * resuelve precio, nunca título/autor/editorial/portada (ya precargados
+   * desde el propio candidato en `seleccionarCandidato`). Igual que ahí, se
+   * SOBRESCRIBE el PVP si la búsqueda encuentra uno (selección explícita del
+   * vendedor); si ninguna fuente encuentra precio, el campo queda como
+   * estaba (no hay nada más confiable con qué reemplazarlo).
+   */
+  private async buscarPvpCandidatoSinIsbn(candidato: CandidatoLibro): Promise<void> {
+    this.buscandoPvpCandidato.set(true);
+    try {
+      const pvp = await this.metadatosService.buscarPvp(candidato.titulo, candidato.autor ?? '');
+      if (pvp) {
+        this.formulario.controls.pvp.setValue(pvp);
+      }
+    } finally {
+      this.buscandoPvpCandidato.set(false);
     }
   }
 
@@ -235,6 +346,8 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * seguidos de la misma editorial) — agiliza la catalogación en serie.
    */
   private reiniciarFormulario(): void {
+    this.candidatos.set([]);
+    this.candidatosNoEncontrados.set(false);
     const porcentajeActual = this.formulario.controls.porcentajeDescuentoEditorial.value;
     this.formulario.reset({
       isbn: '',

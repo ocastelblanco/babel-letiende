@@ -76,4 +76,106 @@ describe('MetadatosService', () => {
 
     expect(await promesa).toEqual(metadatosVacios);
   });
+
+  describe('buscarCandidatos', () => {
+    const candidatos = [
+      {
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        editorial: 'Sudamericana',
+        portadaUrl: 'https://books.google.com/portada.jpg',
+        isbn: '9780307474728',
+      },
+    ];
+
+    it('devuelve [] sin llamar a la API cuando no hay ID Token', async () => {
+      const servicio = configurarPrueba(null);
+
+      const resultado = await servicio.buscarCandidatos('cien años de soledad', '');
+
+      expect(resultado).toEqual([]);
+    });
+
+    it('envía titulo y autor como parámetros de query con el ID Token real', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarCandidatos('cien años de soledad', 'García Márquez');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne(
+        '/api/metadatos/buscar?titulo=cien+a%C3%B1os+de+soledad&autor=Garc%C3%ADa+M%C3%A1rquez',
+      );
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-valido');
+      peticion.flush({ candidatos });
+
+      expect(await promesa).toEqual(candidatos);
+    });
+
+    it('omite el parámetro de query vacío', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarCandidatos('cien años de soledad', '  ');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/metadatos/buscar?titulo=cien+a%C3%B1os+de+soledad');
+      peticion.flush({ candidatos: [] });
+
+      expect(await promesa).toEqual([]);
+    });
+
+    it('devuelve [], sin lanzar, cuando /api/metadatos/buscar falla', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarCandidatos('titulo', '');
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/metadatos/buscar?titulo=titulo')
+        .flush({ error: 'Error interno del servidor.' }, { status: 500, statusText: 'Internal Server Error' });
+
+      expect(await promesa).toEqual([]);
+    });
+  });
+
+  describe('buscarPvp', () => {
+    it('devuelve null sin llamar a la API cuando no hay ID Token', async () => {
+      const servicio = configurarPrueba(null);
+
+      const resultado = await servicio.buscarPvp('aniquilación', 'houellebecq');
+
+      expect(resultado).toBeNull();
+    });
+
+    it('envía titulo y autor como parámetros de query con el ID Token real', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPvp('aniquilación', 'houellebecq');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/metadatos/buscar-pvp?titulo=aniquilaci%C3%B3n&autor=houellebecq');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-valido');
+      peticion.flush({ pvp: 120000 });
+
+      expect(await promesa).toBe(120000);
+    });
+
+    it('omite el parámetro de query vacío', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPvp('libro raro', '  ');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/metadatos/buscar-pvp?titulo=libro+raro');
+      peticion.flush({ pvp: null });
+
+      expect(await promesa).toBeNull();
+    });
+
+    it('devuelve null, sin lanzar, cuando /api/metadatos/buscar-pvp falla', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPvp('titulo', '');
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/metadatos/buscar-pvp?titulo=titulo')
+        .flush({ error: 'Error interno del servidor.' }, { status: 500, statusText: 'Internal Server Error' });
+
+      expect(await promesa).toBeNull();
+    });
+  });
 });

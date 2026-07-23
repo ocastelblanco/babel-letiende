@@ -25,6 +25,21 @@ const METADATOS_VACIOS: MetadatosLibro = {
 };
 
 /**
+ * Un candidato de la búsqueda por título/autor (`GET /api/metadatos/buscar`,
+ * TODO.md — para cuando el vendedor no tiene el ISBN a mano) — mismo
+ * contrato que `CandidatoLibro` en `server/api/services/api-letiende.ts`.
+ * `isbn` es `null` cuando la fuente no lo expuso; en ese caso el PVP queda
+ * manual tras seleccionar el candidato.
+ */
+export interface CandidatoLibro {
+  titulo: string;
+  autor: string | null;
+  editorial: string | null;
+  portadaUrl: string | null;
+  isbn: string | null;
+}
+
+/**
  * Cliente de `GET /api/metadatos/:isbn` (TODO.md, autocompletado de
  * metadatos al catalogar) — mismo patrón que `EstantesService`: peticiones
  * autenticadas con el ID Token actual. Lo consume `CatalogarLibroComponent`
@@ -56,6 +71,72 @@ export class MetadatosService {
       );
     } catch {
       return METADATOS_VACIOS;
+    }
+  }
+
+  /**
+   * Cliente de `GET /api/metadatos/buscar?titulo=&autor=` — para cuando el
+   * vendedor no tiene el ISBN a mano (TODO.md, Tarea de búsqueda por
+   * título/autor). Mismo criterio "nunca lanza" que `obtenerMetadatos`: ante
+   * sesión ausente, cualquier error HTTP o de red, devuelve `[]` — el
+   * llamador lo trata como "sin candidatos", sin bloquear el formulario.
+   */
+  async buscarCandidatos(titulo: string, autor: string): Promise<CandidatoLibro[]> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return [];
+    }
+
+    const parametros = new URLSearchParams();
+    if (titulo.trim() !== '') {
+      parametros.set('titulo', titulo.trim());
+    }
+    if (autor.trim() !== '') {
+      parametros.set('autor', autor.trim());
+    }
+
+    try {
+      const respuesta = await firstValueFrom(
+        this.http.get<{ candidatos: CandidatoLibro[] }>(`/api/metadatos/buscar?${parametros.toString()}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+      );
+      return respuesta.candidatos;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Cliente de `GET /api/metadatos/buscar-pvp?titulo=&autor=` — resuelve el
+   * PVP de un candidato SIN ISBN tras elegirlo en la lista de la búsqueda
+   * por título/autor (TODO.md). Mismo criterio "nunca lanza" que
+   * `obtenerMetadatos`/`buscarCandidatos`: ante sesión ausente, cualquier
+   * error HTTP o de red, devuelve `null` — el PVP queda manual.
+   */
+  async buscarPvp(titulo: string, autor: string): Promise<number | null> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return null;
+    }
+
+    const parametros = new URLSearchParams();
+    if (titulo.trim() !== '') {
+      parametros.set('titulo', titulo.trim());
+    }
+    if (autor.trim() !== '') {
+      parametros.set('autor', autor.trim());
+    }
+
+    try {
+      const respuesta = await firstValueFrom(
+        this.http.get<{ pvp: number | null }>(`/api/metadatos/buscar-pvp?${parametros.toString()}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+      );
+      return respuesta.pvp;
+    } catch {
+      return null;
     }
   }
 }
