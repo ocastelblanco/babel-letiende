@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 
@@ -32,7 +33,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-catalogo-publico',
-  imports: [PvpPipe],
+  imports: [PvpPipe, RouterLink],
   templateUrl: './catalogo-publico.component.html',
 })
 export class CatalogoPublicoComponent implements OnInit {

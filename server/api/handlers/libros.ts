@@ -98,6 +98,52 @@ export const handler: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayPro
   }
 };
 
+/** Datos del libro que expone `handlerDetalle`, con la ubicación física ya resuelta (`TODO.md`, ficha de libro). */
+interface LibroConEstante extends Libro {
+  /** `null` si el estante referenciado ya no existe (dato inconsistente, pero no debe romper la ficha) — CLAUDE.md A08. */
+  estante: { espacio: string; mueble: string; ubicacion: string } | null;
+}
+
+/**
+ * `GET /api/libros/:bookId` — ficha pública de un libro puntual
+ * (`tech-specs.md`, módulo `catalogo-publico/`; `TODO.md`, ficha de libro).
+ * Sin autenticación, mismo criterio que `GET /api/libros`: es de solo
+ * lectura, sin datos sensibles. A diferencia del listado, NO filtra por
+ * `cantidadDisponible` — un visitante que llega por un enlace directo o un
+ * resultado de buscador debe poder ver la ficha aunque el libro esté
+ * agotado en este momento.
+ *
+ * Resuelve la ubicación física (`PRD.md` §7, "Ve el PVP y la ubicación
+ * física... si está disponible") consultando `babel-estantes` por el
+ * `estanteId` del libro — un `GetItem` puntual adicional, no un `Scan`. Si
+ * el estante ya no existe (dato inconsistente), `estante` queda en `null`
+ * en vez de romper la respuesta.
+ */
+export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const bookId = event.pathParameters?.['bookId'];
+    if (!bookId) {
+      return respuestaJson(400, { error: 'Falta el bookId en la ruta.' });
+    }
+
+    const libro = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
+    if (!libro) {
+      return respuestaJson(404, { error: 'El libro no existe.' });
+    }
+
+    const estante = await obtenerPorClave<Estante>(nombreTablaEstantes(), { estanteId: libro.estanteId });
+
+    const libroConEstante: LibroConEstante = {
+      ...libro,
+      estante: estante ? { espacio: estante.espacio, mueble: estante.mueble, ubicacion: estante.ubicacion } : null,
+    };
+
+    return respuestaJson(200, libroConEstante);
+  } catch {
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
 /** Datos aceptados en el body de `POST /api/libros` — el resto lo genera el backend (ver `handlerCrear`). */
 interface DatosNuevoLibro {
   isbn: string | null;

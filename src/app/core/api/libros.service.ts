@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { Libro } from '../models/libro.model';
+import { Libro, LibroConEstante } from '../models/libro.model';
 
 /**
  * Cliente de `GET /api/libros` (tech-specs.md §5) — endpoint público, sin
@@ -39,6 +39,21 @@ export class LibrosService {
       this.errorSignal.set(true);
     } finally {
       this.cargandoSignal.set(false);
+    }
+  }
+
+  /**
+   * Llama `GET /api/libros/:bookId` (ficha pública, `TODO.md`) — endpoint
+   * público, sin autenticación. Nunca lanza: ante `404`, cualquier otro
+   * error HTTP o de red, devuelve `null` — el componente lo trata como
+   * "libro no encontrado" (mismo criterio "nunca lanza" que
+   * `cargarCatalogo`), sin distinguir la causa exacta ante el visitante.
+   */
+  async obtenerDetalle(bookId: string): Promise<LibroConEstante | null> {
+    try {
+      return await firstValueFrom(this.http.get<LibroConEstante>(`/api/libros/${bookId}`));
+    } catch {
+      return null;
     }
   }
 }
