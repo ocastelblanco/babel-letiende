@@ -79,4 +79,97 @@ describe('CatalogoPublicoComponent', () => {
     expect(texto).toContain('Gabriel García Márquez');
     expect(texto).toContain('$45.000');
   });
+
+  describe('búsqueda por título/autor/ISBN', () => {
+    const otroLibro: Libro = {
+      ...libroFalso,
+      bookId: 'book-2',
+      isbn: '9781234567897',
+      titulo: 'Aniquilación',
+      autor: 'Michel Houellebecq',
+    };
+
+    function campoBusqueda(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLInputElement {
+      return fixture.nativeElement.querySelector('input[type="search"]') as HTMLInputElement;
+    }
+
+    function escribirBusqueda(fixture: ComponentFixture<CatalogoPublicoComponent>, texto: string): void {
+      const campo = campoBusqueda(fixture);
+      campo.value = texto;
+      campo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('no muestra el campo de búsqueda mientras carga', () => {
+      const { fixture } = configurarPrueba({ libros: [], cargando: true, error: false });
+      expect(campoBusqueda(fixture)).toBeFalsy();
+    });
+
+    it('no muestra el campo de búsqueda en error', () => {
+      const { fixture } = configurarPrueba({ libros: [], cargando: false, error: true });
+      expect(campoBusqueda(fixture)).toBeFalsy();
+    });
+
+    it('no muestra el campo de búsqueda con el catálogo vacío', () => {
+      const { fixture } = configurarPrueba({ libros: [], cargando: false, error: false });
+      expect(campoBusqueda(fixture)).toBeFalsy();
+    });
+
+    it('sin término de búsqueda, muestra todo el catálogo', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso, otroLibro], cargando: false, error: false });
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Cien años de soledad');
+      expect(texto).toContain('Aniquilación');
+    });
+
+    it('filtra por título, sin distinguir mayúsculas ni tildes', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso, otroLibro], cargando: false, error: false });
+
+      escribirBusqueda(fixture, 'aniquilacion');
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Aniquilación');
+      expect(texto).not.toContain('Cien años de soledad');
+    });
+
+    it('filtra por autor', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso, otroLibro], cargando: false, error: false });
+
+      escribirBusqueda(fixture, 'houellebecq');
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Aniquilación');
+      expect(texto).not.toContain('Cien años de soledad');
+    });
+
+    it('filtra por ISBN', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso, otroLibro], cargando: false, error: false });
+
+      escribirBusqueda(fixture, '9781234567897');
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Aniquilación');
+      expect(texto).not.toContain('Cien años de soledad');
+    });
+
+    it('muestra un mensaje neutral cuando la búsqueda no encuentra ningún libro', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso, otroLibro], cargando: false, error: false });
+
+      escribirBusqueda(fixture, 'libro que no existe');
+
+      expect(fixture.nativeElement.textContent).toContain('No se encontraron libros para tu búsqueda');
+    });
+
+    it('vaciar el término de búsqueda vuelve a mostrar todo el catálogo', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso, otroLibro], cargando: false, error: false });
+
+      escribirBusqueda(fixture, 'aniquilacion');
+      escribirBusqueda(fixture, '');
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Cien años de soledad');
+      expect(texto).toContain('Aniquilación');
+    });
+  });
 });
