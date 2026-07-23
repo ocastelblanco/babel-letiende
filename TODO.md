@@ -2,28 +2,11 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Prioridad de selección aplicada:** se completó `GET /api/ventas/exportar` (XLSX) + `ReportesVentasComponent` — con esto, todos los ítems de prioridad Media del roadmap con backend ya disponible quedan cubiertos. Su resumen está en `MEMORY.md` §2. `DESIGN.md` propio de Babel (antes Tarea 2, sin cambios de contenido) sube a **Tarea 1**. Se agrega como **Tarea 2** la búsqueda por título/autor + UI de selección de candidato en el flujo de catalogación — quedó **explícitamente diferida** de la iniciativa de obtención automatizada de info de libros (`plan-obtencion-info-libros.md`, ver `MEMORY.md` §2, "queda diferida, a propósito"), prioridad Alta (`PRD.md` §5.2, mismo paso del flujo crítico que ya se automatizó por ISBN). Es la última pieza pendiente de esa iniciativa. Ambas tareas son independientes entre sí (una es solo documentación, la otra backend+frontend).
+**Prioridad de selección aplicada:** se completó `DESIGN.md` propio de Babel (PR #46) — con esto, la Tarea 1 anterior queda cerrada. La Tarea 2 anterior (búsqueda por título/autor + selección de candidato al catalogar) sube a **Tarea 1**, sin cambios de alcance. Se agrega como **Tarea 2** la búsqueda/filtro en el catálogo público (`PRD.md` §5.7, prioridad Alta, parte de "Catálogo público de consulta" — la única pieza de ese ítem del roadmap que sigue sin implementar): `CatalogoPublicoComponent` hoy solo lista todo el catálogo sin filtro (comentario explícito en `catalogo-publico.component.ts`: "Sin filtros de texto/autor/tema todavía"), y `GET /api/libros` no acepta ningún parámetro de búsqueda. Ambas tareas son independientes entre sí (una es el flujo de catalogación para el vendedor, la otra es el catálogo público para cualquier visitante).
 
 ---
 
-## Tarea 1 — [DOCS]: `DESIGN.md` propio de Babel
-
-**Origen:** `CLAUDE.md` §4 ("Se recomienda crear un `DESIGN.md` propio de Babel adaptando estos tokens a los patrones específicos del catálogo de libros"). La identidad visual hereda la paleta/tipografía de Comandante (`primary #230C00`, `secondary #E8630A`, `tertiary #00B7A3`, `neutral #FFE7B3`, Poppins — Angellya solo para el logo, decisión ya registrada en `MEMORY.md` §7), pero nunca se documentó cómo esos tokens se traducen en los patrones reales ya construidos (formularios de administración, tarjetas, estados de carga/error, etc.). Con 5 pantallas CRUD/reportes de administración + catálogo público + catalogación + login ya implementadas, hay suficiente superficie real para documentar patrones concretos en vez de solo tokens heredados. Tarea solo de documentación, sin cambios de código. Independiente de la Tarea 2.
-
-**Qué hacer:**
-1. Releer los componentes ya construidos (`gestion-estantes`, `gestion-sitios-scraping`, `gestion-usuarios`, `gestion-descuentos-editoriales`, `reportes-ventas`, `catalogar-libro`, `catalogo-publico`, `login`, `admin-inicio`, `cambiar-estante`) y extraer los patrones Tailwind que se repiten literalmente en todos (clases exactas, no reinventarlas): tarjetas (`rounded-2xl bg-white p-4/p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]`), botones primarios/secundarios/de peligro, inputs de formulario reactivo, mensajes de éxito/error, estados vacío/carga, el patrón "formulario único crear/editar oculto por defecto" ya establecido en los últimos componentes de administración.
-2. Documentar los tokens de marca ya confirmados (`CLAUDE.md` §4, `MEMORY.md` §7): paleta exacta, Poppins como única tipografía de interfaz (Angellya exclusiva del logo, con el razonamiento ya registrado), formato de precios colombiano (`$45.000`).
-3. Escribir `DESIGN.md` en la raíz del repo (mismo nivel que `CLAUDE.md`/`PRD.md`/`tech-specs.md`) con estas secciones como mínimo: identidad de marca (colores/tipografía), componentes reutilizables documentados con su clase Tailwind exacta y un ejemplo de uso real (archivo:línea de un componente existente), el patrón de formulario único crear/editar, y cualquier convención de espaciado/tamaño que se repita (ej. `max-w-2xl`, `px-4 py-8`).
-4. No inventar patrones nuevos ni proponer cambios de diseño — este documento describe lo que YA existe en el código, para que futuras tareas lo repliquen consistentemente en vez de reinventar estilos ligeramente distintos cada vez (ej. el pequeño desvío de tamaño de tarjeta que ya existe entre algunos componentes, si lo hay, documentarlo como está, no "corregirlo" silenciosamente).
-
-**Definition of done:**
-- [ ] `DESIGN.md` existe en la raíz del repo, con secciones de marca + componentes reutilizables + patrones de formulario, cada patrón citando al menos un archivo:línea real como ejemplo
-- [ ] No se modificó ningún archivo de código (`.ts`/`.html`) — solo el nuevo `.md`
-- [ ] Revisar y actualizar la referencia cruzada en `CLAUDE.md` §4 si hace falta (ej. quitar el "se recomienda crear" ahora que existe)
-
----
-
-## Tarea 2 — [FEATURE]: búsqueda por título/autor + UI de selección de candidato al catalogar
+## Tarea 1 — [FEATURE]: búsqueda por título/autor + UI de selección de candidato al catalogar
 
 **Origen:** `PRD.md` §5.2 (mismo paso del flujo de catalogación ya automatizado por ISBN), pieza final —**diferida a propósito**— de la iniciativa de obtención automatizada de info de libros (ver nota en `plan-obtencion-info-libros.md` y `MEMORY.md` §2: "queda diferida, a propósito, la búsqueda por título/autor + UI de selección de candidato"). Hoy, si el vendedor no tiene el ISBN (libro sin código de barras legible, o directamente sin ISBN), no hay ningún camino automático — debe llenar todo a mano. Esta tarea cierra ese hueco.
 
@@ -44,3 +27,25 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 - [ ] `npm run build`, `npm run build:api`, `npm test -- --watch=false`, `npm run test:api` pasan sin errores
 - [ ] El vendedor puede buscar por título/autor sin ISBN, ver una lista de candidatos con portada, y elegir uno para pre-cargar el formulario
 - [ ] Verificado en vivo contra `staging` con un libro real sin ISBN a mano
+
+---
+
+## Tarea 2 — [FEATURE]: búsqueda y filtro en el catálogo público
+
+**Origen:** `PRD.md` §5.7 ("Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, autor, tema (si los metadatos lo permiten) o ISBN") y `tech-specs.md` (el módulo `catalogo-publico/` se describe como "Búsqueda y ficha de libro (SSR, sin auth)"). "Catálogo público de consulta (SSR, sin autenticación)" es prioridad Alta en el roadmap (`PRD.md` §6) y hoy solo está parcialmente implementado: `CatalogoPublicoComponent` lista **todo** el catálogo sin ningún filtro (comentario explícito en el propio código: `catalogo-publico.component.ts` — "Sin filtros de texto/autor/tema todavía (fuera de alcance, ver `TODO.md`)"), y `GET /api/libros` no acepta ningún parámetro de búsqueda. Con el caso de uso fundacional de 3.000+ libros, listar todo sin poder buscar hace que el catálogo público sea poco usable en la práctica.
+
+**Qué investigar/decidir antes de implementar (no asumir, confirmar contra el código real):**
+- Si el filtro debe resolverse **en el cliente** (sobre el `libros()` signal que `LibrosService` ya carga completo desde `GET /api/libros`, sin cambios de backend) o **en el backend** (nuevos parámetros de query en `GET /api/libros`, con `Scan` + filtro en memoria como ya se hace en `GET /api/ventas` — ver `MEMORY.md` §2, PR #26 — dado que DynamoDB no soporta bien búsqueda de texto libre). Con 3.000+ libros cargados de una vez hoy (sin paginación), evaluar si ese volumen ya es un problema de payload/rendimiento independiente del filtro, y si esta tarea debe resolverlo de paso o dejarlo para otra tarea.
+- "Tema", mencionado en el PRD, no existe como campo en el modelo `Libro` actual (`isbn`, `titulo`, `autor`, `editorial`, `portadaUrl`, `pvp`, `estanteId`, etc. — ver `server/api/handlers/libros.ts`) — confirmar si "tema" ya no aplica (los metadatos de Google Books vía `api.letiende.co` no lo traen, según lo verificado en la tarea de autocompletado por ISBN) o si el alcance de esta tarea es solo nombre/autor/ISBN.
+- Si la "ficha de libro" (página de detalle por libro, mencionada en `tech-specs.md` y en el requisito de SEO de `PRD.md` §8) es parte de esta misma tarea o una tarea aparte — hoy no existe ninguna ruta de detalle por libro, solo el listado en `/`.
+
+**Qué hacer (orden sugerido, ajustar tras la investigación del punto anterior):**
+1. Decidir cliente vs. backend para el filtro (ver arriba) y, si aplica, extender `GET /api/libros` con los parámetros de búsqueda decididos.
+2. Frontend: agregar un campo de búsqueda (y filtros si aplica) a `CatalogoPublicoComponent`, actualizando el listado según el texto ingresado — mismo criterio de UX mobile-first que el resto del catálogo público.
+3. Cubrir con tests backend (si hay cambios de API) y frontend (búsqueda con resultados, sin resultados, término vacío).
+
+**Definition of done (ajustar tras la investigación del punto anterior, este es el mínimo esperado):**
+- [ ] Decisión cliente/backend para el filtro documentada (comentario en el código o `ADR`, según el impacto)
+- [ ] `npm run build`, `npm run build:api` (si aplica), `npm test -- --watch=false`, `npm run test:api` (si aplica) pasan sin errores
+- [ ] Un visitante público puede buscar un libro por nombre/autor/ISBN desde `/` y ver el resultado filtrado
+- [ ] Verificado en vivo contra `staging`
