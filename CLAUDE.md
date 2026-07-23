@@ -49,7 +49,7 @@ El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000
 - **Estructura de componentes:** Componentes Standalone obligatorios. Estilos y plantillas en línea para componentes muy pequeños (< 100 líneas); archivos separados (`.html`, `.css`) para componentes grandes.
 - **Tipado:** TypeScript estricto. Prohibido el uso de `any`.
 - **Precios:** formato colombiano `$45.000` (punto como separador de miles, sin decimales para COP).
-- **Identidad visual:** hereda la filosofía y el sistema de marca de **Comandante** (`ocastelblanco/comandante-letiende`) — paleta Le Tiende (`primary #230C00`, `secondary #E8630A`, `tertiary #00B7A3`, `neutral #FFE7B3`), tipografías Angellya (marca) + Poppins (interfaz). Se recomienda crear un `DESIGN.md` propio de Babel adaptando estos tokens a los patrones específicos del catálogo de libros (ver Tarea sugerida en `TODO.md`/roadmap).
+- **Identidad visual:** hereda la filosofía y el sistema de marca de **Comandante** (`ocastelblanco/comandante-letiende`) — paleta Le Tiende (`primary #230C00`, `secondary #E8630A`, `tertiary #00B7A3`, `neutral #FFE7B3`), tipografías Angellya (marca) + Poppins (interfaz). Ver `DESIGN.md` para el detalle de componentes reutilizables (tarjetas, botones, inputs, mensajes, patrón de formulario único crear/editar) con las clases Tailwind exactas ya usadas en el código.
 
 ---
 
