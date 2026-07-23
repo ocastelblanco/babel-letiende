@@ -1,0 +1,75 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="mb-2 text-2xl font-bold text-primary">Reportes de ventas</h1>
+    <p class="mb-6 text-sm text-primary/70">
+      Exporta las ventas a un archivo Excel. Todos los filtros son opcionales — si no eliges ninguno, se exportan
+      todas las ventas registradas.
+    </p>
+
+    <form
+      [formGroup]="formulario"
+      (ngSubmit)="exportar()"
+      class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+    >
+      @if (mensajeExito()) {
+        <p class="text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+      }
+      @if (mensajeError()) {
+        <p class="text-sm text-danger">{{ mensajeError() }}</p>
+      }
+
+      <div>
+        <label for="desde" class="mb-1 block text-sm font-semibold text-primary">Desde</label>
+        <input
+          id="desde"
+          type="date"
+          formControlName="desde"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+      </div>
+
+      <div>
+        <label for="hasta" class="mb-1 block text-sm font-semibold text-primary">Hasta</label>
+        <input
+          id="hasta"
+          type="date"
+          formControlName="hasta"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+      </div>
+
+      <div>
+        <label for="editorial" class="mb-1 block text-sm font-semibold text-primary">Editorial</label>
+        <input
+          id="editorial"
+          type="text"
+          formControlName="editorial"
+          placeholder="Planeta"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+      </div>
+
+      <div>
+        <label for="formaDePago" class="mb-1 block text-sm font-semibold text-primary">Forma de pago</label>
+        <select
+          id="formaDePago"
+          formControlName="formaDePago"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        >
+          <option value="">Todas</option>
+          @for (forma of formasDePago; track forma) {
+            <option [value]="forma">{{ forma }}</option>
+          }
+        </select>
+      </div>
+
+      <button
+        type="submit"
+        class="flex h-12 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        [disabled]="exportando()"
+      >
+        {{ exportando() ? 'Exportando…' : 'Exportar a Excel' }}
+      </button>
+    </form>
+  </div>
+</div>

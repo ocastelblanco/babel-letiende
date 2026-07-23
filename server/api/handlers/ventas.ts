@@ -3,6 +3,7 @@ import type {
   APIGatewayProxyHandlerV2,
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
+import * as XLSX from 'xlsx';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import { decrementarSiPositivo, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
 
@@ -272,12 +273,27 @@ export function validarFiltrosVentas(
 }
 
 /**
- * `GET /api/ventas` — lista/filtra ventas para reportes (tech-specs.md §5,
- * "Admin"). Exige rol `administrador` exclusivamente. `desde`/`hasta`/
- * `formaDePago` filtran directamente sobre los campos de `Venta`; `editorial`
- * filtra contra `Libro.editorial`, resuelto por `bookId` únicamente para las
- * ventas que ya pasaron los demás filtros (evita un `Scan` completo de
- * `babel-libros`, solo `GetItem` puntuales — CLAUDE.md A05).
+ * Una `Venta` con `titulo`/`editorial` resueltos desde `Libro` por `bookId` —
+ * usada internamente por `consultarVentasFiltradas` (necesaria siempre para
+ * `handlerExportar`; `handlerListar` la despoja de estos dos campos antes de
+ * responder, para no romper su contrato JSON ya establecido).
+ */
+interface VentaConLibro extends Venta {
+  tituloLibro: string;
+  editorialLibro: string;
+}
+
+/**
+ * Filtra y enriquece ventas — lógica compartida por `handlerListar` y
+ * `handlerExportar` (evita duplicar el `escanearTodo` + filtrado + `GetItem`
+ * puntual de `Libro` por `bookId` en dos handlers, TODO.md Tarea 1).
+ * `desde`/`hasta`/`formaDePago` filtran directamente sobre los campos de
+ * `Venta`; `editorial` filtra contra `Libro.editorial`, resuelto por
+ * `bookId` únicamente para las ventas que ya pasaron los demás filtros
+ * (evita un `Scan` completo de `babel-libros`, solo `GetItem` puntuales —
+ * CLAUDE.md A05). El título/editorial resuelto se expone siempre en el
+ * resultado (con `'—'` de respaldo si el `Libro` ya no existe — CLAUDE.md
+ * A08, un `bookId` histórico sin `Libro` no debe romper el reporte).
  *
  * Filtra con `Scan` + filtrado en memoria (`escanearTodo`) a propósito:
  * `babel-ventas` no tiene ningún GSI (el `vendidoEn-index` original, con
@@ -286,6 +302,48 @@ export function validarFiltrosVentas(
  * y a este volumen (miles de ventas) el `Scan` es el mismo criterio ya
  * aceptado para tablas pequeñas que `estantes.ts`/`editoriales-descuentos.ts`
  * (`MEMORY.md` §6).
+ */
+async function consultarVentasFiltradas(filtros: FiltrosVentas): Promise<VentaConLibro[]> {
+  const { desde, hasta, editorial, formaDePago } = filtros;
+
+  let ventas = await escanearTodo<Venta>(nombreTablaVentas());
+
+  if (desde) {
+    ventas = ventas.filter((venta) => venta.vendidoEn >= desde);
+  }
+  if (hasta) {
+    ventas = ventas.filter((venta) => venta.vendidoEn <= hasta);
+  }
+  if (formaDePago) {
+    ventas = ventas.filter((venta) => venta.formaDePago === formaDePago);
+  }
+
+  const bookIds = [...new Set(ventas.map((venta) => venta.bookId))];
+  const libros = await Promise.all(
+    bookIds.map((bookId) => obtenerPorClave<Libro>(nombreTablaLibros(), { bookId })),
+  );
+  const libroPorBookId = new Map(bookIds.map((bookId, indice) => [bookId, libros[indice] ?? null]));
+
+  let ventasConLibro = ventas.map((venta) => ({ venta, libro: libroPorBookId.get(venta.bookId) ?? null }));
+
+  if (editorial) {
+    ventasConLibro = ventasConLibro.filter(({ libro }) => (libro?.editorial ?? null) === editorial);
+  }
+
+  return ventasConLibro.map(({ venta, libro }) => ({
+    ...venta,
+    tituloLibro: libro?.titulo ?? '—',
+    editorialLibro: libro?.editorial ?? '—',
+  }));
+}
+
+/**
+ * `GET /api/ventas` — lista/filtra ventas para reportes (tech-specs.md §5,
+ * "Admin"). Exige rol `administrador` exclusivamente. Reusa
+ * `consultarVentasFiltradas` pero despoja `tituloLibro`/`editorialLibro`
+ * antes de responder — mantiene exactamente el mismo contrato JSON
+ * (`Venta[]` planas) que ya consume cualquier cliente existente de este
+ * endpoint.
  */
 export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -298,29 +356,68 @@ export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
     if (!validacion.valido) {
       return respuestaJson(400, { error: validacion.error });
     }
-    const { desde, hasta, editorial, formaDePago } = validacion.filtros;
 
-    let ventas = await escanearTodo<Venta>(nombreTablaVentas());
-
-    if (desde) {
-      ventas = ventas.filter((venta) => venta.vendidoEn >= desde);
-    }
-    if (hasta) {
-      ventas = ventas.filter((venta) => venta.vendidoEn <= hasta);
-    }
-    if (formaDePago) {
-      ventas = ventas.filter((venta) => venta.formaDePago === formaDePago);
-    }
-    if (editorial) {
-      const bookIds = [...new Set(ventas.map((venta) => venta.bookId))];
-      const libros = await Promise.all(
-        bookIds.map((bookId) => obtenerPorClave<Libro>(nombreTablaLibros(), { bookId })),
-      );
-      const editorialPorBookId = new Map(bookIds.map((bookId, indice) => [bookId, libros[indice]?.editorial ?? null]));
-      ventas = ventas.filter((venta) => editorialPorBookId.get(venta.bookId) === editorial);
-    }
+    const ventasConLibro = await consultarVentasFiltradas(validacion.filtros);
+    const ventas: Venta[] = ventasConLibro.map(({ tituloLibro: _tituloLibro, editorialLibro: _editorialLibro, ...venta }) => venta);
 
     return respuestaJson(200, ventas);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `GET /api/ventas/exportar` — genera un archivo `.xlsx` con las ventas
+ * filtradas (tech-specs.md §5.5, TODO.md Tarea 1). Exige rol
+ * `administrador` exclusivamente, mismos filtros que `handlerListar`
+ * (reusa `validarFiltrosVentas`/`consultarVentasFiltradas`). Un `Libro`
+ * faltante para un `bookId` histórico nunca rompe el reporte completo —
+ * `consultarVentasFiltradas` ya resuelve ese caso con `'—'` de respaldo
+ * (CLAUDE.md A08). Devuelve el archivo como `body` en base64
+ * (`isBase64Encoded: true`) — API Gateway lo decodifica y sirve como binario.
+ */
+export const handlerExportar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const email = await exigirAdministrador(event.headers['authorization']);
+    if (!email) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para exportar reportes de ventas en Babel.' });
+    }
+
+    const validacion = validarFiltrosVentas(event.queryStringParameters);
+    if (!validacion.valido) {
+      return respuestaJson(400, { error: validacion.error });
+    }
+
+    const ventas = await consultarVentasFiltradas(validacion.filtros);
+
+    const filas = ventas.map((venta) => ({
+      'Fecha de venta': venta.vendidoEn,
+      Título: venta.tituloLibro,
+      Editorial: venta.editorialLibro,
+      ISBN: venta.isbn ?? '—',
+      PVP: venta.pvp,
+      Costo: venta.costoLibro,
+      Utilidad: venta.utilidad,
+      'Forma de pago': venta.formaDePago,
+    }));
+
+    const libroExcel = XLSX.utils.book_new();
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    XLSX.utils.book_append_sheet(libroExcel, hoja, 'Ventas');
+    const contenidoBase64 = XLSX.write(libroExcel, { type: 'base64', bookType: 'xlsx' }) as string;
+
+    return {
+      statusCode: 200,
+      isBase64Encoded: true,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="reporte-ventas.xlsx"',
+      },
+      body: contenidoBase64,
+    };
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });
