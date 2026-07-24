@@ -2,67 +2,65 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Prioridad de selección aplicada (2026-07-24):** se completó el modelo jerárquico Espacio→Mueble→Ubicación (PR #54, Tarea B del backlog de `ajustes-finales.md`) — la pieza fundacional de la que dependen las 5 tareas restantes del backlog. Sigue vigente la decisión del usuario: **no se retoma el plan de modo offline ni el despliegue a producción hasta cerrar todo el conjunto de `ajustes-finales.md`.** Se promueven las siguientes 2 tareas del backlog ordenado (`ajustes-finales.md` §"Backlog ordenado de implementación"): Tarea C (migrar `Libro.estanteId` → `ubicacionId`) sube a **Tarea 1**; Tarea D (vender desde la ficha) sube a **Tarea 2** — depende de que la Tarea 1 esté fusionada primero (necesita el campo ya migrado), mismo criterio de dependencia secuencial ya aplicado anteriormente en este backlog.
+**Prioridad de selección aplicada (2026-07-24):** se completaron la Tarea C (PR #56, migrar `Libro.estanteId`→`ubicacionId`) y la Tarea D (PR #57, vender desde la ficha) del backlog de `ajustes-finales.md`. Sigue vigente la decisión del usuario: **no se retoma el plan de modo offline ni el despliegue a producción hasta cerrar todo el conjunto de `ajustes-finales.md`.** Se promueven las siguientes 2 tareas del backlog ordenado (`ajustes-finales.md` §"Backlog ordenado de implementación"): Tarea E (área "Gestionar") sube a **Tarea 1** — sus dependencias (B y C) ya están fusionadas, sin bloqueo; Tarea F (filtrado público por ubicación) sube a **Tarea 2** — depende solo de B (ya fusionada), así que puede avanzar en paralelo con la Tarea 1 sin conflicto real de archivos (una toca `/gestionar` y `CatalogarLibroComponent`, la otra `CatalogoPublicoComponent`).
 
 ---
 
-## Tarea 1 — [FEATURE]: migrar `Libro.estanteId` → `Libro.ubicacionId`
+## Tarea 1 — [FEATURE]: área "Gestionar" (Catalogar rediseñado + Editar/Eliminar libro)
 
-**Origen:** `ajustes-finales.md` Tarea C. Con el modelo Espacio→Mueble→Ubicación ya construido (PR #54, `/api/espacios`, `/api/muebles`, `/api/ubicaciones`), el siguiente paso es que los libros catalogados empiecen a usarlo — hoy `Libro.estanteId` sigue apuntando al modelo antiguo (`babel-estantes`, todavía intacto porque `CatalogarLibroComponent`/`CambiarEstanteComponent` dependen de él). Esta tarea es el punto de corte: después de ella, nada en el proyecto debe seguir escribiendo en `babel-estantes`.
+**Origen:** `ajustes-finales.md` Tarea E. Reemplaza `/libros` (`ListaLibrosCatalogadosComponent`) y `/catalogar` como destinos separados por una única ruta `/gestionar` con 2 pestañas. También reemplaza de verdad el placeholder mínimo de la Tarea C (`CambiarUbicacionComponent`, ruta `/libros/:bookId/ubicacion`), que solo permitía cambiar la ubicación — esta tarea permite editar el libro completo.
 
-**Qué ya existe y se puede reutilizar (confirmado en PR #54, no adivinado):**
-- `GET /api/ubicaciones` (público, sin auth) ya devuelve `{ ubicacionId, muebleId, nombre }[]` — sirve para poblar cualquier `<select>` de ubicación.
-- `GET /api/muebles`/`GET /api/espacios` (también públicos) ya permiten resolver nombre de mueble/espacio a partir de una `Ubicacion`, para mostrarlos como campos independientes.
-- La ficha de libro (`/libro/:bookId`, `handlerDetalle` en `server/api/handlers/libros.ts`) ya resuelve y muestra la ubicación física del libro — hoy contra `babel-estantes` (`estante: { espacio, mueble, ubicacion }`), concatenados visualmente en el frontend con `—` entre cada campo (el hallazgo original de `ajustes-finales.md`: "no como una secuencia {ESPACIO} - {MUEBLE} - {UBICACION}"). Esta tarea cambia la fuente de datos (Espacio/Mueble/Ubicación reales, no texto libre) Y corrige la presentación (campos independientes).
+**Qué ya existe y se puede reutilizar (confirmado en el código, no adivinado):**
+- `UbicacionFisicaService` (`src/app/core/api/ubicacion-fisica.service.ts`) ya expone `cargarEspacios()`/`cargarMuebles()`/`cargarUbicaciones()` + signals `espacios`/`muebles`/`ubicaciones` (endpoints públicos, sin token) — sirve directamente para la cascada Espacio→Mueble→Ubicación del panel "Ubicación del libro", sin crear ningún endpoint nuevo.
+- `EditorialesDescuentosService.descuentos` ya expone `{ editorial, porcentajePorDefecto, porcentajesDisponibles }[]` — sirve para autocompletar `porcentajeDescuentoEditorial` al catalogar por coincidencia de nombre de editorial (comparación insensible a mayúsculas/tildes, mismo criterio `normalize('NFD')` ya usado en la búsqueda del catálogo público, `catalogo-publico.component.ts`).
+- `CatalogarLibroComponent` ya tiene resuelto todo el flujo de búsqueda/escaneo (ISBN por cámara, autocompletado por ISBN vía `api.letiende.co`, búsqueda por título/autor con selección de candidato) — nada de eso se toca; esta tarea solo agrega el panel de ubicación ANTES del formulario y reemplaza su `<select>` plano de Ubicación (Tarea C) por la cascada persistente.
+- No existe todavía `PUT`/`DELETE /api/libros/:bookId` en el backend (`server/api/handlers/libros.ts` solo tiene `handler`, `handlerDetalle`, `handlerCrear`, `handlerCambiarUbicacion`) — hay que crearlos.
 
 **Qué hacer (orden sugerido):**
-1. Backend: `POST /api/libros` (`handlerCrear` en `libros.ts`) — cambiar `estanteId` por `ubicacionId` en `DatosNuevoLibro`/`validarDatosNuevoLibro`; validar que el `ubicacionId` exista en `babel-ubicaciones` antes de guardar (mismo criterio que `handlerMuebles`/`handlerUbicaciones` validan a su padre). Actualizar `Libro` (modelo backend y `src/app/core/models/libro.model.ts`) para reemplazar `estanteId` por `ubicacionId`.
-2. Backend: la ficha (`handlerDetalle`) debe resolver `ubicacionId` → `Ubicacion` → `Mueble` → `Espacio` (3 `GetItem` puntuales, no `Scan`) y devolver los 3 nombres como campos independientes en la respuesta (ej. `{ espacio: string, mueble: string, ubicacion: string } | null`, mismo shape final que hoy pero con la fuente de datos correcta).
-3. Frontend: la ficha (`LibroDetalleComponent`) debe mostrar Espacio/Mueble/Ubicación como 3 líneas o campos separados, no concatenados con `—` (corrige el HTML actual).
-4. Eliminar `handlerCambiarEstante` (`server/api/handlers/libros.ts`), la ruta `PATCH /api/libros/:bookId/estante`, `CambiarEstanteComponent` y la ruta `/libros/:bookId/estante` — quedan reemplazados por la pestaña "Editar" del área "Gestionar" (Tarea E, todavía no activa). Si Tarea E no está lista aún, evaluar dejar un placeholder mínimo o coordinar con el usuario si conviene esperar — **no dejar al vendedor sin ninguna forma de cambiar la ubicación de un libro ya catalogado** entre esta tarea y la Tarea E.
-5. `CatalogarLibroComponent`: reemplazar el `<select>` de estante (que usa `EstantesService`) por selects de Ubicación (directamente, sin cascada Espacio→Mueble todavía — esa mejora de UX específica, con el panel "Ubicación del libro" persistente entre catalogaciones, es la Tarea E; esta tarea C solo necesita que el campo grabado sea `ubicacionId` válido).
-6. Eliminar `EstantesService`, `server/api/handlers/estantes.ts`, el CRUD `/api/estantes`, la tabla `babel-estantes` de `serverless.yml`, y el modelo `Estante` (`estante.model.ts`) — ya nada los usa tras los pasos anteriores.
-7. Cubrir con tests backend y frontend (catalogar con `ubicacionId` válido/inválido, ficha con campos independientes, ausencia de estante/ubicación resuelta).
+1. Backend: `PUT /api/libros/:bookId` (nuevo handler en `libros.ts`) — edita `ubicacionId`, `cantidadTotal` (incluido bajar a 0), `pvp`, `porcentajeDescuentoEditorial`; recalcula `costo`/`utilidadCatalogo` igual que `handlerCrear` si cambia el descuento editorial; valida `ubicacionId` contra `babel-ubicaciones` (mismo criterio que `handlerCrear`). Exige `vendedor`/`administrador` (`CLAUDE.md` A01). Reemplaza a `handlerCambiarUbicacion` (que queda obsoleto: este endpoint ya cubre ese caso y más) — eliminar `handlerCambiarUbicacion`, la ruta `PATCH /api/libros/:bookId/ubicacion` y su rol IAM de `serverless.yml`.
+2. Backend: `DELETE /api/libros/:bookId` (nuevo handler) — exige **exclusivamente `administrador`** (a diferencia de `PUT`, mismo criterio de la nota del documento). Sin salvaguarda especial de negocio más allá de que el `bookId` exista (`404` si no) — a diferencia de ADR-009 (usuarios), no hay "auto-eliminación" que proteger aquí.
+3. Frontend: nueva ruta `/gestionar` (`RoleGuard(['vendedor','administrador'])`, `RenderMode.Client` como el resto de rutas autenticadas) con 2 pestañas:
+   - **Catalogar:** panel "Ubicación del libro" (cascada Espacio→Mueble→Ubicación con `UbicacionFisicaService`) ANTES del formulario de `CatalogarLibroComponent`; a diferencia de hoy, **no se limpia al guardar** — solo se limpia el formulario de datos del libro (título/autor/ISBN/PVP/etc.), permitiendo catalogar varios libros seguidos de la misma ubicación sin repetir la selección. Autocompletar `porcentajeDescuentoEditorial` cuando el campo `editorial` coincida con una fila de `EditorialesDescuentosService.descuentos` (sin pisar si el vendedor ya lo modificó manualmente — mismo criterio "nunca pisa lo ya escrito" que el resto del formulario).
+   - **Editar:** lista de libros catalogados con filtro por título/autor/ISBN (reutilizar el lector de código de barras ya construido en `CatalogarLibroComponent` para el filtro por ISBN) — fuente de datos: `LibrosService` (mismo `Signal` del catálogo público, ya carga todo) o un nuevo listado si hace falta incluir libros con `cantidadDisponible = 0` (el catálogo público los excluye — confirmar cuál lista debe usarse aquí, probablemente todos, ya que es la pantalla de administración del inventario, no del catálogo). Cada fila con botón "Editar" → formulario con Espacio/Mueble/Ubicación (misma cascada)/cantidad/PVP/descuento editorial. Botón "ELIMINAR LIBRO" visible **solo para `administrador`** (mismo patrón de guard visual que `GestionUsuariosComponent`/ADR-009), con `confirm()` antes de llamar `DELETE`.
+4. Header (`App`): cambiar el texto del vínculo de "Mi cuenta" a "Gestionar" y su destino de `/libros` a `/gestionar` (`src/app/app.html`, línea del `<a routerLink="/libros">`).
+5. Eliminar `ListaLibrosCatalogadosComponent`, la ruta `/libros`, `CambiarUbicacionComponent` y la ruta `/libros/:bookId/ubicacion` — todo reemplazado por lo anterior.
+6. Cubrir con tests backend (`PUT`: válido/`ubicacionId` inválido/rol insuficiente; `DELETE`: válido/`404`/rol distinto de administrador) y frontend (cascada de ubicación persistente entre catalogaciones, autocompletado de descuento editorial, filtro de la pestaña Editar, guard visual de "ELIMINAR LIBRO").
 
 **Definition of done:**
 - [ ] `npm run build`, `npm run build:api`, `npm test -- --watch=false`, `npm run test:api` pasan sin errores
-- [ ] Un libro se cataloga con una `Ubicacion` real (no un estante de texto libre)
-- [ ] La ficha de un libro muestra Espacio/Mueble/Ubicación como campos independientes, no concatenados
-- [ ] `EstantesService`/`estantes.ts`/`babel-estantes`/`Estante` ya no existen en el proyecto
-- [ ] El vendedor sigue teniendo alguna forma de cambiar la ubicación de un libro ya catalogado (aunque sea provisional hasta la Tarea E)
+- [ ] El panel de ubicación persiste entre catalogaciones seguidas sin tener que volver a seleccionarlo
+- [ ] El campo de descuento editorial se autocompleta al coincidir el nombre de la editorial ya configurada
+- [ ] Un vendedor/administrador puede editar Espacio/Mueble/Ubicación/cantidad/PVP/descuento de un libro ya catalogado desde `/gestionar`
+- [ ] Solo un administrador ve y puede usar "ELIMINAR LIBRO"
+- [ ] El vínculo del header dice "Gestionar" y apunta a `/gestionar`; `/libros` y `/libros/:bookId/ubicacion` ya no existen
 - [ ] Verificado en vivo contra `staging`
 
 ---
 
-## Tarea 2 — [FEATURE]: vender desde la ficha del libro
+## Tarea 2 — [FEATURE]: filtrado público por ubicación (Espacio/Mueble)
 
-**Origen:** `ajustes-finales.md` Tarea D. Primera UI real para `POST /api/ventas` (hoy sin ningún frontend). **Depende de que la Tarea 1 esté fusionada** — el diálogo necesita que `Libro`/la ficha ya usen el campo `ubicacionId` migrado, para no construir sobre el modelo que la Tarea 1 está reemplazando.
+**Origen:** `ajustes-finales.md` Tarea F. Depende solo de la Tarea B (ya fusionada, PR #54) — no depende de la Tarea 1 de arriba, así que no hay que esperarla.
 
-**Decisiones ya confirmadas con el usuario (`ajustes-finales.md` §"Decisiones técnicas confirmadas"):**
-- El diálogo "Vender" SÍ incluye selector de Forma de pago (obligatorio, mismo enum ya usado en Reportes).
-- Cantidad > 1: se extiende el backend con un campo `cantidad` — **1 solo registro de `Venta`** representa N ejemplares (no N registros).
-- La ficha de un libro agotado (`cantidadDisponible = 0`) sigue siendo accesible; solo se oculta el botón "Vender".
+**Qué ya existe y se puede reutilizar:**
+- `GET /api/espacios`/`GET /api/muebles` ya son públicos (sin token) — sirven directamente para poblar los 2 selects de filtro sin crear ningún endpoint nuevo.
+- `CatalogoPublicoComponent` ya resuelve el filtro de texto (título/autor/ISBN) en el **cliente**, sobre el `libros()` signal completo de `LibrosService` (decisión ya documentada en el propio componente) — el filtro por Espacio/Mueble debe seguir el mismo criterio (acumulativo con el texto, todo en el cliente, sin tocar `GET /api/libros`), ya que el catálogo completo ya viaja al cliente hoy sin paginación.
+- `Libro` (tras la Tarea C) ya trae `ubicacionId` — para filtrar por Mueble/Espacio hace falta resolver `ubicacionId → muebleId → espacioId` en el cliente usando los listados de `UbicacionFisicaService` (`ubicaciones`/`muebles`, ya expuestos), no una llamada nueva por libro.
 
 **Qué hacer (orden sugerido):**
-1. Backend: `POST /api/ventas` (`handler` en `server/api/handlers/ventas.ts`) acepta un campo `cantidad` (entero positivo, default 1 si no viene — evaluar si default o requerido, criterio del usuario ya es "1 por defecto" en el diálogo, el backend puede exigirlo siempre y que el frontend mande 1 explícito). Reemplaza `decrementarSiPositivo` (decrementa exactamente 1) por una función nueva en `dynamodb.ts` que decremente condicionalmente por `cantidad` (rechaza si `cantidadDisponible < cantidad`, atómico). El registro de `Venta` guarda la `cantidad` vendida; `precioFinal`/`utilidad` se calculan sobre el total (¿por unidad o por el total de la transacción? — definir y documentar en el código, criterio sugerido: `pvp`/`costoLibro` quedan como snapshot unitario ya existente, se agrega `cantidad`, y `precioFinal`/`utilidad` representan el total de la transacción).
-2. Frontend: botón "Vender" en `LibroDetalleComponent`, visible solo para vendedor/administrador autenticado (mismo patrón de guard visual que otros botones condicionados por rol) y solo si `cantidadDisponible > 0`. Al hacer clic, abre un diálogo con: cantidad (default 1, máximo `cantidadDisponible`), % descuento de venta (default 0), forma de pago (`<select>`, obligatorio), botones Cancelar/Confirmar.
-3. Primera implementación real de `src/app/features/venta/` (hoy solo tiene un `.gitkeep`) o del cliente de venta donde tenga más sentido (evaluar si conviene un servicio nuevo `VentaService.registrarVenta(...)` o extender `VentasService` ya existente, que hoy solo exporta reportes).
-4. Tras confirmar, refrescar la ficha (la disponibilidad bajó) y mostrar confirmación de éxito.
-5. Cubrir con tests backend (cantidad válida/mayor a disponible, forma de pago faltante) y frontend (diálogo, botón oculto sin ejemplares, confirmación).
+1. Frontend: `CatalogoPublicoComponent` agrega 2 `<select>` (Espacio, Mueble — dependiente del Espacio elegido, mismo patrón de cascada que `UbicacionFisicaService` ya usa en `/admin/ubicaciones`), poblados con `GET /api/espacios`/`GET /api/muebles`. El filtro es acumulativo con la búsqueda de texto ya existente (todos los criterios activos deben cumplirse a la vez).
+2. Soportar query params `?espacio=<espacioId>&mueble=<muebleId>` para pre-filtrar al entrar a `/` (habilita el caso de uso QR — confirmado en `ajustes-finales.md`: solo la URL filtrable, no la generación de la imagen del código). Sincronizar los selects con la URL en ambas direcciones (cambiar el select actualiza la URL; entrar con query params preselecciona los selects).
+3. Cubrir con tests frontend (filtro acumulativo texto+espacio+mueble, cascada Mueble depende de Espacio, pre-filtrado vía query params).
 
 **Definition of done:**
-- [ ] `npm run build`, `npm run build:api`, `npm test -- --watch=false`, `npm run test:api` pasan sin errores
-- [ ] Un vendedor/administrador autenticado puede vender un libro desde su ficha, eligiendo cantidad, descuento y forma de pago
-- [ ] El botón "Vender" no aparece si no quedan ejemplares disponibles
-- [ ] No se puede vender más ejemplares de los disponibles (rechazo atómico, sin condición de carrera)
+- [ ] `npm run build`, `npm test -- --watch=false` pasan sin errores
+- [ ] Un visitante sin autenticar puede filtrar el catálogo por Espacio y por Mueble (acumulativo entre sí y con la búsqueda de texto)
+- [ ] Entrar a `/?espacio=X&mueble=Y` pre-filtra el catálogo con esos valores
 - [ ] Verificado en vivo contra `staging`
 
 ---
 
 ## Backlog restante de `ajustes-finales.md` (no activo todavía, ver detalle completo allá)
 
-- **Tarea E** — Área "Gestionar" (Catalogar rediseñado con panel de ubicación persistente + autocompletado de descuento editorial; Editar reemplaza el cambio de ubicación provisional de la Tarea 1, con eliminar libro para administrador).
-- **Tarea F** — Filtrado público por Espacio/Mueble, acumulativo, navegable por URL (listo para QR).
-- **Tarea G** — Reporte de Inventario (XLSX).
+- **Tarea G** — Reporte de Inventario (XLSX): ISBN/Título/Autor/Editorial/PVP/Descuento editorial/Cantidad/Espacio/Mueble/Ubicación, junto al reporte de Ventas ya existente en `/admin/reportes`. Depende de B y C (ambas ya fusionadas) — sin bloqueo cuando se promueva.
 
 Después de la Tarea G: retomar el plan de modo offline/cola de sincronización y evaluar la preparación del primer despliegue a producción.
