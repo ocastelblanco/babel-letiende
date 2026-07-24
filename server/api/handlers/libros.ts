@@ -4,7 +4,7 @@ import type {
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
-import { escanearMayorQue, guardar, obtenerPorClave } from '../services/dynamodb';
+import { eliminar, escanearMayorQue, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
 
 /**
  * Copia local de `src/app/core/models/libro.model.ts` (misma forma exacta).
@@ -351,28 +351,97 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
   }
 };
 
+/** Datos aceptados en el body de `PUT /api/libros/:bookId` — solo los 4 campos editables desde la pestaña "Editar" del área "Gestionar" (`TODO.md`). */
+interface DatosEditarLibro {
+  ubicacionId: string;
+  cantidadTotal: number;
+  pvp: number;
+  porcentajeDescuentoEditorial: number;
+}
+
+type ResultadoValidacionEditar =
+  | { valido: true; datos: DatosEditarLibro }
+  | { valido: false; error: string };
+
 /**
- * `PATCH /api/libros/:bookId/ubicacion` — cambia la ubicación de un libro ya
- * catalogado (tech-specs.md §5, "Vendedor/Admin"). Exige rol `vendedor` o
- * `administrador` (CLAUDE.md A01), mismo criterio que `POST /api/libros` —
- * mover un libro de ubicación es parte de la operación diaria, no solo de
- * administración. La ruta usa `bookId` (clave primaria real de
- * `babel-libros`, tech-specs.md §5.1) y no `isbn`, que puede ser `null`.
- *
- * Placeholder mínimo (`TODO.md` Tarea 1, paso 4): reemplaza a
- * `handlerCambiarEstante` con el mismo flujo pero apuntando al modelo nuevo
- * (`ubicacionId` contra `babel-ubicaciones` en vez de `estanteId` contra
- * `babel-estantes`) — garantiza que el vendedor siga teniendo alguna forma
- * de cambiar la ubicación de un libro ya catalogado mientras la Tarea E
- * (panel "Gestionar" con edición completa) no esté lista.
+ * Valida el body de `PUT /api/libros/:bookId`: mismas reglas de rango que
+ * `validarDatosNuevoLibro` para `pvp`/`porcentajeDescuentoEditorial`, salvo
+ * `cantidadTotal`, que aquí acepta 0 (a diferencia de la catalogación
+ * inicial) — el área "Gestionar" permite bajar la cantidad de un libro
+ * hasta 0 sin eliminarlo (`TODO.md`). Exportada para poder probarla sin
+ * invocar el handler completo.
  */
-export const handlerCambiarUbicacion: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+export function validarDatosEditarLibro(cuerpo: unknown): ResultadoValidacionEditar {
+  if (typeof cuerpo !== 'object' || cuerpo === null) {
+    return { valido: false, error: 'El cuerpo de la petición debe ser un objeto JSON.' };
+  }
+  const datos = cuerpo as Record<string, unknown>;
+
+  if (typeof datos['ubicacionId'] !== 'string' || datos['ubicacionId'].trim() === '') {
+    return { valido: false, error: 'La ubicación es requerida.' };
+  }
+  if (
+    typeof datos['pvp'] !== 'number' ||
+    !Number.isFinite(datos['pvp']) ||
+    datos['pvp'] <= 0 ||
+    datos['pvp'] > PVP_MAXIMO
+  ) {
+    return { valido: false, error: `El PVP debe ser un número mayor a 0 y menor o igual a ${PVP_MAXIMO}.` };
+  }
+  if (
+    typeof datos['porcentajeDescuentoEditorial'] !== 'number' ||
+    !Number.isFinite(datos['porcentajeDescuentoEditorial']) ||
+    datos['porcentajeDescuentoEditorial'] < 0 ||
+    datos['porcentajeDescuentoEditorial'] > 100
+  ) {
+    return { valido: false, error: 'El porcentaje de descuento editorial debe estar entre 0 y 100.' };
+  }
+  if (
+    typeof datos['cantidadTotal'] !== 'number' ||
+    !Number.isInteger(datos['cantidadTotal']) ||
+    datos['cantidadTotal'] < 0
+  ) {
+    return { valido: false, error: 'La cantidad total debe ser un número entero mayor o igual a 0.' };
+  }
+
+  return {
+    valido: true,
+    datos: {
+      ubicacionId: datos['ubicacionId'],
+      cantidadTotal: datos['cantidadTotal'],
+      pvp: datos['pvp'],
+      porcentajeDescuentoEditorial: datos['porcentajeDescuentoEditorial'],
+    },
+  };
+}
+
+/**
+ * `PUT /api/libros/:bookId` — edita un libro ya catalogado (`TODO.md`, área
+ * "Gestionar", pestaña "Editar"). Exige rol `vendedor` o `administrador`
+ * (CLAUDE.md A01), mismo criterio que `POST /api/libros`. Reemplaza a
+ * `handlerCambiarUbicacion` (que solo cambiaba `ubicacionId`): ahora también
+ * permite corregir `cantidadTotal` (incluida una baja hasta 0), `pvp` y
+ * `porcentajeDescuentoEditorial`.
+ *
+ * Al cambiar `cantidadTotal`, `cantidadDisponible` se ajusta por la misma
+ * diferencia (delta) en vez de reemplazarse — así se preserva cuántos
+ * ejemplares ya se vendieron (`cantidadTotal - cantidadDisponible` antes de
+ * editar), sin importar si el vendedor corrige el total hacia arriba o hacia
+ * abajo. El resultado se recorta a `[0, nuevaCantidadTotal]` para nunca
+ * quedar negativo ni por encima del nuevo total (ej. si la cantidadTotal
+ * baja por debajo de lo ya vendido).
+ *
+ * `costo`/`utilidadCatalogo` se recalculan siempre con el mismo criterio que
+ * `handlerCrear` (a partir de `pvp`/`porcentajeDescuentoEditorial`), nunca
+ * se reciben del cliente (CLAUDE.md A08).
+ */
+export const handlerEditar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
     const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
 
     const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
     if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
-      return respuestaJson(403, { error: 'Este correo no está autorizado para catalogar libros en Babel.' });
+      return respuestaJson(403, { error: 'Este correo no está autorizado para editar libros en Babel.' });
     }
 
     const bookId = event.pathParameters?.['bookId'];
@@ -391,21 +460,103 @@ export const handlerCambiarUbicacion: APIGatewayProxyHandlerV2 = async (event): 
     } catch {
       return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
     }
-    const datos = typeof cuerpo === 'object' && cuerpo !== null ? (cuerpo as Record<string, unknown>) : {};
-    if (typeof datos['ubicacionId'] !== 'string' || datos['ubicacionId'].trim() === '') {
-      return respuestaJson(400, { error: 'El ubicacionId es requerido.' });
-    }
-    const ubicacionId = datos['ubicacionId'];
 
-    const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId });
+    const validacion = validarDatosEditarLibro(cuerpo);
+    if (!validacion.valido) {
+      return respuestaJson(400, { error: validacion.error });
+    }
+    const { datos } = validacion;
+
+    const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId: datos.ubicacionId });
     if (!ubicacion) {
       return respuestaJson(400, { error: 'La ubicación indicada no existe.' });
     }
 
-    const libroActualizado: Libro = { ...libro, ubicacionId, actualizadoEn: new Date().toISOString() };
+    const deltaCantidad = datos.cantidadTotal - libro.cantidadTotal;
+    const cantidadDisponible = Math.min(Math.max(libro.cantidadDisponible + deltaCantidad, 0), datos.cantidadTotal);
+
+    const libroActualizado: Libro = {
+      ...libro,
+      ubicacionId: datos.ubicacionId,
+      cantidadTotal: datos.cantidadTotal,
+      cantidadDisponible,
+      pvp: datos.pvp,
+      porcentajeDescuentoEditorial: datos.porcentajeDescuentoEditorial,
+      costo: Math.round(datos.pvp * (1 - datos.porcentajeDescuentoEditorial / 100)),
+      utilidadCatalogo: Math.round(datos.pvp * (datos.porcentajeDescuentoEditorial / 100)),
+      actualizadoEn: new Date().toISOString(),
+    };
+
     await guardar(nombreTablaLibros(), libroActualizado);
 
     return respuestaJson(200, libroActualizado);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `DELETE /api/libros/:bookId` — elimina un libro catalogado (`TODO.md`,
+ * área "Gestionar", pestaña "Editar", botón "ELIMINAR LIBRO"). Exige rol
+ * `administrador` EXCLUSIVAMENTE (a diferencia de `PUT`, que acepta también
+ * `vendedor`) — mismo criterio de otros CRUD de administración (CLAUDE.md
+ * A01, ADR-008). Solo valida que el `bookId` exista.
+ */
+export const handlerEliminar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || usuario.rol !== 'administrador') {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para eliminar libros en Babel.' });
+    }
+
+    const bookId = event.pathParameters?.['bookId'];
+    if (!bookId) {
+      return respuestaJson(400, { error: 'Falta el bookId en la ruta.' });
+    }
+
+    const libro = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
+    if (!libro) {
+      return respuestaJson(404, { error: 'El libro no existe.' });
+    }
+
+    await eliminar(nombreTablaLibros(), { bookId });
+
+    return respuestaJson(204, undefined);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `GET /api/libros/inventario` — listado COMPLETO de libros catalogados,
+ * incluidos los agotados (`cantidadDisponible = 0`) — a diferencia de
+ * `GET /api/libros` (catálogo público, solo libros disponibles). Exige rol
+ * `vendedor` o `administrador` (CLAUDE.md A01): es la pantalla de
+ * inventario de la pestaña "Editar" del área "Gestionar", no el catálogo
+ * público. Ruta estática `/api/libros/inventario`, sin conflicto con
+ * `/api/libros/:bookId` — API Gateway (HTTP API) prioriza siempre los
+ * segmentos de ruta literales sobre los parametrizados, mismo criterio ya
+ * usado por `/api/usuarios/me` frente a `/api/usuarios/{email}`.
+ */
+export const handlerInventario: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para ver el inventario de Babel.' });
+    }
+
+    const libros = await escanearTodo<Libro>(nombreTablaLibros());
+    return respuestaJson(200, libros);
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

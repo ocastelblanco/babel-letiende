@@ -2,14 +2,21 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenInvalidoError } from '../lib/verificar-token';
 
-const { verificarTokenDesdeHeaderMock, obtenerPorClaveMock, guardarMock, escanearMayorQueMock } = vi.hoisted(
-  () => ({
-    verificarTokenDesdeHeaderMock: vi.fn(),
-    obtenerPorClaveMock: vi.fn(),
-    guardarMock: vi.fn(),
-    escanearMayorQueMock: vi.fn(),
-  }),
-);
+const {
+  verificarTokenDesdeHeaderMock,
+  obtenerPorClaveMock,
+  guardarMock,
+  eliminarMock,
+  escanearMayorQueMock,
+  escanearTodoMock,
+} = vi.hoisted(() => ({
+  verificarTokenDesdeHeaderMock: vi.fn(),
+  obtenerPorClaveMock: vi.fn(),
+  guardarMock: vi.fn(),
+  eliminarMock: vi.fn(),
+  escanearMayorQueMock: vi.fn(),
+  escanearTodoMock: vi.fn(),
+}));
 
 vi.mock('../lib/verificar-token', async () => {
   const real = await vi.importActual<typeof import('../lib/verificar-token')>('../lib/verificar-token');
@@ -22,10 +29,20 @@ vi.mock('../lib/verificar-token', async () => {
 vi.mock('../services/dynamodb', () => ({
   obtenerPorClave: obtenerPorClaveMock,
   guardar: guardarMock,
+  eliminar: eliminarMock,
   escanearMayorQue: escanearMayorQueMock,
+  escanearTodo: escanearTodoMock,
 }));
 
-const { handlerCrear, handlerCambiarUbicacion, handlerDetalle, validarDatosNuevoLibro } = await import('./libros');
+const {
+  handlerCrear,
+  handlerEditar,
+  handlerEliminar,
+  handlerInventario,
+  handlerDetalle,
+  validarDatosNuevoLibro,
+  validarDatosEditarLibro,
+} = await import('./libros');
 
 const datosValidos = {
   isbn: '9780000000000',
@@ -53,7 +70,7 @@ function eventoDetalle(bookId?: string): APIGatewayProxyEventV2 {
   } as unknown as APIGatewayProxyEventV2;
 }
 
-function eventoCambiarUbicacion(
+function eventoConBookId(
   opciones: { body?: unknown; authorization?: string; bookId?: string } = {},
 ): APIGatewayProxyEventV2 {
   return {
@@ -199,7 +216,41 @@ describe('handlerCrear (POST /api/libros)', () => {
   });
 });
 
-describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => {
+const datosEditarValidos = {
+  ubicacionId: 'ubicacion-2',
+  cantidadTotal: 3,
+  pvp: 50000,
+  porcentajeDescuentoEditorial: 35,
+};
+
+describe('validarDatosEditarLibro', () => {
+  it('acepta un body válido', () => {
+    const resultado = validarDatosEditarLibro(datosEditarValidos);
+    expect(resultado.valido).toBe(true);
+  });
+
+  it('acepta cantidadTotal en 0 (a diferencia de validarDatosNuevoLibro)', () => {
+    const resultado = validarDatosEditarLibro({ ...datosEditarValidos, cantidadTotal: 0 });
+    expect(resultado.valido).toBe(true);
+  });
+
+  it('rechaza sin ubicacionId', () => {
+    const resultado = validarDatosEditarLibro({ ...datosEditarValidos, ubicacionId: '' });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza un PVP fuera de rango', () => {
+    const resultado = validarDatosEditarLibro({ ...datosEditarValidos, pvp: -1 });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza una cantidadTotal negativa', () => {
+    const resultado = validarDatosEditarLibro({ ...datosEditarValidos, cantidadTotal: -1 });
+    expect(resultado.valido).toBe(false);
+  });
+});
+
+describe('handlerEditar (PUT /api/libros/:bookId)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['TABLA_LIBROS'] = 'babel-libros-test';
@@ -210,18 +261,18 @@ describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => 
   it('responde 401 sin token válido', async () => {
     verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
 
-    const respuesta = await handlerCambiarUbicacion(eventoCambiarUbicacion({}), {} as never, {} as never);
+    const respuesta = await handlerEditar(eventoConBookId({}), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 401 });
     expect(guardarMock).not.toHaveBeenCalled();
   });
 
-  it('responde 403 cuando el correo no tiene fila en babel-usuarios', async () => {
+  it('responde 403 cuando el correo no tiene fila en babel-usuarios (rol insuficiente)', async () => {
     verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
     obtenerPorClaveMock.mockResolvedValue(undefined);
 
-    const respuesta = await handlerCambiarUbicacion(
-      eventoCambiarUbicacion({ authorization: 'Bearer token', bookId: 'libro-1', body: { ubicacionId: 'ubicacion-2' } }),
+    const respuesta = await handlerEditar(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosEditarValidos }),
       {} as never,
       {} as never,
     );
@@ -239,12 +290,8 @@ describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => 
     it('responde 404 cuando el bookId no existe', async () => {
       obtenerPorClaveMock.mockResolvedValueOnce(undefined);
 
-      const respuesta = await handlerCambiarUbicacion(
-        eventoCambiarUbicacion({
-          authorization: 'Bearer token',
-          bookId: 'no-existe',
-          body: { ubicacionId: 'ubicacion-2' },
-        }),
+      const respuesta = await handlerEditar(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'no-existe', body: datosEditarValidos }),
         {} as never,
         {} as never,
       );
@@ -253,11 +300,11 @@ describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => 
       expect(guardarMock).not.toHaveBeenCalled();
     });
 
-    it('responde 400 sin ubicacionId en el body', async () => {
+    it('responde 400 con un body inválido', async () => {
       obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
 
-      const respuesta = await handlerCambiarUbicacion(
-        eventoCambiarUbicacion({ authorization: 'Bearer token', bookId: 'libro-1', body: {} }),
+      const respuesta = await handlerEditar(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: { ...datosEditarValidos, pvp: -1 } }),
         {} as never,
         {} as never,
       );
@@ -270,11 +317,11 @@ describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => 
       obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
       obtenerPorClaveMock.mockResolvedValueOnce(undefined);
 
-      const respuesta = await handlerCambiarUbicacion(
-        eventoCambiarUbicacion({
+      const respuesta = await handlerEditar(
+        eventoConBookId({
           authorization: 'Bearer token',
           bookId: 'libro-1',
-          body: { ubicacionId: 'no-existe' },
+          body: { ...datosEditarValidos, ubicacionId: 'no-existe' },
         }),
         {} as never,
         {} as never,
@@ -284,16 +331,12 @@ describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => 
       expect(guardarMock).not.toHaveBeenCalled();
     });
 
-    it('responde 200 y actualiza la ubicación cuando todo es válido', async () => {
+    it('responde 200, actualiza ubicación/cantidad/pvp/descuento y recalcula costo/utilidad cuando todo es válido', async () => {
       obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
       obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
 
-      const respuesta = await handlerCambiarUbicacion(
-        eventoCambiarUbicacion({
-          authorization: 'Bearer token',
-          bookId: 'libro-1',
-          body: { ubicacionId: 'ubicacion-2' },
-        }),
+      const respuesta = await handlerEditar(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosEditarValidos }),
         {} as never,
         {} as never,
       );
@@ -303,8 +346,147 @@ describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => 
       const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
       expect(libroGuardado['ubicacionId']).toBe('ubicacion-2');
       expect(libroGuardado['bookId']).toBe('libro-1');
+      expect(libroGuardado['cantidadTotal']).toBe(3);
+      // libroFalso: cantidadTotal 2, cantidadDisponible 2 → delta +1 → 3.
+      expect(libroGuardado['cantidadDisponible']).toBe(3);
+      expect(libroGuardado['pvp']).toBe(50000);
+      expect(libroGuardado['costo']).toBe(32500);
+      expect(libroGuardado['utilidadCatalogo']).toBe(17500);
       expect(libroGuardado['actualizadoEn']).not.toBe(libroFalso.actualizadoEn);
     });
+
+    it('permite bajar cantidadTotal a 0 y recorta cantidadDisponible a 0', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+
+      const respuesta = await handlerEditar(
+        eventoConBookId({
+          authorization: 'Bearer token',
+          bookId: 'libro-1',
+          body: { ...datosEditarValidos, cantidadTotal: 0 },
+        }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(libroGuardado['cantidadTotal']).toBe(0);
+      expect(libroGuardado['cantidadDisponible']).toBe(0);
+    });
+  });
+});
+
+describe('handlerEliminar (DELETE /api/libros/:bookId)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerEliminar(eventoConBookId({ bookId: 'libro-1' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(eliminarMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el rol es vendedor (exige administrador exclusivamente)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+
+    const respuesta = await handlerEliminar(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(eliminarMock).not.toHaveBeenCalled();
+  });
+
+  describe('con un administrador autenticado', () => {
+    beforeEach(() => {
+      verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-2' });
+      obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+    });
+
+    it('responde 404 cuando el bookId no existe', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+      const respuesta = await handlerEliminar(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'no-existe' }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 404 });
+      expect(eliminarMock).not.toHaveBeenCalled();
+    });
+
+    it('responde 204 y elimina el libro cuando el bookId existe', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+
+      const respuesta = await handlerEliminar(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 204 });
+      expect(eliminarMock).toHaveBeenCalledWith('babel-libros-test', { bookId: 'libro-1' });
+    });
+  });
+});
+
+describe('handlerInventario (GET /api/libros/inventario)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerInventario(eventoConBookId({}), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el correo no tiene fila en babel-usuarios', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue(undefined);
+
+    const respuesta = await handlerInventario(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 200 con el listado completo (incluidos libros con cantidadDisponible: 0) para un vendedor', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    const libroAgotado = { ...libroFalso, bookId: 'libro-2', cantidadDisponible: 0 };
+    escanearTodoMock.mockResolvedValue([libroFalso, libroAgotado]);
+
+    const respuesta = await handlerInventario(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as unknown[];
+    expect(cuerpo).toHaveLength(2);
+    expect(escanearTodoMock).toHaveBeenCalledWith('babel-libros-test');
   });
 });
 
