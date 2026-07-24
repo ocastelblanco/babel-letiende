@@ -4,11 +4,11 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
-import { EstantesService } from '../../core/api/estantes.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { LibrosService } from '../../core/api/libros.service';
-import type { Estante } from '../../core/models/estante.model';
+import type { Ubicacion } from '../../core/models/ubicacion.model';
 import type { Libro } from '../../core/models/libro.model';
-import { CambiarEstanteComponent } from './cambiar-estante.component';
+import { CambiarUbicacionComponent } from './cambiar-ubicacion.component';
 
 // `auth.service.ts` (importado solo como token de DI) importa el SDK real de
 // Firebase a nivel de módulo — mismo motivo de mock que en el resto de specs
@@ -22,11 +22,10 @@ vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: vi.fn(),
 }));
 
-const estanteFalso: Estante = {
-  estanteId: 'estante-1',
-  espacio: 'Espacio principal',
-  mueble: 'Biblioteca 1',
-  ubicacion: 'Estante 1',
+const ubicacionFalsa: Ubicacion = {
+  ubicacionId: 'ubicacion-1',
+  muebleId: 'mueble-1',
+  nombre: 'Estante 1',
 };
 
 const libroFalso: Libro = {
@@ -42,14 +41,14 @@ const libroFalso: Libro = {
   utilidadCatalogo: 15750,
   cantidadTotal: 2,
   cantidadDisponible: 2,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
   creadoPor: 'vendedor@letiende.co',
   creadoEn: '2026-01-01T00:00:00.000Z',
   actualizadoEn: '2026-01-01T00:00:00.000Z',
 };
 
 function configurarPrueba(opciones: { bookId?: string; libros?: Libro[] } = {}) {
-  const cargarEstantesMock = vi.fn().mockResolvedValue(undefined);
+  const cargarUbicacionesMock = vi.fn().mockResolvedValue(undefined);
   const cargarCatalogoMock = vi.fn().mockResolvedValue(undefined);
   const obtenerIdTokenMock = vi.fn().mockResolvedValue('token-valido');
 
@@ -64,11 +63,11 @@ function configurarPrueba(opciones: { bookId?: string; libros?: Libro[] } = {}) 
       },
       { provide: AuthService, useValue: { obtenerIdToken: obtenerIdTokenMock } },
       {
-        provide: EstantesService,
+        provide: UbicacionFisicaService,
         useValue: {
-          estantes: signal([estanteFalso]),
-          error: signal(false),
-          cargarEstantes: cargarEstantesMock,
+          ubicaciones: signal([ubicacionFalsa]),
+          errorUbicaciones: signal(false),
+          cargarUbicaciones: cargarUbicacionesMock,
         },
       },
       {
@@ -84,35 +83,35 @@ function configurarPrueba(opciones: { bookId?: string; libros?: Libro[] } = {}) 
   });
 
   const httpMock = TestBed.inject(HttpTestingController);
-  const fixture: ComponentFixture<CambiarEstanteComponent> = TestBed.createComponent(CambiarEstanteComponent);
+  const fixture: ComponentFixture<CambiarUbicacionComponent> = TestBed.createComponent(CambiarUbicacionComponent);
   fixture.detectChanges();
 
-  return { fixture, httpMock, obtenerIdTokenMock, cargarEstantesMock, cargarCatalogoMock };
+  return { fixture, httpMock, obtenerIdTokenMock, cargarUbicacionesMock, cargarCatalogoMock };
 }
 
-describe('CambiarEstanteComponent', () => {
+describe('CambiarUbicacionComponent', () => {
   let httpMock: HttpTestingController;
 
   afterEach(() => {
     httpMock.verify();
   });
 
-  it('carga los estantes y el catálogo al inicializar', () => {
+  it('carga las ubicaciones y el catálogo al inicializar', () => {
     const resultado = configurarPrueba();
     httpMock = resultado.httpMock;
 
-    expect(resultado.cargarEstantesMock).toHaveBeenCalledTimes(1);
+    expect(resultado.cargarUbicacionesMock).toHaveBeenCalledTimes(1);
     expect(resultado.cargarCatalogoMock).toHaveBeenCalledTimes(1);
   });
 
-  it('preselecciona el estante actual del libro tras cargar el catálogo', async () => {
+  it('preselecciona la ubicación actual del libro tras cargar el catálogo', async () => {
     const { fixture, httpMock: mock } = configurarPrueba();
     httpMock = mock;
     await Promise.resolve();
     await Promise.resolve();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((fixture.componentInstance as any).formulario.value.estanteId).toBe('estante-1');
+    expect((fixture.componentInstance as any).formulario.value.ubicacionId).toBe('ubicacion-1');
   });
 
   it('muestra "no se encontró el libro" cuando el bookId no está en el catálogo', () => {
@@ -123,29 +122,29 @@ describe('CambiarEstanteComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('No se encontró el libro');
   });
 
-  it('envía PATCH /api/libros/:bookId/estante con el ID Token real y muestra el mensaje de éxito', async () => {
+  it('envía PATCH /api/libros/:bookId/ubicacion con el ID Token real y muestra el mensaje de éxito', async () => {
     const { fixture, httpMock: mock } = configurarPrueba();
     httpMock = mock;
     await Promise.resolve();
     await Promise.resolve();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (fixture.componentInstance as any).formulario.setValue({ estanteId: 'estante-2' });
+    (fixture.componentInstance as any).formulario.setValue({ ubicacionId: 'ubicacion-2' });
     const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
     formulario.dispatchEvent(new Event('submit'));
     await Promise.resolve();
     await Promise.resolve();
 
-    const peticion = httpMock.expectOne('/api/libros/book-1/estante');
+    const peticion = httpMock.expectOne('/api/libros/book-1/ubicacion');
     expect(peticion.request.method).toBe('PATCH');
     expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-valido');
-    expect(peticion.request.body).toEqual({ estanteId: 'estante-2' });
-    peticion.flush({ bookId: 'book-1', estanteId: 'estante-2' });
+    expect(peticion.request.body).toEqual({ ubicacionId: 'ubicacion-2' });
+    peticion.flush({ bookId: 'book-1', ubicacionId: 'ubicacion-2' });
     await Promise.resolve();
     await Promise.resolve();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Estante actualizado correctamente.');
+    expect(fixture.nativeElement.textContent).toContain('Ubicación actualizada correctamente.');
   });
 
   it('muestra un mensaje de error cuando el PATCH falla', async () => {
@@ -155,20 +154,20 @@ describe('CambiarEstanteComponent', () => {
     await Promise.resolve();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (fixture.componentInstance as any).formulario.setValue({ estanteId: 'estante-2' });
+    (fixture.componentInstance as any).formulario.setValue({ ubicacionId: 'ubicacion-2' });
     const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
     formulario.dispatchEvent(new Event('submit'));
     await Promise.resolve();
     await Promise.resolve();
 
     httpMock
-      .expectOne('/api/libros/book-1/estante')
-      .flush({ error: 'El estante indicado no existe.' }, { status: 400, statusText: 'Bad Request' });
+      .expectOne('/api/libros/book-1/ubicacion')
+      .flush({ error: 'La ubicación indicada no existe.' }, { status: 400, statusText: 'Bad Request' });
     await Promise.resolve();
     await Promise.resolve();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('El estante indicado no existe.');
+    expect(fixture.nativeElement.textContent).toContain('La ubicación indicada no existe.');
   });
 
   it('no envía la petición cuando el formulario es inválido', async () => {
@@ -179,6 +178,6 @@ describe('CambiarEstanteComponent', () => {
     const formulario = fixture.nativeElement.querySelector('form');
     // Sin libro encontrado, el formulario ni siquiera se renderiza.
     expect(formulario).toBeNull();
-    httpMock.expectNone('/api/libros/book-1/estante');
+    httpMock.expectNone('/api/libros/book-1/ubicacion');
   });
 });

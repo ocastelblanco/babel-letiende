@@ -4,15 +4,19 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
-import { EstantesService } from '../../core/api/estantes.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { LibrosService } from '../../core/api/libros.service';
 
 /**
- * Primer consumo desde el frontend de `PATCH /api/libros/:bookId/estante`
- * (ya verificado en vivo, `TODO.md` histórico) — ruta `/libros/:bookId/estante`
- * (tech-specs.md §4.2), guardada solo con `AuthGuard` (no `RoleGuard`): tanto
- * `vendedor` como `administrador` pueden mover un libro de estante, mismo
- * criterio que `/libros`.
+ * Primer consumo desde el frontend de `PATCH /api/libros/:bookId/ubicacion`
+ * — ruta `/libros/:bookId/ubicacion` (tech-specs.md §4.2), guardada solo con
+ * `AuthGuard` (no `RoleGuard`): tanto `vendedor` como `administrador` pueden
+ * mover un libro de ubicación, mismo criterio que `/libros`.
+ *
+ * Placeholder mínimo (`TODO.md` Tarea 1, paso 4): reemplaza a
+ * `CambiarEstanteComponent`, mismo flujo pero con un select de `Ubicacion`
+ * (`UbicacionFisicaService`, sin cascada Espacio→Mueble todavía — esa
+ * mejora de UX es la Tarea E) en vez del antiguo select de `Estante`.
  *
  * No existe un endpoint de detalle por `bookId` — el libro actual se
  * resuelve del mismo catálogo público que ya consume `ListaLibrosCatalogadosComponent`
@@ -22,22 +26,22 @@ import { LibrosService } from '../../core/api/libros.service';
  * formulario roto.
  */
 @Component({
-  selector: 'app-cambiar-estante',
+  selector: 'app-cambiar-ubicacion',
   imports: [ReactiveFormsModule, RouterLink],
-  templateUrl: './cambiar-estante.component.html',
+  templateUrl: './cambiar-ubicacion.component.html',
 })
-export class CambiarEstanteComponent implements OnInit {
+export class CambiarUbicacionComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
-  private readonly estantesService = inject(EstantesService);
+  private readonly ubicacionFisicaService = inject(UbicacionFisicaService);
   private readonly librosService = inject(LibrosService);
 
   protected readonly bookId = this.route.snapshot.paramMap.get('bookId') ?? '';
 
-  protected readonly estantes = this.estantesService.estantes;
-  protected readonly errorEstantes = this.estantesService.error;
+  protected readonly ubicaciones = this.ubicacionFisicaService.ubicaciones;
+  protected readonly errorUbicaciones = this.ubicacionFisicaService.errorUbicaciones;
 
   protected readonly cargandoLibro = this.librosService.cargando;
   protected readonly libro = computed(() => this.librosService.libros().find((l) => l.bookId === this.bookId));
@@ -47,15 +51,15 @@ export class CambiarEstanteComponent implements OnInit {
   protected readonly mensajeError = signal<string | null>(null);
 
   protected readonly formulario = this.fb.nonNullable.group({
-    estanteId: ['', Validators.required],
+    ubicacionId: ['', Validators.required],
   });
 
   ngOnInit(): void {
-    void this.estantesService.cargarEstantes();
+    void this.ubicacionFisicaService.cargarUbicaciones();
     void this.librosService.cargarCatalogo().then(() => {
       const libro = this.libro();
       if (libro) {
-        this.formulario.controls.estanteId.setValue(libro.estanteId);
+        this.formulario.controls.ubicacionId.setValue(libro.ubicacionId);
       }
     });
   }
@@ -73,24 +77,24 @@ export class CambiarEstanteComponent implements OnInit {
     try {
       const idToken = await this.authService.obtenerIdToken();
       if (!idToken) {
-        this.mensajeError.set('No se pudo cambiar el estante. Intenta de nuevo.');
+        this.mensajeError.set('No se pudo cambiar la ubicación. Intenta de nuevo.');
         return;
       }
 
       await firstValueFrom(
         this.http.patch(
-          `/api/libros/${this.bookId}/estante`,
-          { estanteId: this.formulario.getRawValue().estanteId },
+          `/api/libros/${this.bookId}/ubicacion`,
+          { ubicacionId: this.formulario.getRawValue().ubicacionId },
           { headers: { Authorization: `Bearer ${idToken}` } },
         ),
       );
 
-      this.mensajeExito.set('Estante actualizado correctamente.');
+      this.mensajeExito.set('Ubicación actualizada correctamente.');
     } catch (error) {
       const mensaje =
         error instanceof HttpErrorResponse && typeof error.error?.error === 'string'
           ? error.error.error
-          : 'No se pudo cambiar el estante. Intenta de nuevo.';
+          : 'No se pudo cambiar la ubicación. Intenta de nuevo.';
       this.mensajeError.set(mensaje);
     } finally {
       this.guardando.set(false);

@@ -15,10 +15,10 @@ type Pestaña = 'espacios' | 'muebles' | 'ubicaciones';
 /**
  * Ruta protegida `/admin/ubicaciones` (`RoleGuard('administrador')`,
  * `TODO.md` Tarea 2) — CRUD del modelo jerárquico de ubicación física
- * Espacio → Mueble → Ubicación, que eventualmente reemplaza a
- * `GestionEstantesComponent`/`/admin/estantes` (esa migración es una tarea
- * futura separada: `EstantesService`/`estantes.ts` siguen en uso sin
- * cambios por `CatalogarLibroComponent`/`CambiarEstanteComponent`).
+ * Espacio → Mueble → Ubicación, que reemplazó al antiguo `Estante`
+ * (`GestionEstantesComponent`/`/admin/estantes` ya no existen —
+ * `CatalogarLibroComponent`/`CambiarUbicacionComponent` consumen este
+ * modelo desde `TODO.md` Tarea 1).
  *
  * 3 pestañas independientes (`pestanaActiva`), cada una con su propio
  * formulario único crear/editar oculto por defecto (`DESIGN.md` §4,
