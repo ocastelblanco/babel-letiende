@@ -6,7 +6,7 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import type { IScannerControls } from '@zxing/browser';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
-import { EstantesService } from '../../core/api/estantes.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.service';
 
 const PVP_MAXIMO = 5_000_000;
@@ -35,11 +35,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
-  private readonly estantesService = inject(EstantesService);
+  private readonly ubicacionFisicaService = inject(UbicacionFisicaService);
   private readonly metadatosService = inject(MetadatosService);
 
-  protected readonly estantes = this.estantesService.estantes;
-  protected readonly errorEstantes = this.estantesService.error;
+  protected readonly ubicaciones = this.ubicacionFisicaService.ubicaciones;
+  protected readonly errorUbicaciones = this.ubicacionFisicaService.errorUbicaciones;
 
   protected readonly guardando = signal(false);
   protected readonly mensajeExito = signal<string | null>(null);
@@ -75,11 +75,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     pvp: [0, [Validators.required, Validators.min(1), Validators.max(PVP_MAXIMO)]],
     porcentajeDescuentoEditorial: [35, [Validators.required, Validators.min(0), Validators.max(100)]],
     cantidadTotal: [1, [Validators.required, Validators.min(1)]],
-    estanteId: ['', Validators.required],
+    ubicacionId: ['', Validators.required],
   });
 
   ngOnInit(): void {
-    void this.estantesService.cargarEstantes();
+    void this.ubicacionFisicaService.cargarUbicaciones();
   }
 
   ngOnDestroy(): void {
@@ -310,7 +310,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       pvp: valores.pvp,
       porcentajeDescuentoEditorial: valores.porcentajeDescuentoEditorial,
       cantidadTotal: valores.cantidadTotal,
-      estanteId: valores.estanteId,
+      ubicacionId: valores.ubicacionId,
     };
 
     this.guardando.set(true);
@@ -358,7 +358,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       pvp: 0,
       porcentajeDescuentoEditorial: porcentajeActual,
       cantidadTotal: 1,
-      estanteId: '',
+      ubicacionId: '',
     });
   }
 }

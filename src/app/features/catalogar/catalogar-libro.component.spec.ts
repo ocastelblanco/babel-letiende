@@ -3,9 +3,9 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AuthService } from '../../core/auth/auth.service';
-import { EstantesService } from '../../core/api/estantes.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { MetadatosService } from '../../core/api/metadatos.service';
-import type { Estante } from '../../core/models/estante.model';
+import type { Ubicacion } from '../../core/models/ubicacion.model';
 import { CatalogarLibroComponent } from './catalogar-libro.component';
 
 // `auth.service.ts` (importado arriba solo como token de DI) importa el SDK
@@ -43,11 +43,10 @@ vi.mock('@zxing/browser', () => ({
   }),
 }));
 
-const estanteFalso: Estante = {
-  estanteId: 'estante-1',
-  espacio: 'Espacio principal',
-  mueble: 'Biblioteca 1',
-  ubicacion: 'Estante 1',
+const ubicacionFalsa: Ubicacion = {
+  ubicacionId: 'ubicacion-1',
+  muebleId: 'mueble-1',
+  nombre: 'Estante 1',
 };
 
 const datosValidos = {
@@ -59,13 +58,13 @@ const datosValidos = {
   pvp: 45000,
   porcentajeDescuentoEditorial: 35,
   cantidadTotal: 2,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
 };
 
 const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null, pvp: null };
 
 function configurarPrueba() {
-  const cargarEstantesMock = vi.fn().mockResolvedValue(undefined);
+  const cargarUbicacionesMock = vi.fn().mockResolvedValue(undefined);
   const obtenerIdTokenMock = vi.fn().mockResolvedValue('token-valido');
   // Por defecto no encuentra nada — las pruebas de autocompletado sobrescriben
   // esta resolución con `mockResolvedValueOnce`/`mockResolvedValue` según el caso.
@@ -83,11 +82,11 @@ function configurarPrueba() {
       provideHttpClientTesting(),
       { provide: AuthService, useValue: { obtenerIdToken: obtenerIdTokenMock } },
       {
-        provide: EstantesService,
+        provide: UbicacionFisicaService,
         useValue: {
-          estantes: signal([estanteFalso]),
-          error: signal(false),
-          cargarEstantes: cargarEstantesMock,
+          ubicaciones: signal([ubicacionFalsa]),
+          errorUbicaciones: signal(false),
+          cargarUbicaciones: cargarUbicacionesMock,
         },
       },
       {
@@ -109,7 +108,7 @@ function configurarPrueba() {
     fixture,
     httpMock,
     obtenerIdTokenMock,
-    cargarEstantesMock,
+    cargarUbicacionesMock,
     obtenerMetadatosMock,
     buscarCandidatosMock,
     buscarPvpMock,
@@ -136,11 +135,11 @@ describe('CatalogarLibroComponent', () => {
     httpMock.verify();
   });
 
-  it('carga los estantes al inicializar', () => {
+  it('carga las ubicaciones al inicializar', () => {
     const resultado = configurarPrueba();
     httpMock = resultado.httpMock;
 
-    expect(resultado.cargarEstantesMock).toHaveBeenCalledTimes(1);
+    expect(resultado.cargarUbicacionesMock).toHaveBeenCalledTimes(1);
   });
 
   it('envía POST /api/libros con el ID Token real y muestra el mensaje de éxito', async () => {
@@ -162,7 +161,7 @@ describe('CatalogarLibroComponent', () => {
       pvp: 45000,
       porcentajeDescuentoEditorial: 35,
       cantidadTotal: 2,
-      estanteId: 'estante-1',
+      ubicacionId: 'ubicacion-1',
     });
     peticion.flush({ titulo: 'Libro de prueba' });
     await Promise.resolve();
@@ -186,7 +185,7 @@ describe('CatalogarLibroComponent', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const formulario = (fixture.componentInstance as any).formulario;
     expect(formulario.value.titulo).toBe('');
-    expect(formulario.value.estanteId).toBe('');
+    expect(formulario.value.ubicacionId).toBe('');
     // El porcentaje de descuento editorial se conserva entre libros seguidos.
     expect(formulario.value.porcentajeDescuentoEditorial).toBe(35);
   });
