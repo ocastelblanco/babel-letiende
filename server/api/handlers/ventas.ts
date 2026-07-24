@@ -25,7 +25,7 @@ interface Libro {
   utilidadCatalogo: number;
   cantidadTotal: number;
   cantidadDisponible: number;
-  estanteId: string;
+  ubicacionId: string;
   creadoPor: string;
   creadoEn: string;
   actualizadoEn: string;

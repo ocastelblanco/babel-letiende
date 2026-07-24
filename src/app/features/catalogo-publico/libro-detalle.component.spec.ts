@@ -2,10 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
-import type { LibroConEstante } from '../../core/models/libro.model';
+import type { LibroConUbicacion } from '../../core/models/libro.model';
 import { LibroDetalleComponent } from './libro-detalle.component';
 
-const libroFalso: LibroConEstante = {
+const libroFalso: LibroConUbicacion = {
   isbn: '9780000000000',
   bookId: 'book-1',
   titulo: 'Cien años de soledad',
@@ -18,11 +18,11 @@ const libroFalso: LibroConEstante = {
   utilidadCatalogo: 15750,
   cantidadTotal: 2,
   cantidadDisponible: 1,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
   creadoPor: 'vendedor@letiende.co',
   creadoEn: '2026-07-19T00:00:00.000Z',
   actualizadoEn: '2026-07-19T00:00:00.000Z',
-  estante: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
+  ubicacion: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
 };
 
 function configurarPrueba(opciones: { bookId?: string; obtenerDetalleMock?: ReturnType<typeof vi.fn> } = {}) {
@@ -76,8 +76,8 @@ describe('LibroDetalleComponent', () => {
     expect(texto).toContain('Estante 2');
   });
 
-  it('no muestra la sección de ubicación cuando el estante es null', async () => {
-    const obtenerDetalleMock = vi.fn().mockResolvedValue({ ...libroFalso, estante: null });
+  it('no muestra la sección de ubicación cuando la ubicación es null', async () => {
+    const obtenerDetalleMock = vi.fn().mockResolvedValue({ ...libroFalso, ubicacion: null });
     const { fixture } = configurarPrueba({ obtenerDetalleMock });
     await Promise.resolve();
     fixture.detectChanges();

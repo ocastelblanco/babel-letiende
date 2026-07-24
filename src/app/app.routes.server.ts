@@ -25,7 +25,7 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Client
   },
   {
-    path: 'libros/:bookId/estante',
+    path: 'libros/:bookId/ubicacion',
     renderMode: RenderMode.Client
   },
   {

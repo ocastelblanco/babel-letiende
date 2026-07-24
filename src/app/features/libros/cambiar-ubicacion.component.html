@@ -1,7 +1,7 @@
 <div class="min-h-screen bg-surface px-4 py-8">
   <div class="mx-auto max-w-xl">
     <a routerLink="/libros" class="mb-4 inline-block text-sm font-semibold text-secondary underline">← Volver</a>
-    <h1 class="mb-6 text-2xl font-bold text-primary">Cambiar estante</h1>
+    <h1 class="mb-6 text-2xl font-bold text-primary">Cambiar ubicación</h1>
 
     @if (cargandoLibro()) {
       <p class="text-sm text-primary/70">Cargando…</p>
@@ -19,22 +19,22 @@
         class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
       >
         <div>
-          <label for="estanteId" class="mb-1 block text-sm font-semibold text-primary">Estante</label>
+          <label for="ubicacionId" class="mb-1 block text-sm font-semibold text-primary">Ubicación</label>
           <select
-            id="estanteId"
-            formControlName="estanteId"
+            id="ubicacionId"
+            formControlName="ubicacionId"
             class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
           >
-            <option value="" disabled>Selecciona un estante</option>
-            @for (estante of estantes(); track estante.estanteId) {
-              <option [value]="estante.estanteId">{{ estante.espacio }} — {{ estante.mueble }} — {{ estante.ubicacion }}</option>
+            <option value="" disabled>Selecciona una ubicación</option>
+            @for (ubicacion of ubicaciones(); track ubicacion.ubicacionId) {
+              <option [value]="ubicacion.ubicacionId">{{ ubicacion.nombre }}</option>
             }
           </select>
-          @if (formulario.controls.estanteId.invalid && formulario.controls.estanteId.touched) {
-            <p class="mt-1 text-xs text-danger">El estante es requerido.</p>
+          @if (formulario.controls.ubicacionId.invalid && formulario.controls.ubicacionId.touched) {
+            <p class="mt-1 text-xs text-danger">La ubicación es requerida.</p>
           }
-          @if (errorEstantes()) {
-            <p class="mt-1 text-xs text-danger">No se pudieron cargar los estantes.</p>
+          @if (errorUbicaciones()) {
+            <p class="mt-1 text-xs text-danger">No se pudieron cargar las ubicaciones.</p>
           }
         </div>
 

@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import type { Libro, LibroConEstante } from '../models/libro.model';
+import type { Libro, LibroConUbicacion } from '../models/libro.model';
 import { LibrosService } from './libros.service';
 
 const libroFalso: Libro = {
@@ -17,7 +17,7 @@ const libroFalso: Libro = {
   utilidadCatalogo: 15750,
   cantidadTotal: 2,
   cantidadDisponible: 1,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
   creadoPor: 'vendedor@letiende.co',
   creadoEn: '2026-07-19T00:00:00.000Z',
   actualizadoEn: '2026-07-19T00:00:00.000Z',
@@ -65,18 +65,18 @@ describe('LibrosService', () => {
   });
 
   describe('obtenerDetalle', () => {
-    const libroConEstanteFalso: LibroConEstante = {
+    const libroConUbicacionFalso: LibroConUbicacion = {
       ...libroFalso,
-      estante: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
+      ubicacion: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
     };
 
     it('resuelve el libro cuando /api/libros/:bookId responde 200', async () => {
       const servicio = configurarPrueba();
 
       const promesa = servicio.obtenerDetalle('book-1');
-      httpMock.expectOne('/api/libros/book-1').flush(libroConEstanteFalso);
+      httpMock.expectOne('/api/libros/book-1').flush(libroConUbicacionFalso);
 
-      expect(await promesa).toEqual(libroConEstanteFalso);
+      expect(await promesa).toEqual(libroConUbicacionFalso);
     });
 
     it('devuelve null, sin lanzar, cuando /api/libros/:bookId responde 404', async () => {

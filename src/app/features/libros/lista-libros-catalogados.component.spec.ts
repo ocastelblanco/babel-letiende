@@ -18,7 +18,7 @@ const libroFalso: Libro = {
   utilidadCatalogo: 15750,
   cantidadTotal: 2,
   cantidadDisponible: 2,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
   creadoPor: 'vendedor@letiende.co',
   creadoEn: '2026-01-01T00:00:00.000Z',
   actualizadoEn: '2026-01-01T00:00:00.000Z',
@@ -56,11 +56,11 @@ describe('ListaLibrosCatalogadosComponent', () => {
     expect(cargarCatalogoMock).toHaveBeenCalledTimes(1);
   });
 
-  it('muestra los libros catalogados con un enlace para cambiar el estante', () => {
+  it('muestra los libros catalogados con un enlace para cambiar la ubicación', () => {
     const { fixture } = configurarPrueba();
 
     expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
-    const enlace = fixture.nativeElement.querySelector('a[href="/libros/book-1/estante"]');
+    const enlace = fixture.nativeElement.querySelector('a[href="/libros/book-1/ubicacion"]');
     expect(enlace).not.toBeNull();
   });
 

@@ -7,7 +7,7 @@ import { LibrosService } from '../../core/api/libros.service';
  * `LibrosService` (el mismo catálogo público que consume `/`) para listar
  * los libros ya catalogados — no es una gestión completa de inventario
  * (eso queda para una tarea de roadmap separada), solo el punto de
- * navegación mínimo para llegar a `CambiarEstanteComponent` desde un libro
+ * navegación mínimo para llegar a `CambiarUbicacionComponent` desde un libro
  * concreto. También enlaza a `/catalogar`.
  */
 @Component({

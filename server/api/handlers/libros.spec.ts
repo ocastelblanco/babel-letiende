@@ -25,7 +25,7 @@ vi.mock('../services/dynamodb', () => ({
   escanearMayorQue: escanearMayorQueMock,
 }));
 
-const { handlerCrear, handlerCambiarEstante, handlerDetalle, validarDatosNuevoLibro } = await import('./libros');
+const { handlerCrear, handlerCambiarUbicacion, handlerDetalle, validarDatosNuevoLibro } = await import('./libros');
 
 const datosValidos = {
   isbn: '9780000000000',
@@ -36,7 +36,7 @@ const datosValidos = {
   pvp: 45000,
   porcentajeDescuentoEditorial: 35,
   cantidadTotal: 2,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
 };
 
 function eventoFalso(body: unknown, authorization?: string): APIGatewayProxyEventV2 {
@@ -53,7 +53,7 @@ function eventoDetalle(bookId?: string): APIGatewayProxyEventV2 {
   } as unknown as APIGatewayProxyEventV2;
 }
 
-function eventoCambiarEstante(
+function eventoCambiarUbicacion(
   opciones: { body?: unknown; authorization?: string; bookId?: string } = {},
 ): APIGatewayProxyEventV2 {
   return {
@@ -76,13 +76,15 @@ const libroFalso = {
   utilidadCatalogo: 15750,
   cantidadTotal: 2,
   cantidadDisponible: 2,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
   creadoPor: 'vendedor@letiende.co',
   creadoEn: '2026-01-01T00:00:00.000Z',
   actualizadoEn: '2026-01-01T00:00:00.000Z',
 };
 
-const estanteFalso = { estanteId: 'estante-2', espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' };
+const ubicacionFalsa = { ubicacionId: 'ubicacion-2', muebleId: 'mueble-1', nombre: 'Estante 2' };
+const muebleFalso = { muebleId: 'mueble-1', espacioId: 'espacio-1', nombre: 'Biblioteca 1' };
+const espacioFalso = { espacioId: 'espacio-1', nombre: 'Sala principal' };
 
 describe('validarDatosNuevoLibro', () => {
   it('acepta un body válido', () => {
@@ -121,7 +123,7 @@ describe('handlerCrear (POST /api/libros)', () => {
     vi.clearAllMocks();
     process.env['TABLA_LIBROS'] = 'babel-libros-test';
     process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
-    process.env['TABLA_ESTANTES'] = 'babel-estantes-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
   });
 
   it('responde 401 sin token válido', async () => {
@@ -157,9 +159,21 @@ describe('handlerCrear (POST /api/libros)', () => {
     expect(guardarMock).not.toHaveBeenCalled();
   });
 
-  it('responde 201 y guarda el libro cuando el rol es vendedor', async () => {
+  it('responde 400 cuando el ubicacionId no existe', async () => {
     verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
-    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 201 y guarda el libro cuando el rol es vendedor y el ubicacionId es válido', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
 
     const respuesta = await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
@@ -170,12 +184,14 @@ describe('handlerCrear (POST /api/libros)', () => {
     expect(libroGuardado['cantidadDisponible']).toBe(datosValidos.cantidadTotal);
     expect(libroGuardado['costo']).toBe(29250);
     expect(libroGuardado['utilidadCatalogo']).toBe(15750);
+    expect(libroGuardado['ubicacionId']).toBe('ubicacion-1');
     expect(typeof libroGuardado['bookId']).toBe('string');
   });
 
   it('responde 201 cuando el rol es administrador', async () => {
     verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-2' });
-    obtenerPorClaveMock.mockResolvedValue({ email: 'admin@letiende.co', rol: 'administrador' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+    obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
 
     const respuesta = await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
@@ -183,18 +199,18 @@ describe('handlerCrear (POST /api/libros)', () => {
   });
 });
 
-describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
+describe('handlerCambiarUbicacion (PATCH /api/libros/:bookId/ubicacion)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['TABLA_LIBROS'] = 'babel-libros-test';
     process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
-    process.env['TABLA_ESTANTES'] = 'babel-estantes-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
   });
 
   it('responde 401 sin token válido', async () => {
     verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
 
-    const respuesta = await handlerCambiarEstante(eventoCambiarEstante({}), {} as never, {} as never);
+    const respuesta = await handlerCambiarUbicacion(eventoCambiarUbicacion({}), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 401 });
     expect(guardarMock).not.toHaveBeenCalled();
@@ -204,8 +220,8 @@ describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
     verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
     obtenerPorClaveMock.mockResolvedValue(undefined);
 
-    const respuesta = await handlerCambiarEstante(
-      eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: { estanteId: 'estante-2' } }),
+    const respuesta = await handlerCambiarUbicacion(
+      eventoCambiarUbicacion({ authorization: 'Bearer token', bookId: 'libro-1', body: { ubicacionId: 'ubicacion-2' } }),
       {} as never,
       {} as never,
     );
@@ -223,8 +239,12 @@ describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
     it('responde 404 cuando el bookId no existe', async () => {
       obtenerPorClaveMock.mockResolvedValueOnce(undefined);
 
-      const respuesta = await handlerCambiarEstante(
-        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'no-existe', body: { estanteId: 'estante-2' } }),
+      const respuesta = await handlerCambiarUbicacion(
+        eventoCambiarUbicacion({
+          authorization: 'Bearer token',
+          bookId: 'no-existe',
+          body: { ubicacionId: 'ubicacion-2' },
+        }),
         {} as never,
         {} as never,
       );
@@ -233,11 +253,11 @@ describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
       expect(guardarMock).not.toHaveBeenCalled();
     });
 
-    it('responde 400 sin estanteId en el body', async () => {
+    it('responde 400 sin ubicacionId en el body', async () => {
       obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
 
-      const respuesta = await handlerCambiarEstante(
-        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: {} }),
+      const respuesta = await handlerCambiarUbicacion(
+        eventoCambiarUbicacion({ authorization: 'Bearer token', bookId: 'libro-1', body: {} }),
         {} as never,
         {} as never,
       );
@@ -246,12 +266,16 @@ describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
       expect(guardarMock).not.toHaveBeenCalled();
     });
 
-    it('responde 400 cuando el estanteId no existe', async () => {
+    it('responde 400 cuando el ubicacionId no existe', async () => {
       obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
       obtenerPorClaveMock.mockResolvedValueOnce(undefined);
 
-      const respuesta = await handlerCambiarEstante(
-        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: { estanteId: 'no-existe' } }),
+      const respuesta = await handlerCambiarUbicacion(
+        eventoCambiarUbicacion({
+          authorization: 'Bearer token',
+          bookId: 'libro-1',
+          body: { ubicacionId: 'no-existe' },
+        }),
         {} as never,
         {} as never,
       );
@@ -260,12 +284,16 @@ describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
       expect(guardarMock).not.toHaveBeenCalled();
     });
 
-    it('responde 200 y actualiza el estante cuando todo es válido', async () => {
+    it('responde 200 y actualiza la ubicación cuando todo es válido', async () => {
       obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
-      obtenerPorClaveMock.mockResolvedValueOnce(estanteFalso);
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
 
-      const respuesta = await handlerCambiarEstante(
-        eventoCambiarEstante({ authorization: 'Bearer token', bookId: 'libro-1', body: { estanteId: 'estante-2' } }),
+      const respuesta = await handlerCambiarUbicacion(
+        eventoCambiarUbicacion({
+          authorization: 'Bearer token',
+          bookId: 'libro-1',
+          body: { ubicacionId: 'ubicacion-2' },
+        }),
         {} as never,
         {} as never,
       );
@@ -273,7 +301,7 @@ describe('handlerCambiarEstante (PATCH /api/libros/:bookId/estante)', () => {
       expect(respuesta).toMatchObject({ statusCode: 200 });
       expect(guardarMock).toHaveBeenCalledTimes(1);
       const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(libroGuardado['estanteId']).toBe('estante-2');
+      expect(libroGuardado['ubicacionId']).toBe('ubicacion-2');
       expect(libroGuardado['bookId']).toBe('libro-1');
       expect(libroGuardado['actualizadoEn']).not.toBe(libroFalso.actualizadoEn);
     });
@@ -284,7 +312,9 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['TABLA_LIBROS'] = 'babel-libros-test';
-    process.env['TABLA_ESTANTES'] = 'babel-estantes-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    process.env['TABLA_MUEBLES'] = 'babel-muebles-test';
+    process.env['TABLA_ESPACIOS'] = 'babel-espacios-test';
   });
 
   it('responde 400 sin bookId en la ruta', async () => {
@@ -303,39 +333,86 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
     expect(verificarTokenDesdeHeaderMock).not.toHaveBeenCalled();
   });
 
-  it('responde 200 con el libro y su ubicación física resuelta', async () => {
-    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso).mockResolvedValueOnce(estanteFalso);
+  it('responde 200 con el libro y su ubicación física resuelta (Espacio → Mueble → Ubicación, 3 GetItem puntuales)', async () => {
+    obtenerPorClaveMock
+      .mockResolvedValueOnce(libroFalso)
+      .mockResolvedValueOnce(ubicacionFalsa)
+      .mockResolvedValueOnce(muebleFalso)
+      .mockResolvedValueOnce(espacioFalso);
 
     const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 200 });
     const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
     expect(cuerpo['titulo']).toBe(libroFalso.titulo);
-    expect(cuerpo['estante']).toEqual({
-      espacio: estanteFalso.espacio,
-      mueble: estanteFalso.mueble,
-      ubicacion: estanteFalso.ubicacion,
+    expect(cuerpo['ubicacion']).toEqual({
+      espacio: espacioFalso.nombre,
+      mueble: muebleFalso.nombre,
+      ubicacion: ubicacionFalsa.nombre,
     });
     expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(1, 'babel-libros-test', { bookId: 'libro-1' });
-    expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(2, 'babel-estantes-test', {
-      estanteId: libroFalso.estanteId,
+    expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(2, 'babel-ubicaciones-test', {
+      ubicacionId: libroFalso.ubicacionId,
     });
+    expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(3, 'babel-muebles-test', { muebleId: ubicacionFalsa.muebleId });
+    expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(4, 'babel-espacios-test', { espacioId: muebleFalso.espacioId });
   });
 
-  it('devuelve estante: null (sin romper la ficha) cuando el estanteId ya no existe', async () => {
+  it('responde 200 con ubicacion: null (sin 500) para un libro catalogado antes de la migración a ubicacionId', async () => {
+    const { ubicacionId: _ubicacionId, ...libroSinUbicacionId } = libroFalso;
+    obtenerPorClaveMock.mockResolvedValueOnce({ ...libroSinUbicacionId, ubicacionId: undefined });
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo['ubicacion']).toBeNull();
+    expect(obtenerPorClaveMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('devuelve ubicacion: null (sin romper la ficha) cuando el ubicacionId ya no existe', async () => {
     obtenerPorClaveMock.mockResolvedValueOnce(libroFalso).mockResolvedValueOnce(undefined);
 
     const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 200 });
     const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
-    expect(cuerpo['estante']).toBeNull();
+    expect(cuerpo['ubicacion']).toBeNull();
+  });
+
+  it('devuelve ubicacion: null cuando el mueble referenciado ya no existe', async () => {
+    obtenerPorClaveMock
+      .mockResolvedValueOnce(libroFalso)
+      .mockResolvedValueOnce(ubicacionFalsa)
+      .mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo['ubicacion']).toBeNull();
+  });
+
+  it('devuelve ubicacion: null cuando el espacio referenciado ya no existe', async () => {
+    obtenerPorClaveMock
+      .mockResolvedValueOnce(libroFalso)
+      .mockResolvedValueOnce(ubicacionFalsa)
+      .mockResolvedValueOnce(muebleFalso)
+      .mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo['ubicacion']).toBeNull();
   });
 
   it('responde 200 aunque el libro esté agotado (cantidadDisponible: 0) — a diferencia del listado', async () => {
-    obtenerPorClaveMock.mockResolvedValueOnce({ ...libroFalso, cantidadDisponible: 0 }).mockResolvedValueOnce(
-      estanteFalso,
-    );
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ ...libroFalso, cantidadDisponible: 0 })
+      .mockResolvedValueOnce(ubicacionFalsa)
+      .mockResolvedValueOnce(muebleFalso)
+      .mockResolvedValueOnce(espacioFalso);
 
     const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
 
