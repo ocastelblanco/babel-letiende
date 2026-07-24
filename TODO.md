@@ -4,8 +4,6 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Prioridad de selección aplicada (2026-07-24):** se completaron la Tarea C (PR #56, migrar `Libro.estanteId`→`ubicacionId`) y la Tarea D (PR #57, vender desde la ficha) del backlog de `ajustes-finales.md`. Sigue vigente la decisión del usuario: **no se retoma el plan de modo offline ni el despliegue a producción hasta cerrar todo el conjunto de `ajustes-finales.md`.** Se promueven las siguientes 2 tareas del backlog ordenado (`ajustes-finales.md` §"Backlog ordenado de implementación"): Tarea E (área "Gestionar") sube a **Tarea 1** — sus dependencias (B y C) ya están fusionadas, sin bloqueo; Tarea F (filtrado público por ubicación) sube a **Tarea 2** — depende solo de B (ya fusionada), así que puede avanzar en paralelo con la Tarea 1 sin conflicto real de archivos (una toca `/gestionar` y `CatalogarLibroComponent`, la otra `CatalogoPublicoComponent`).
 
-**Nota operativa importante:** en `staging` no hay ningún Espacio/Mueble/Ubicación creado todavía (tablas confirmadas vacías directamente en DynamoDB, 2026-07-24) — antes de poder verificar en vivo cualquiera de las 2 tareas de abajo, hay que crear al menos un Espacio→Mueble→Ubicación desde `/admin/ubicaciones`.
-
 ---
 
 ## Tarea 1 — [FEATURE]: área "Gestionar" (Catalogar rediseñado + Editar/Eliminar libro)
@@ -35,7 +33,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 - [ ] Un vendedor/administrador puede editar Espacio/Mueble/Ubicación/cantidad/PVP/descuento de un libro ya catalogado desde `/gestionar`
 - [ ] Solo un administrador ve y puede usar "ELIMINAR LIBRO"
 - [ ] El vínculo del header dice "Gestionar" y apunta a `/gestionar`; `/libros` y `/libros/:bookId/ubicacion` ya no existen
-- [ ] Verificado en vivo contra `staging` (requiere al menos un Espacio/Mueble/Ubicación ya sembrado — ver nota operativa arriba)
+- [ ] Verificado en vivo contra `staging`
 
 ---
 
@@ -57,7 +55,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 - [ ] `npm run build`, `npm test -- --watch=false` pasan sin errores
 - [ ] Un visitante sin autenticar puede filtrar el catálogo por Espacio y por Mueble (acumulativo entre sí y con la búsqueda de texto)
 - [ ] Entrar a `/?espacio=X&mueble=Y` pre-filtra el catálogo con esos valores
-- [ ] Verificado en vivo contra `staging` (requiere al menos un Espacio/Mueble/Ubicación ya sembrado — ver nota operativa arriba)
+- [ ] Verificado en vivo contra `staging`
 
 ---
 
