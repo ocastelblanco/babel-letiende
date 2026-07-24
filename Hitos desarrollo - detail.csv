@@ -99,3 +99,5 @@ Backend,23/07/2026 08:32,23/07/2026 09:31,0:59:00,AI,Sonnet 5,"GET /api/ventas/e
 Cloud infraestructure,23/07/2026 09:34,23/07/2026 09:35,0:01:00,AI,Sonnet 5,Limpieza de repo local tras fusionar PR #45.,Claude Code,cli,high
 Cloud infraestructure,24/07/2026 12:02,24/07/2026 12:03,0:01:00,AI,Sonnet 5,"Limpieza de repo local tras fusionar PR #55 (main actualizado, rama docs borrada).",Claude Code,cli,high
 Backend,24/07/2026 12:03,24/07/2026 12:20,0:17:00,AI,Sonnet 5,Migra Libro.estanteId a ubicacionId (Tarea 1 del motor JIT): backend/frontend/infra + PR #56.,Claude Code,cli,high
+Backend,24/07/2026 14:31,24/07/2026 14:34,0:03:00,AI,Sonnet 5,"Corrige 500 en ficha de libros pre-migracion (ubicacionId undefined), commit adicional en PR #56.",Claude Code,cli,high
+Workspace settting,24/07/2026 14:34,24/07/2026 14:37,0:03:00,AI,Sonnet 5,Agrega CLAUDE.md paragrafo 8 y trackea Hitos desarrollo - detail.csv en el repo.,Claude Code,cli,high
