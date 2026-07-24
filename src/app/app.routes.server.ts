@@ -1,6 +1,6 @@
 import { RenderMode, ServerRoute } from '@angular/ssr';
 
-// Todas las rutas actuales dependen de un guard (AuthGuard/NoAuthGuard) que
+// Todas las rutas actuales dependen de un guard (RoleGuard/NoAuthGuard) que
 // debe evaluarse en cada petición. RenderMode.Prerender genera HTML estático
 // en build time y NUNCA ejecuta guards por petición en el Lambda desplegado
 // (verificado: /libros servía 200 en vez de redirigir a /login en staging).
@@ -18,7 +18,7 @@ import { RenderMode, ServerRoute } from '@angular/ssr';
 // en un bucle de redirección a /login al entrar por URL directa/refresh).
 // Con Client, esas rutas no se renderizan en el servidor — el navegador
 // hace CSR completo, donde el guard sí puede leer la sesión real
-// (`AuthService.esperarListo()`, ver `auth.guard.ts`). Ver MEMORY.md §7.
+// (`AuthService.esperarListo()`, ver `role.guard.ts`). Ver MEMORY.md §7.
 export const serverRoutes: ServerRoute[] = [
   {
     path: 'gestionar',
