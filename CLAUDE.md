@@ -201,3 +201,28 @@ Mismo hallazgo que en Comandante: añadir siempre `referrerpolicy="no-referrer"`
 
 ### Cold starts de Lambda en SSR
 El primer request tras inactividad a una función Lambda que sirve SSR de Angular puede tardar significativamente más (cold start incluye bootstrap de Node + Angular Universal). Evaluar `provisioned concurrency` solo si el costo lo justifica (rompe el objetivo de $0); por defecto, aceptar la latencia en frío y optimizar el bundle del servidor.
+
+---
+
+## 8. Seguimiento de Tiempos de Desarrollo
+
+**Obligatorio, sin excepción:** todo agente IA que trabaje en este repo debe registrar **cada tarea** — de planeación (definir specs, responder preguntas, documentar) o de ejecución (código, infra, fixes) — como una fila nueva en `Hitos desarrollo - detail.csv` (raíz del repo). No es un reporte opcional en el chat: es una fila en ese archivo.
+
+**Columnas exactas:** `stage,start,finish,time,role,model,milestone,tool,device,effort`
+
+| Columna | Valores/formato |
+|---|---|
+| `stage` | Categoría de la tarea: `Specs definition`, `Workspace settting`, `Scaffold`, `Cloud infraestructure`, `Auth connection`, `Backend`, `Frontend` (agregar una nueva categoría solo si ninguna aplica) |
+| `start` / `finish` | `DD/MM/YYYY HH:MM`, hora de Bogotá (`America/Bogota`) |
+| `time` | Duración `H:MM:SS` |
+| `role` | `human` o `AI` |
+| `model` | Si `role=AI`: nombre del modelo (`Sonnet 5`, `Opus 4.8`, `Fable 5`, etc.). Si `role=human`: `OCM` |
+| `milestone` | Resumen breve en español de qué se hizo, una línea |
+| `tool` | Herramienta usada (`Claude Code`, `Github`, `GCP`, etc.) |
+| `device` | `cli`, `mobile`, `web`, `desktop` |
+| `effort` | `high`, `medium`, `low` |
+
+**Protocolo obligatorio en cada tarea:**
+1. Al **iniciar**, capturar la hora exacta con `TZ=America/Bogota date`.
+2. Al **finalizar**, capturar la hora de nuevo con el mismo comando y agregar la fila al CSV (append, nunca sobreescribir ni reordenar filas existentes).
+3. Esto es independiente del reporte verbal de inicio/fin que ya se le da al usuario en el chat — ambos deben ocurrir siempre.
