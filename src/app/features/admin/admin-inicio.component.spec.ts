@@ -17,15 +17,15 @@ describe('AdminInicioComponent', () => {
 
   it('lista las 5 secciones', () => {
     const texto = fixture.nativeElement.textContent as string;
-    expect(texto).toContain('Estantes');
+    expect(texto).toContain('Ubicación física');
     expect(texto).toContain('Usuarios');
     expect(texto).toContain('Editoriales');
     expect(texto).toContain('Sitios de scraping');
     expect(texto).toContain('Reportes');
   });
 
-  it('enlaza la sección Estantes a /admin/estantes', () => {
-    const enlace = fixture.nativeElement.querySelector('a[href="/admin/estantes"]') as HTMLAnchorElement | null;
+  it('enlaza la sección Ubicación física a /admin/ubicaciones', () => {
+    const enlace = fixture.nativeElement.querySelector('a[href="/admin/ubicaciones"]') as HTMLAnchorElement | null;
     expect(enlace).not.toBeNull();
   });
 

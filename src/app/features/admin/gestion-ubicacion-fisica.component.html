@@ -1,0 +1,387 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="mb-2 text-2xl font-bold text-primary">Ubicación física</h1>
+    <p class="mb-6 text-sm text-primary/70">
+      Gestiona el modelo jerárquico de ubicación física: Espacio → Mueble → Ubicación.
+    </p>
+
+    <div class="mb-6 flex gap-2">
+      <button
+        type="button"
+        (click)="cambiarPestana('espacios')"
+        [class]="
+          pestanaActiva() === 'espacios'
+            ? 'rounded-lg bg-primary px-4 py-2 text-xs font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90'
+            : 'rounded-lg border border-primary/20 px-4 py-2 text-xs font-semibold tracking-wider text-primary uppercase transition-opacity hover:opacity-90'
+        "
+      >
+        Espacios
+      </button>
+      <button
+        type="button"
+        (click)="cambiarPestana('muebles')"
+        [class]="
+          pestanaActiva() === 'muebles'
+            ? 'rounded-lg bg-primary px-4 py-2 text-xs font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90'
+            : 'rounded-lg border border-primary/20 px-4 py-2 text-xs font-semibold tracking-wider text-primary uppercase transition-opacity hover:opacity-90'
+        "
+      >
+        Muebles
+      </button>
+      <button
+        type="button"
+        (click)="cambiarPestana('ubicaciones')"
+        [class]="
+          pestanaActiva() === 'ubicaciones'
+            ? 'rounded-lg bg-primary px-4 py-2 text-xs font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90'
+            : 'rounded-lg border border-primary/20 px-4 py-2 text-xs font-semibold tracking-wider text-primary uppercase transition-opacity hover:opacity-90'
+        "
+      >
+        Ubicaciones
+      </button>
+    </div>
+
+    @if (mensajeExito()) {
+      <p class="mb-3 text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+    }
+    @if (mensajeError()) {
+      <p class="mb-3 text-sm text-danger">{{ mensajeError() }}</p>
+    }
+
+    <!-- ================= Espacios ================= -->
+    @if (pestanaActiva() === 'espacios') {
+      <div class="mb-6 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 class="mb-3 text-sm font-semibold text-primary">Espacios registrados</h2>
+
+        @if (errorCargaEspacios()) {
+          <p class="text-sm text-danger">No se pudieron cargar los espacios.</p>
+        } @else if (espacios().length === 0) {
+          <p class="text-sm text-primary/70">Todavía no hay espacios registrados.</p>
+        } @else {
+          <ul class="flex flex-col gap-2">
+            @for (espacio of espacios(); track espacio.espacioId) {
+              <li class="flex items-center justify-between gap-2 rounded-xl border border-primary/10 px-3 py-2">
+                <p class="min-w-0 truncate text-sm text-primary">{{ espacio.nombre }}</p>
+                <div class="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    (click)="editarEspacio(espacio)"
+                    class="rounded-lg border border-primary/20 px-3 py-1 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    (click)="eliminarEspacio(espacio)"
+                    class="rounded-lg border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    [disabled]="eliminandoEspacioId() === espacio.espacioId"
+                  >
+                    {{ eliminandoEspacioId() === espacio.espacioId ? 'Eliminando…' : 'Eliminar' }}
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="mb-6 flex justify-center">
+        <button
+          type="button"
+          (click)="agregarEspacio()"
+          [disabled]="formularioEspacioVisible()"
+          class="rounded-lg bg-primary px-4 py-2 text-xs font-semibold tracking-wider text-neutral uppercase shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Crear espacio
+        </button>
+      </div>
+
+      @if (formularioEspacioVisible()) {
+        <form
+          [formGroup]="formularioEspacio"
+          (ngSubmit)="guardarEspacio()"
+          class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+        >
+          <h2 class="text-sm font-semibold text-primary">
+            {{ espacioEditandoId() ? 'Editar espacio' : 'Nuevo espacio' }}
+          </h2>
+
+          <div>
+            <label for="espacio-nombre" class="mb-1 block text-sm font-semibold text-primary">Nombre</label>
+            <input
+              id="espacio-nombre"
+              type="text"
+              formControlName="nombre"
+              placeholder="Espacio principal"
+              class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+            />
+            @if (formularioEspacio.controls.nombre.invalid && formularioEspacio.controls.nombre.touched) {
+              <p class="mt-1 text-xs text-danger">El nombre es requerido.</p>
+            }
+          </div>
+
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              [disabled]="guardandoEspacio()"
+            >
+              {{ guardandoEspacio() ? 'Guardando…' : espacioEditandoId() ? 'Guardar cambios' : 'Crear espacio' }}
+            </button>
+            <button
+              type="button"
+              (click)="cancelarEdicionEspacio()"
+              class="h-12 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      }
+    }
+
+    <!-- ================= Muebles ================= -->
+    @if (pestanaActiva() === 'muebles') {
+      <div class="mb-6 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 class="mb-3 text-sm font-semibold text-primary">Muebles registrados</h2>
+
+        @if (errorCargaMuebles()) {
+          <p class="text-sm text-danger">No se pudieron cargar los muebles.</p>
+        } @else if (muebles().length === 0) {
+          <p class="text-sm text-primary/70">Todavía no hay muebles registrados.</p>
+        } @else {
+          <ul class="flex flex-col gap-2">
+            @for (mueble of muebles(); track mueble.muebleId) {
+              <li class="flex items-center justify-between gap-2 rounded-xl border border-primary/10 px-3 py-2">
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-primary">{{ mueble.nombre }}</p>
+                  <p class="truncate text-xs text-primary/60">{{ nombreEspacio(mueble.espacioId) }}</p>
+                </div>
+                <div class="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    (click)="editarMueble(mueble)"
+                    class="rounded-lg border border-primary/20 px-3 py-1 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    (click)="eliminarMueble(mueble)"
+                    class="rounded-lg border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    [disabled]="eliminandoMuebleId() === mueble.muebleId"
+                  >
+                    {{ eliminandoMuebleId() === mueble.muebleId ? 'Eliminando…' : 'Eliminar' }}
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="mb-6 flex justify-center">
+        <button
+          type="button"
+          (click)="agregarMueble()"
+          [disabled]="formularioMuebleVisible()"
+          class="rounded-lg bg-primary px-4 py-2 text-xs font-semibold tracking-wider text-neutral uppercase shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Crear mueble
+        </button>
+      </div>
+
+      @if (formularioMuebleVisible()) {
+        <form
+          [formGroup]="formularioMueble"
+          (ngSubmit)="guardarMueble()"
+          class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+        >
+          <h2 class="text-sm font-semibold text-primary">
+            {{ muebleEditandoId() ? 'Editar mueble' : 'Nuevo mueble' }}
+          </h2>
+
+          <div>
+            <label for="mueble-espacio" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
+            <select
+              id="mueble-espacio"
+              formControlName="espacioId"
+              class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+            >
+              <option value="" disabled>Elige un espacio</option>
+              @for (espacio of espacios(); track espacio.espacioId) {
+                <option [value]="espacio.espacioId">{{ espacio.nombre }}</option>
+              }
+            </select>
+            @if (formularioMueble.controls.espacioId.invalid && formularioMueble.controls.espacioId.touched) {
+              <p class="mt-1 text-xs text-danger">El espacio es requerido.</p>
+            }
+          </div>
+
+          <div>
+            <label for="mueble-nombre" class="mb-1 block text-sm font-semibold text-primary">Nombre</label>
+            <input
+              id="mueble-nombre"
+              type="text"
+              formControlName="nombre"
+              placeholder="Biblioteca 1"
+              class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+            />
+            @if (formularioMueble.controls.nombre.invalid && formularioMueble.controls.nombre.touched) {
+              <p class="mt-1 text-xs text-danger">El nombre es requerido.</p>
+            }
+          </div>
+
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              [disabled]="guardandoMueble()"
+            >
+              {{ guardandoMueble() ? 'Guardando…' : muebleEditandoId() ? 'Guardar cambios' : 'Crear mueble' }}
+            </button>
+            <button
+              type="button"
+              (click)="cancelarEdicionMueble()"
+              class="h-12 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      }
+    }
+
+    <!-- ================= Ubicaciones ================= -->
+    @if (pestanaActiva() === 'ubicaciones') {
+      <div class="mb-6 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 class="mb-3 text-sm font-semibold text-primary">Ubicaciones registradas</h2>
+
+        @if (errorCargaUbicaciones()) {
+          <p class="text-sm text-danger">No se pudieron cargar las ubicaciones.</p>
+        } @else if (ubicaciones().length === 0) {
+          <p class="text-sm text-primary/70">Todavía no hay ubicaciones registradas.</p>
+        } @else {
+          <ul class="flex flex-col gap-2">
+            @for (ubicacion of ubicaciones(); track ubicacion.ubicacionId) {
+              <li class="flex items-center justify-between gap-2 rounded-xl border border-primary/10 px-3 py-2">
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-primary">{{ ubicacion.nombre }}</p>
+                  <p class="truncate text-xs text-primary/60">
+                    {{ nombreEspacioDeUbicacion(ubicacion.muebleId) }} · {{ nombreMueble(ubicacion.muebleId) }}
+                  </p>
+                </div>
+                <div class="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    (click)="editarUbicacion(ubicacion)"
+                    class="rounded-lg border border-primary/20 px-3 py-1 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    (click)="eliminarUbicacion(ubicacion)"
+                    class="rounded-lg border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    [disabled]="eliminandoUbicacionId() === ubicacion.ubicacionId"
+                  >
+                    {{ eliminandoUbicacionId() === ubicacion.ubicacionId ? 'Eliminando…' : 'Eliminar' }}
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="mb-6 flex justify-center">
+        <button
+          type="button"
+          (click)="agregarUbicacion()"
+          [disabled]="formularioUbicacionVisible()"
+          class="rounded-lg bg-primary px-4 py-2 text-xs font-semibold tracking-wider text-neutral uppercase shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Crear ubicación
+        </button>
+      </div>
+
+      @if (formularioUbicacionVisible()) {
+        <form
+          [formGroup]="formularioUbicacion"
+          (ngSubmit)="guardarUbicacion()"
+          class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+        >
+          <h2 class="text-sm font-semibold text-primary">
+            {{ ubicacionEditandoId() ? 'Editar ubicación' : 'Nueva ubicación' }}
+          </h2>
+
+          <div>
+            <label for="ubicacion-espacio" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
+            <select
+              id="ubicacion-espacio"
+              formControlName="espacioId"
+              (change)="alCambiarEspacioEnFormularioUbicacion()"
+              class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+            >
+              <option value="" disabled>Elige un espacio</option>
+              @for (espacio of espacios(); track espacio.espacioId) {
+                <option [value]="espacio.espacioId">{{ espacio.nombre }}</option>
+              }
+            </select>
+            @if (formularioUbicacion.controls.espacioId.invalid && formularioUbicacion.controls.espacioId.touched) {
+              <p class="mt-1 text-xs text-danger">El espacio es requerido.</p>
+            }
+          </div>
+
+          <div>
+            <label for="ubicacion-mueble" class="mb-1 block text-sm font-semibold text-primary">Mueble</label>
+            <select
+              id="ubicacion-mueble"
+              formControlName="muebleId"
+              class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+            >
+              <option value="" disabled>Elige un mueble</option>
+              @for (mueble of mueblesDelEspacioSeleccionado(); track mueble.muebleId) {
+                <option [value]="mueble.muebleId">{{ mueble.nombre }}</option>
+              }
+            </select>
+            @if (formularioUbicacion.controls.muebleId.invalid && formularioUbicacion.controls.muebleId.touched) {
+              <p class="mt-1 text-xs text-danger">El mueble es requerido.</p>
+            }
+          </div>
+
+          <div>
+            <label for="ubicacion-nombre" class="mb-1 block text-sm font-semibold text-primary">Nombre</label>
+            <input
+              id="ubicacion-nombre"
+              type="text"
+              formControlName="nombre"
+              placeholder="Estante 1"
+              class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+            />
+            @if (formularioUbicacion.controls.nombre.invalid && formularioUbicacion.controls.nombre.touched) {
+              <p class="mt-1 text-xs text-danger">El nombre es requerido.</p>
+            }
+          </div>
+
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              [disabled]="guardandoUbicacion()"
+            >
+              {{ guardandoUbicacion() ? 'Guardando…' : ubicacionEditandoId() ? 'Guardar cambios' : 'Crear ubicación' }}
+            </button>
+            <button
+              type="button"
+              (click)="cancelarEdicionUbicacion()"
+              class="h-12 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      }
+    }
+  </div>
+</div>

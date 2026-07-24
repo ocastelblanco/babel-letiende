@@ -23,6 +23,9 @@ custom:
     libros: babel-libros-${sls:stage}
     ventas: babel-ventas-${sls:stage}
     estantes: babel-estantes-${sls:stage}
+    espacios: babel-espacios-${sls:stage}
+    muebles: babel-muebles-${sls:stage}
+    ubicaciones: babel-ubicaciones-${sls:stage}
     editorialesDescuentos: babel-editoriales-descuentos-${sls:stage}
     sitiosScraping: babel-sitios-scraping-${sls:stage}
     usuarios: babel-usuarios-${sls:stage}
@@ -440,6 +443,217 @@ functions:
           method: put
       - httpApi:
           path: /api/estantes/{estanteId}
+          method: delete
+
+  espacios:
+    handler: dist-server/api/handlers/ubicacion-fisica.handlerEspacios
+    role: !GetAtt EspaciosLambdaRole.Arn
+    description: >-
+      CRUD /api/espacios — GET público (sin token), POST/PUT/DELETE exigen
+      administrador (CLAUDE.md A01, ADR-008). Primer nivel del modelo
+      Espacio → Mueble → Ubicación (TODO.md Tarea 2), reemplaza a
+      `babel-estantes`.
+    environment:
+      TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/ubicacion-fisica.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Verifica tokens con firebase-admin — igual que estantes/usuariosMe,
+        # se incluye node_modules completo en vez de un allowlist manual
+        # (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/espacios
+          method: get
+      - httpApi:
+          path: /api/espacios
+          method: post
+      - httpApi:
+          path: /api/espacios/{espacioId}
+          method: put
+      - httpApi:
+          path: /api/espacios/{espacioId}
+          method: delete
+
+  muebles:
+    handler: dist-server/api/handlers/ubicacion-fisica.handlerMuebles
+    role: !GetAtt MueblesLambdaRole.Arn
+    description: >-
+      CRUD /api/muebles — GET público (sin token), POST/PUT/DELETE exigen
+      administrador (CLAUDE.md A01, ADR-008). Segundo nivel del modelo
+      jerárquico de ubicación física (TODO.md Tarea 2): cada mueble
+      pertenece a un espacio existente.
+    environment:
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/ubicacion-fisica.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Verifica tokens con firebase-admin — igual que estantes/usuariosMe,
+        # se incluye node_modules completo en vez de un allowlist manual
+        # (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/muebles
+          method: get
+      - httpApi:
+          path: /api/muebles
+          method: post
+      - httpApi:
+          path: /api/muebles/{muebleId}
+          method: put
+      - httpApi:
+          path: /api/muebles/{muebleId}
+          method: delete
+
+  ubicaciones:
+    handler: dist-server/api/handlers/ubicacion-fisica.handlerUbicaciones
+    role: !GetAtt UbicacionesLambdaRole.Arn
+    description: >-
+      CRUD /api/ubicaciones — GET público (sin token), POST/PUT/DELETE
+      exigen administrador (CLAUDE.md A01, ADR-008). Tercer nivel del
+      modelo jerárquico de ubicación física (TODO.md Tarea 2): cada
+      ubicación pertenece a un mueble existente.
+    environment:
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/ubicacion-fisica.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Verifica tokens con firebase-admin — igual que estantes/usuariosMe,
+        # se incluye node_modules completo en vez de un allowlist manual
+        # (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/ubicaciones
+          method: get
+      - httpApi:
+          path: /api/ubicaciones
+          method: post
+      - httpApi:
+          path: /api/ubicaciones/{ubicacionId}
+          method: put
+      - httpApi:
+          path: /api/ubicaciones/{ubicacionId}
           method: delete
 
   metadatos:
@@ -1275,6 +1489,136 @@ resources:
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
 
+    EspaciosLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-espacios-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # CRUD completo sobre babel-espacios, solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token, y escanea
+          # (Scan) babel-muebles para validar que ningún mueble dependa de
+          # un espacio antes de borrarlo (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-espacios-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaEspacios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaMuebles.Arn
+
+    MueblesLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-muebles-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # CRUD completo sobre babel-muebles, solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token, lee (GetItem)
+          # babel-espacios para validar que el espacioId exista al
+          # crear/editar, y escanea (Scan) babel-ubicaciones para validar
+          # que ninguna ubicación dependa de un mueble antes de borrarlo
+          # (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-muebles-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaMuebles.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaEspacios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaUbicaciones.Arn
+
+    UbicacionesLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-ubicaciones-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # CRUD completo sobre babel-ubicaciones, solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token, y lee (GetItem)
+          # babel-muebles para validar que el muebleId exista al
+          # crear/editar (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-ubicaciones-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaUbicaciones.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaMuebles.Arn
+
     MetadatosLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -1657,6 +2001,51 @@ resources:
             AttributeType: S
         KeySchema:
           - AttributeName: estanteId
+            KeyType: HASH
+
+    TablaEspacios:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.espacios}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: espacioId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: espacioId
+            KeyType: HASH
+
+    TablaMuebles:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.muebles}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: muebleId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: muebleId
+            KeyType: HASH
+
+    TablaUbicaciones:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.ubicaciones}
+        BillingMode: PROVISIONED
+        ProvisionedThroughput:
+          ReadCapacityUnits: 25
+          WriteCapacityUnits: 25
+        AttributeDefinitions:
+          - AttributeName: ubicacionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: ubicacionId
             KeyType: HASH
 
     TablaEditorialesDescuentos:
