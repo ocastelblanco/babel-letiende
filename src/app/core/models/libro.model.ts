@@ -25,7 +25,7 @@ export interface Libro {
   utilidadCatalogo: number;
   cantidadTotal: number;
   cantidadDisponible: number;
-  estanteId: string;
+  ubicacionId: string;
   /** Email del vendedor/administrador que catalogó el libro. */
   creadoPor: string;
   /** Fecha ISO. */
@@ -36,10 +36,11 @@ export interface Libro {
 
 /**
  * Un libro con su ubicación física ya resuelta — contrato de
- * `GET /api/libros/:bookId` (ficha pública, `TODO.md`). `estante` es `null`
- * si el `estanteId` referenciado ya no existe (dato inconsistente que no
+ * `GET /api/libros/:bookId` (ficha pública, `TODO.md`). `ubicacion` es
+ * `null` si algún eslabón de la cadena Ubicación → Mueble → Espacio
+ * referenciada por `ubicacionId` ya no existe (dato inconsistente que no
  * debe romper la ficha, `CLAUDE.md` A08).
  */
-export interface LibroConEstante extends Libro {
-  estante: { espacio: string; mueble: string; ubicacion: string } | null;
+export interface LibroConUbicacion extends Libro {
+  ubicacion: { espacio: string; mueble: string; ubicacion: string } | null;
 }

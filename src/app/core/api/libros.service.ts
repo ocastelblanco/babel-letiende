@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { Libro, LibroConEstante } from '../models/libro.model';
+import { Libro, LibroConUbicacion } from '../models/libro.model';
 
 /**
  * Cliente de `GET /api/libros` (tech-specs.md §5) — endpoint público, sin
@@ -49,9 +49,9 @@ export class LibrosService {
    * "libro no encontrado" (mismo criterio "nunca lanza" que
    * `cargarCatalogo`), sin distinguir la causa exacta ante el visitante.
    */
-  async obtenerDetalle(bookId: string): Promise<LibroConEstante | null> {
+  async obtenerDetalle(bookId: string): Promise<LibroConUbicacion | null> {
     try {
-      return await firstValueFrom(this.http.get<LibroConEstante>(`/api/libros/${bookId}`));
+      return await firstValueFrom(this.http.get<LibroConUbicacion>(`/api/libros/${bookId}`));
     } catch {
       return null;
     }
