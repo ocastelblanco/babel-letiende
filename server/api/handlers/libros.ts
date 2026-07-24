@@ -24,7 +24,7 @@ interface Libro {
   utilidadCatalogo: number;
   cantidadTotal: number;
   cantidadDisponible: number;
-  estanteId: string;
+  ubicacionId: string;
   creadoPor: string;
   creadoEn: string;
   actualizadoEn: string;
@@ -39,12 +39,27 @@ interface Usuario {
   creadoEn: string;
 }
 
-/** Copia local de `src/app/core/models/estante.model.ts` — mismo motivo que arriba. */
-interface Estante {
-  estanteId: string;
-  espacio: string;
-  mueble: string;
-  ubicacion: string;
+/**
+ * Copias locales de `src/app/core/models/espacio.model.ts`,
+ * `mueble.model.ts` y `ubicacion.model.ts` — mismo motivo que arriba.
+ * Modelo jerárquico Espacio → Mueble → Ubicación (`TODO.md` Tarea 1, PR #54)
+ * que reemplaza al antiguo `Estante`.
+ */
+interface Espacio {
+  espacioId: string;
+  nombre: string;
+}
+
+interface Mueble {
+  muebleId: string;
+  espacioId: string;
+  nombre: string;
+}
+
+interface Ubicacion {
+  ubicacionId: string;
+  muebleId: string;
+  nombre: string;
 }
 
 function respuestaJson(statusCode: number, cuerpo: unknown): APIGatewayProxyResultV2 {
@@ -71,10 +86,26 @@ function nombreTablaUsuarios(): string {
   return nombre;
 }
 
-function nombreTablaEstantes(): string {
-  const nombre = process.env['TABLA_ESTANTES'];
+function nombreTablaEspacios(): string {
+  const nombre = process.env['TABLA_ESPACIOS'];
   if (!nombre) {
-    throw new Error('Falta la variable de entorno TABLA_ESTANTES.');
+    throw new Error('Falta la variable de entorno TABLA_ESPACIOS.');
+  }
+  return nombre;
+}
+
+function nombreTablaMuebles(): string {
+  const nombre = process.env['TABLA_MUEBLES'];
+  if (!nombre) {
+    throw new Error('Falta la variable de entorno TABLA_MUEBLES.');
+  }
+  return nombre;
+}
+
+function nombreTablaUbicaciones(): string {
+  const nombre = process.env['TABLA_UBICACIONES'];
+  if (!nombre) {
+    throw new Error('Falta la variable de entorno TABLA_UBICACIONES.');
   }
   return nombre;
 }
@@ -99,9 +130,34 @@ export const handler: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayPro
 };
 
 /** Datos del libro que expone `handlerDetalle`, con la ubicación física ya resuelta (`TODO.md`, ficha de libro). */
-interface LibroConEstante extends Libro {
-  /** `null` si el estante referenciado ya no existe (dato inconsistente, pero no debe romper la ficha) — CLAUDE.md A08. */
-  estante: { espacio: string; mueble: string; ubicacion: string } | null;
+interface LibroConUbicacion extends Libro {
+  /** `null` si algún eslabón de la cadena Ubicación → Mueble → Espacio ya no existe (dato inconsistente, pero no debe romper la ficha) — CLAUDE.md A08. */
+  ubicacion: { espacio: string; mueble: string; ubicacion: string } | null;
+}
+
+/**
+ * Resuelve el nombre de Espacio/Mueble/Ubicación de un libro con 3 `GetItem`
+ * puntuales (no un `Scan`): `ubicacionId` → `Ubicacion` → `Mueble` →
+ * `Espacio`. Si cualquier eslabón de la cadena ya no existe (dato
+ * inconsistente — ej. la ubicación fue borrada pero el libro todavía la
+ * referencia), devuelve `null` en vez de lanzar (CLAUDE.md A08).
+ */
+async function resolverUbicacion(
+  ubicacionId: string,
+): Promise<{ espacio: string; mueble: string; ubicacion: string } | null> {
+  const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId });
+  if (!ubicacion) {
+    return null;
+  }
+  const mueble = await obtenerPorClave<Mueble>(nombreTablaMuebles(), { muebleId: ubicacion.muebleId });
+  if (!mueble) {
+    return null;
+  }
+  const espacio = await obtenerPorClave<Espacio>(nombreTablaEspacios(), { espacioId: mueble.espacioId });
+  if (!espacio) {
+    return null;
+  }
+  return { espacio: espacio.nombre, mueble: mueble.nombre, ubicacion: ubicacion.nombre };
 }
 
 /**
@@ -114,10 +170,10 @@ interface LibroConEstante extends Libro {
  * agotado en este momento.
  *
  * Resuelve la ubicación física (`PRD.md` §7, "Ve el PVP y la ubicación
- * física... si está disponible") consultando `babel-estantes` por el
- * `estanteId` del libro — un `GetItem` puntual adicional, no un `Scan`. Si
- * el estante ya no existe (dato inconsistente), `estante` queda en `null`
- * en vez de romper la respuesta.
+ * física... si está disponible") con `resolverUbicacion` (Espacio → Mueble →
+ * Ubicación, `TODO.md` Tarea 1) — 3 `GetItem` puntuales, no un `Scan`. Si
+ * algún eslabón ya no existe (dato inconsistente), `ubicacion` queda en
+ * `null` en vez de romper la respuesta.
  */
 export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -131,14 +187,11 @@ export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<A
       return respuestaJson(404, { error: 'El libro no existe.' });
     }
 
-    const estante = await obtenerPorClave<Estante>(nombreTablaEstantes(), { estanteId: libro.estanteId });
+    const ubicacion = await resolverUbicacion(libro.ubicacionId);
 
-    const libroConEstante: LibroConEstante = {
-      ...libro,
-      estante: estante ? { espacio: estante.espacio, mueble: estante.mueble, ubicacion: estante.ubicacion } : null,
-    };
+    const libroConUbicacion: LibroConUbicacion = { ...libro, ubicacion };
 
-    return respuestaJson(200, libroConEstante);
+    return respuestaJson(200, libroConUbicacion);
   } catch {
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }
@@ -154,7 +207,7 @@ interface DatosNuevoLibro {
   pvp: number;
   porcentajeDescuentoEditorial: number;
   cantidadTotal: number;
-  estanteId: string;
+  ubicacionId: string;
 }
 
 /** Techo de sanidad para el PVP (CLAUDE.md A08) — no es un límite de negocio real, solo detecta datos claramente erróneos. */
@@ -183,8 +236,8 @@ export function validarDatosNuevoLibro(cuerpo: unknown): ResultadoValidacion {
   if (typeof datos['autor'] !== 'string' || datos['autor'].trim() === '') {
     return { valido: false, error: 'El autor es requerido.' };
   }
-  if (typeof datos['estanteId'] !== 'string' || datos['estanteId'].trim() === '') {
-    return { valido: false, error: 'El estante es requerido.' };
+  if (typeof datos['ubicacionId'] !== 'string' || datos['ubicacionId'].trim() === '') {
+    return { valido: false, error: 'La ubicación es requerida.' };
   }
   if (
     typeof datos['pvp'] !== 'number' ||
@@ -227,7 +280,7 @@ export function validarDatosNuevoLibro(cuerpo: unknown): ResultadoValidacion {
       pvp: datos['pvp'],
       porcentajeDescuentoEditorial: datos['porcentajeDescuentoEditorial'],
       cantidadTotal: datos['cantidadTotal'],
-      estanteId: datos['estanteId'],
+      ubicacionId: datos['ubicacionId'],
     },
   };
 }
@@ -236,7 +289,10 @@ export function validarDatosNuevoLibro(cuerpo: unknown): ResultadoValidacion {
  * `POST /api/libros` — cataloga un libro (tech-specs.md §5, "Vendedor/Admin").
  * Exige rol `vendedor` o `administrador` en `babel-usuarios` (CLAUDE.md A01)
  * — nunca confía en un rol enviado desde el cliente. `creadoPor` se toma
- * siempre del email verificado del token, nunca del body.
+ * siempre del email verificado del token, nunca del body. Valida que el
+ * `ubicacionId` recibido exista en `babel-ubicaciones` antes de guardar
+ * (mismo criterio que `handlerMuebles`/`handlerUbicaciones` en
+ * `ubicacion-fisica.ts` validan a su padre, `TODO.md` Tarea 1).
  */
 export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -260,6 +316,12 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
     }
 
     const { datos } = validacion;
+
+    const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId: datos.ubicacionId });
+    if (!ubicacion) {
+      return respuestaJson(400, { error: 'La ubicación indicada no existe.' });
+    }
+
     const ahora = new Date().toISOString();
     const libro: Libro = {
       ...datos,
@@ -284,14 +346,21 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
 };
 
 /**
- * `PATCH /api/libros/:bookId/estante` — cambia el estante de un libro ya
+ * `PATCH /api/libros/:bookId/ubicacion` — cambia la ubicación de un libro ya
  * catalogado (tech-specs.md §5, "Vendedor/Admin"). Exige rol `vendedor` o
  * `administrador` (CLAUDE.md A01), mismo criterio que `POST /api/libros` —
- * mover un libro de estante es parte de la operación diaria, no solo de
+ * mover un libro de ubicación es parte de la operación diaria, no solo de
  * administración. La ruta usa `bookId` (clave primaria real de
  * `babel-libros`, tech-specs.md §5.1) y no `isbn`, que puede ser `null`.
+ *
+ * Placeholder mínimo (`TODO.md` Tarea 1, paso 4): reemplaza a
+ * `handlerCambiarEstante` con el mismo flujo pero apuntando al modelo nuevo
+ * (`ubicacionId` contra `babel-ubicaciones` en vez de `estanteId` contra
+ * `babel-estantes`) — garantiza que el vendedor siga teniendo alguna forma
+ * de cambiar la ubicación de un libro ya catalogado mientras la Tarea E
+ * (panel "Gestionar" con edición completa) no esté lista.
  */
-export const handlerCambiarEstante: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+export const handlerCambiarUbicacion: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
     const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
 
@@ -317,17 +386,17 @@ export const handlerCambiarEstante: APIGatewayProxyHandlerV2 = async (event): Pr
       return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
     }
     const datos = typeof cuerpo === 'object' && cuerpo !== null ? (cuerpo as Record<string, unknown>) : {};
-    if (typeof datos['estanteId'] !== 'string' || datos['estanteId'].trim() === '') {
-      return respuestaJson(400, { error: 'El estanteId es requerido.' });
+    if (typeof datos['ubicacionId'] !== 'string' || datos['ubicacionId'].trim() === '') {
+      return respuestaJson(400, { error: 'El ubicacionId es requerido.' });
     }
-    const estanteId = datos['estanteId'];
+    const ubicacionId = datos['ubicacionId'];
 
-    const estante = await obtenerPorClave<Estante>(nombreTablaEstantes(), { estanteId });
-    if (!estante) {
-      return respuestaJson(400, { error: 'El estante indicado no existe.' });
+    const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId });
+    if (!ubicacion) {
+      return respuestaJson(400, { error: 'La ubicación indicada no existe.' });
     }
 
-    const libroActualizado: Libro = { ...libro, estanteId, actualizadoEn: new Date().toISOString() };
+    const libroActualizado: Libro = { ...libro, ubicacionId, actualizadoEn: new Date().toISOString() };
     await guardar(nombreTablaLibros(), libroActualizado);
 
     return respuestaJson(200, libroActualizado);

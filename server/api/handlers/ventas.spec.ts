@@ -44,7 +44,7 @@ const libroFalso = {
   utilidadCatalogo: 15750,
   cantidadTotal: 2,
   cantidadDisponible: 1,
-  estanteId: 'estante-1',
+  ubicacionId: 'ubicacion-1',
   creadoPor: 'vendedor@letiende.co',
   creadoEn: '2026-07-19T00:00:00.000Z',
   actualizadoEn: '2026-07-19T00:00:00.000Z',
