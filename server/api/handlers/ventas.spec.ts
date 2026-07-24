@@ -3,12 +3,12 @@ import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenInvalidoError } from '../lib/verificar-token';
 
-const { verificarTokenDesdeHeaderMock, obtenerPorClaveMock, guardarMock, decrementarSiPositivoMock, escanearTodoMock } =
+const { verificarTokenDesdeHeaderMock, obtenerPorClaveMock, guardarMock, decrementarPorCantidadSiSuficienteMock, escanearTodoMock } =
   vi.hoisted(() => ({
     verificarTokenDesdeHeaderMock: vi.fn(),
     obtenerPorClaveMock: vi.fn(),
     guardarMock: vi.fn(),
-    decrementarSiPositivoMock: vi.fn(),
+    decrementarPorCantidadSiSuficienteMock: vi.fn(),
     escanearTodoMock: vi.fn(),
   }));
 
@@ -23,13 +23,13 @@ vi.mock('../lib/verificar-token', async () => {
 vi.mock('../services/dynamodb', () => ({
   obtenerPorClave: obtenerPorClaveMock,
   guardar: guardarMock,
-  decrementarSiPositivo: decrementarSiPositivoMock,
+  decrementarPorCantidadSiSuficiente: decrementarPorCantidadSiSuficienteMock,
   escanearTodo: escanearTodoMock,
 }));
 
 const { handler, handlerListar, handlerExportar, validarDatosNuevaVenta, validarFiltrosVentas } = await import('./ventas');
 
-const datosValidos = { bookId: 'book-1', formaDePago: 'efectivo', porcentajeDescuentoVenta: 0 };
+const datosValidos = { bookId: 'book-1', cantidad: 1, formaDePago: 'efectivo', porcentajeDescuentoVenta: 0 };
 
 const libroFalso = {
   isbn: '9780000000000',
@@ -72,6 +72,19 @@ describe('validarDatosNuevaVenta', () => {
 
   it('rechaza un porcentajeDescuentoVenta fuera de 0-100', () => {
     expect(validarDatosNuevaVenta({ ...datosValidos, porcentajeDescuentoVenta: 150 }).valido).toBe(false);
+  });
+
+  it('rechaza una cantidad menor a 1', () => {
+    expect(validarDatosNuevaVenta({ ...datosValidos, cantidad: 0 }).valido).toBe(false);
+  });
+
+  it('rechaza una cantidad no entera', () => {
+    expect(validarDatosNuevaVenta({ ...datosValidos, cantidad: 1.5 }).valido).toBe(false);
+  });
+
+  it('rechaza cuando falta la cantidad', () => {
+    const { cantidad: _cantidad, ...sinCantidad } = datosValidos;
+    expect(validarDatosNuevaVenta(sinCantidad).valido).toBe(false);
   });
 });
 
@@ -125,7 +138,7 @@ describe('handler (POST /api/ventas)', () => {
     const respuesta = await handler(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 404 });
-    expect(decrementarSiPositivoMock).not.toHaveBeenCalled();
+    expect(decrementarPorCantidadSiSuficienteMock).not.toHaveBeenCalled();
     expect(guardarMock).not.toHaveBeenCalled();
   });
 
@@ -134,11 +147,31 @@ describe('handler (POST /api/ventas)', () => {
     obtenerPorClaveMock
       .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
       .mockResolvedValueOnce(libroFalso);
-    decrementarSiPositivoMock.mockResolvedValue(false);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(false);
 
     const respuesta = await handler(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 400 });
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 400 cuando la cantidad pedida excede la disponible (rechazo atómico)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
+      .mockResolvedValueOnce(libroFalso);
+    // libroFalso.cantidadDisponible es 1 — pedir 5 debe rechazarse atómicamente vía la condición de dynamodb.ts, aquí simulada por el mock.
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(false);
+
+    const respuesta = await handler(eventoFalso({ ...datosValidos, cantidad: 5 }, 'Bearer token'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+    expect(decrementarPorCantidadSiSuficienteMock).toHaveBeenCalledWith(
+      'babel-libros-test',
+      { bookId: 'book-1' },
+      'cantidadDisponible',
+      5,
+    );
     expect(guardarMock).not.toHaveBeenCalled();
   });
 
@@ -147,7 +180,7 @@ describe('handler (POST /api/ventas)', () => {
     obtenerPorClaveMock
       .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
       .mockResolvedValueOnce(libroFalso);
-    decrementarSiPositivoMock.mockResolvedValue(true);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(true);
 
     const respuesta = await handler(
       eventoFalso({ ...datosValidos, porcentajeDescuentoVenta: 10 }, 'Bearer token'),
@@ -156,10 +189,16 @@ describe('handler (POST /api/ventas)', () => {
     );
 
     expect(respuesta).toMatchObject({ statusCode: 201 });
-    expect(decrementarSiPositivoMock).toHaveBeenCalledWith('babel-libros-test', { bookId: 'book-1' }, 'cantidadDisponible');
+    expect(decrementarPorCantidadSiSuficienteMock).toHaveBeenCalledWith(
+      'babel-libros-test',
+      { bookId: 'book-1' },
+      'cantidadDisponible',
+      1,
+    );
     expect(guardarMock).toHaveBeenCalledTimes(1);
     const [, ventaGuardada] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
     expect(ventaGuardada['vendidoPor']).toBe('vendedor@letiende.co');
+    expect(ventaGuardada['cantidad']).toBe(1);
     expect(ventaGuardada['pvp']).toBe(45000);
     expect(ventaGuardada['costoLibro']).toBe(29250);
     expect(ventaGuardada['precioFinal']).toBe(40500);
@@ -167,12 +206,39 @@ describe('handler (POST /api/ventas)', () => {
     expect(typeof ventaGuardada['ventaId']).toBe('string');
   });
 
+  it('responde 201 con cantidad > 1 y calcula precioFinal/utilidad sobre el total', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
+      .mockResolvedValueOnce(libroFalso);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(true);
+
+    const respuesta = await handler(
+      eventoFalso({ ...datosValidos, cantidad: 3, porcentajeDescuentoVenta: 10 }, 'Bearer token'),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 201 });
+    expect(decrementarPorCantidadSiSuficienteMock).toHaveBeenCalledWith(
+      'babel-libros-test',
+      { bookId: 'book-1' },
+      'cantidadDisponible',
+      3,
+    );
+    const [, ventaGuardada] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(ventaGuardada['cantidad']).toBe(3);
+    // 45000 * 3 * 0.9 = 121500; utilidad = 121500 - 29250 * 3 = 33750
+    expect(ventaGuardada['precioFinal']).toBe(121500);
+    expect(ventaGuardada['utilidad']).toBe(33750);
+  });
+
   it('responde 201 cuando el rol es administrador', async () => {
     verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-2' });
     obtenerPorClaveMock
       .mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' })
       .mockResolvedValueOnce(libroFalso);
-    decrementarSiPositivoMock.mockResolvedValue(true);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(true);
 
     const respuesta = await handler(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
