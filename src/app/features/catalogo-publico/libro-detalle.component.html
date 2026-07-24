@@ -32,12 +32,12 @@
           </div>
         </div>
 
-        @if (libro.estante) {
+        @if (libro.ubicacion) {
           <div class="mt-6 rounded-xl border border-primary/10 px-3 py-2">
             <p class="mb-1 text-sm font-semibold text-primary">Ubicación en la librería</p>
-            <p class="text-sm text-primary/70">
-              {{ libro.estante.espacio }} — {{ libro.estante.mueble }} — {{ libro.estante.ubicacion }}
-            </p>
+            <p class="text-sm text-primary/70">Espacio: {{ libro.ubicacion.espacio }}</p>
+            <p class="text-sm text-primary/70">Mueble: {{ libro.ubicacion.mueble }}</p>
+            <p class="text-sm text-primary/70">Ubicación: {{ libro.ubicacion.ubicacion }}</p>
           </div>
         }
       </div>

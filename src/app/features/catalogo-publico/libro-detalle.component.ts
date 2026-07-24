@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
-import type { LibroConEstante } from '../../core/models/libro.model';
+import type { LibroConUbicacion } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 
 /**
@@ -14,9 +14,9 @@ import { PvpPipe } from '../../shared/pipes/pvp.pipe';
  * servidor para SEO).
  *
  * Pide el libro directo a `GET /api/libros/:bookId` (no reutiliza el
- * `libros()` de `LibrosService` como hace `CambiarEstanteComponent`) porque
- * esta puede ser la primera petición de la sesión — un visitante puede
- * llegar por un enlace directo o un buscador sin haber visto antes el
+ * `libros()` de `LibrosService` como hace `CambiarUbicacionComponent`)
+ * porque esta puede ser la primera petición de la sesión — un visitante
+ * puede llegar por un enlace directo o un buscador sin haber visto antes el
  * listado en `/`.
  */
 @Component({
@@ -32,7 +32,7 @@ export class LibroDetalleComponent implements OnInit {
 
   private readonly bookId = this.route.snapshot.paramMap.get('bookId') ?? '';
 
-  protected readonly libro = signal<LibroConEstante | null>(null);
+  protected readonly libro = signal<LibroConUbicacion | null>(null);
   protected readonly cargando = signal(true);
   /** `true` cuando el libro no existe o la petición falló — mismo mensaje para ambos casos ante el visitante (`LibrosService.obtenerDetalle` nunca lanza). */
   protected readonly noEncontrado = signal(false);
