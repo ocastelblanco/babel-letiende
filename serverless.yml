@@ -22,7 +22,6 @@ custom:
   nombresTablas:
     libros: babel-libros-${sls:stage}
     ventas: babel-ventas-${sls:stage}
-    estantes: babel-estantes-${sls:stage}
     espacios: babel-espacios-${sls:stage}
     muebles: babel-muebles-${sls:stage}
     ubicaciones: babel-ubicaciones-${sls:stage}
@@ -42,7 +41,6 @@ functions:
       # reales de tabla por stage, para no chocar entre dev/staging/production.
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_VENTAS: ${self:custom.nombresTablas.ventas}
-      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
       TABLA_EDITORIALES_DESCUENTOS: ${self:custom.nombresTablas.editorialesDescuentos}
       TABLA_SITIOS_SCRAPING: ${self:custom.nombresTablas.sitiosScraping}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
@@ -207,11 +205,14 @@ functions:
     role: !GetAtt LibrosDetalleLambdaRole.Arn
     description: >-
       GET /api/libros/:bookId — ficha pública de un libro puntual, sin
-      autenticación, resuelve la ubicación física vía babel-estantes
+      autenticación, resuelve la ubicación física (Espacio → Mueble →
+      Ubicación) vía babel-ubicaciones/babel-muebles/babel-espacios
       (tech-specs.md, TODO.md ficha de libro).
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
-      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
     package:
       patterns:
         - '!**'
@@ -266,9 +267,11 @@ functions:
     role: !GetAtt CatalogarLibroLambdaRole.Arn
     description: >-
       POST /api/libros — cataloga un libro, exige rol vendedor o
-      administrador (CLAUDE.md A01, ADR-008).
+      administrador y valida que el ubicacionId exista en babel-ubicaciones
+      (CLAUDE.md A01, A08, ADR-008, TODO.md Tarea 1).
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
     package:
@@ -319,15 +322,16 @@ functions:
           path: /api/libros
           method: post
 
-  cambiarEstanteLibro:
-    handler: dist-server/api/handlers/libros.handlerCambiarEstante
-    role: !GetAtt CambiarEstanteLibroLambdaRole.Arn
+  cambiarUbicacionLibro:
+    handler: dist-server/api/handlers/libros.handlerCambiarUbicacion
+    role: !GetAtt CambiarUbicacionLibroLambdaRole.Arn
     description: >-
-      PATCH /api/libros/:bookId/estante — cambia el estante de un libro,
-      exige rol vendedor o administrador (CLAUDE.md A01, ADR-008).
+      PATCH /api/libros/:bookId/ubicacion — cambia la ubicación de un libro,
+      exige rol vendedor o administrador (CLAUDE.md A01, ADR-008, TODO.md
+      Tarea 1 — placeholder mínimo hasta la Tarea E).
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
-      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
     package:
@@ -375,75 +379,8 @@ functions:
         - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
-          path: /api/libros/{bookId}/estante
+          path: /api/libros/{bookId}/ubicacion
           method: patch
-
-  estantes:
-    handler: dist-server/api/handlers/estantes.handler
-    role: !GetAtt EstantesLambdaRole.Arn
-    description: >-
-      CRUD /api/estantes — GET acepta vendedor o administrador, POST/PUT/
-      DELETE exigen administrador (CLAUDE.md A01, ADR-008).
-    environment:
-      TABLA_ESTANTES: ${self:custom.nombresTablas.estantes}
-      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
-      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
-    package:
-      patterns:
-        - '!**'
-        - 'dist-server/api/handlers/estantes.js'
-        - 'dist-server/api/lib/verificar-token.js'
-        - 'dist-server/api/services/dynamodb.js'
-        # Verifica tokens con firebase-admin — igual que usuariosMe/
-        # catalogarLibro, se incluye node_modules completo en vez de un
-        # allowlist manual (ver gotcha de jose/jwks-rsa en MEMORY.md §7).
-        - 'node_modules/**'
-        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
-        # razón de cada exclusión documentada en la función `usuariosMe`
-        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
-        - '!node_modules/@angular/**'
-        - '!node_modules/firebase/**'
-        - '!node_modules/@zxing/**'
-        - '!node_modules/rxjs/**'
-        - '!node_modules/typescript/**'
-        - '!node_modules/@types/**'
-        - '!node_modules/vite/**'
-        - '!node_modules/vitest/**'
-        - '!node_modules/tailwindcss/**'
-        - '!node_modules/@tailwindcss/**'
-        - '!node_modules/postcss/**'
-        - '!node_modules/prettier/**'
-        - '!node_modules/jsdom/**'
-        - '!node_modules/serverless/**'
-        - '!node_modules/@babel/**'
-        - '!node_modules/@esbuild/**'
-        - '!node_modules/zod/**'
-        - '!node_modules/@algolia/**'
-        - '!node_modules/algoliasearch/**'
-        - '!node_modules/@modelcontextprotocol/**'
-        - '!node_modules/@firebase/**'
-        - 'node_modules/@firebase/database-compat/**'
-        - 'node_modules/@firebase/database/**'
-        - 'node_modules/@firebase/database-types/**'
-        - 'node_modules/@firebase/logger/**'
-        - 'node_modules/@firebase/util/**'
-        - 'node_modules/@firebase/component/**'
-        - 'node_modules/@firebase/app-check-interop-types/**'
-        - 'node_modules/@firebase/auth-interop-types/**'
-        - 'node_modules/@firebase/app-types/**'
-    events:
-      - httpApi:
-          path: /api/estantes
-          method: get
-      - httpApi:
-          path: /api/estantes
-          method: post
-      - httpApi:
-          path: /api/estantes/{estanteId}
-          method: put
-      - httpApi:
-          path: /api/estantes/{estanteId}
-          method: delete
 
   espacios:
     handler: dist-server/api/handlers/ubicacion-fisica.handlerEspacios
@@ -1298,7 +1235,6 @@ resources:
                     - !GetAtt TablaLibros.Arn
                     - !Sub '${TablaLibros.Arn}/index/*'
                     - !GetAtt TablaVentas.Arn
-                    - !GetAtt TablaEstantes.Arn
                     - !GetAtt TablaEditorialesDescuentos.Arn
                     - !GetAtt TablaSitiosScraping.Arn
                     - !GetAtt TablaUsuarios.Arn
@@ -1370,11 +1306,13 @@ resources:
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
-          # Solo lectura puntual (GetItem) sobre babel-libros y babel-estantes
-          # — endpoint público de solo consulta, sin necesidad de escribir ni
-          # leer ninguna otra tabla (CLAUDE.md A05). A diferencia de
-          # LibrosLambdaRole (el listado, que hace un Scan completo), acá
-          # basta GetItem porque se resuelve un bookId puntual.
+          # Solo lectura puntual (GetItem) sobre babel-libros y, para
+          # resolver Espacio → Mueble → Ubicación, babel-ubicaciones/
+          # babel-muebles/babel-espacios — endpoint público de solo
+          # consulta, sin necesidad de escribir ni leer ninguna otra tabla
+          # (CLAUDE.md A05). A diferencia de LibrosLambdaRole (el listado,
+          # que hace un Scan completo), acá basta GetItem porque se resuelve
+          # un bookId puntual.
           - PolicyName: babel-libros-detalle-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
@@ -1384,7 +1322,9 @@ resources:
                     - dynamodb:GetItem
                   Resource:
                     - !GetAtt TablaLibros.Arn
-                    - !GetAtt TablaEstantes.Arn
+                    - !GetAtt TablaUbicaciones.Arn
+                    - !GetAtt TablaMuebles.Arn
+                    - !GetAtt TablaEspacios.Arn
 
     CatalogarLibroLambdaRole:
       Type: AWS::IAM::Role
@@ -1400,9 +1340,10 @@ resources:
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
-          # Escribe en babel-libros y solo lee (GetItem) babel-usuarios para
-          # resolver el rol del token — sin acceso a ninguna otra tabla
-          # (CLAUDE.md A05, ADR-008).
+          # Escribe en babel-libros, solo lee (GetItem) babel-usuarios para
+          # resolver el rol del token, y solo lee (GetItem) babel-ubicaciones
+          # para validar que el ubicacionId recibido exista (CLAUDE.md A05,
+          # A08, ADR-008, TODO.md Tarea 1).
           - PolicyName: babel-catalogar-libro-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
@@ -1417,11 +1358,12 @@ resources:
                     - dynamodb:GetItem
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
+                    - !GetAtt TablaUbicaciones.Arn
 
-    CambiarEstanteLibroLambdaRole:
+    CambiarUbicacionLibroLambdaRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: babel-cambiar-estante-libro-role-${sls:stage}
+        RoleName: babel-cambiar-ubicacion-libro-role-${sls:stage}
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -1432,12 +1374,12 @@ resources:
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
-          # Lee/escribe babel-libros, solo lee (GetItem) babel-estantes para
-          # validar que el estante destino exista, y solo lee (GetItem)
-          # babel-usuarios para resolver el rol del token — sin acceso de
-          # escritura a ninguna tabla salvo babel-libros (CLAUDE.md A05,
-          # ADR-008).
-          - PolicyName: babel-cambiar-estante-libro-dynamodb-${sls:stage}
+          # Lee/escribe babel-libros, solo lee (GetItem) babel-ubicaciones
+          # para validar que la ubicación destino exista, y solo lee
+          # (GetItem) babel-usuarios para resolver el rol del token — sin
+          # acceso de escritura a ninguna tabla salvo babel-libros
+          # (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-cambiar-ubicacion-libro-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
               Statement:
@@ -1451,42 +1393,7 @@ resources:
                   Action:
                     - dynamodb:GetItem
                   Resource:
-                    - !GetAtt TablaEstantes.Arn
-                    - !GetAtt TablaUsuarios.Arn
-
-    EstantesLambdaRole:
-      Type: AWS::IAM::Role
-      Properties:
-        RoleName: babel-estantes-role-${sls:stage}
-        AssumeRolePolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service: lambda.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        Policies:
-          # CRUD completo sobre babel-estantes y solo lee (GetItem)
-          # babel-usuarios para resolver el rol del token — sin acceso a
-          # ninguna otra tabla (CLAUDE.md A05, ADR-008).
-          - PolicyName: babel-estantes-dynamodb-${sls:stage}
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - dynamodb:GetItem
-                    - dynamodb:PutItem
-                    - dynamodb:DeleteItem
-                    - dynamodb:Scan
-                  Resource:
-                    - !GetAtt TablaEstantes.Arn
-                - Effect: Allow
-                  Action:
-                    - dynamodb:GetItem
-                  Resource:
+                    - !GetAtt TablaUbicaciones.Arn
                     - !GetAtt TablaUsuarios.Arn
 
     EspaciosLambdaRole:
@@ -1987,21 +1894,6 @@ resources:
         # con Scan + filtrado en memoria (criterio de tablas pequeñas, ver
         # MEMORY.md §6/§7); si el volumen algún día lo exige, diseñar un
         # GSI real con partición fija + vendidoEn como clave de rango.
-
-    TablaEstantes:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:custom.nombresTablas.estantes}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
-        AttributeDefinitions:
-          - AttributeName: estanteId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: estanteId
-            KeyType: HASH
 
     TablaEspacios:
       Type: AWS::DynamoDB::Table
