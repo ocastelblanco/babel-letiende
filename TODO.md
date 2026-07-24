@@ -2,53 +2,57 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Prioridad de selección aplicada:** se completó la búsqueda/filtro del catálogo público (PR #49) — con esto, todos los ítems de prioridad Alta/Media del roadmap (`PRD.md` §6) quedan cubiertos salvo la ficha de libro, la última pieza pendiente de "Catálogo público de consulta". La Tarea 2 anterior (ficha de libro) sube a **Tarea 1**, sin cambios de alcance. Tras ella, los únicos ítems de roadmap que quedan son de prioridad Baja: "Modo offline / cola de sincronización" y "Empaquetado nativo" (este último explícitamente fuera del alcance actual, `CLAUDE.md` §2). Se agrega como **Tarea 2** el **plan** (solo documentación, sin código) del modo offline/cola de sincronización — mismo criterio ya usado para iniciativas grandes de este proyecto (`plan-obtencion-info-libros.md`, Step 0 = documentación antes de implementar): es una iniciativa genuinamente compleja (Service Worker, cola persistente, resolución de conflictos entre catalogaciones concurrentes sin señal) que merece diseño explícito antes de tocar código. Ambas tareas son independientes entre sí.
+**Prioridad de selección aplicada (2026-07-23):** el usuario entregó `ajustes-finales.md` con un conjunto extenso de ajustes de producto (ubicación física jerárquica Espacio→Mueble→Ubicación reemplazando "Estante", edición de libros catalogados, venta desde la ficha del libro, área "Gestionar", filtrado público por ubicación con soporte QR, reporte de inventario, y varios fixes de copy/bugs) — **decisión explícita: no se retoma el plan de modo offline ni la preparación del primer despliegue a producción hasta cerrar TODO este conjunto.** `PRD.md` ya se actualizó con el alcance acordado (tras resolver 5 ambigüedades reales con el usuario, ver `ajustes-finales.md` §"Decisiones técnicas confirmadas"). El conjunto se rompió en 7 tareas atómicas ordenadas por dependencia (Tarea A–G, detalle completo en `ajustes-finales.md` §"Backlog ordenado de implementación") — las primeras 2 quedan activas aquí; al cerrar cualquiera, se promueve la siguiente de esa lista.
 
 ---
 
-## Tarea 1 — [FEATURE]: ficha de libro (página de detalle público)
+## Tarea 1 — [FIX]: fixes rápidos del catálogo público
 
-**Origen:** `tech-specs.md` describe el módulo `catalogo-publico/` como "Búsqueda **y ficha de libro** (SSR, sin auth)" y `PRD.md` §8 (requisitos no funcionales) exige explícitamente SSR "para las páginas de catálogo **y ficha de libro**" por motivos de SEO. Hoy `CatalogoPublicoComponent` solo renderiza un listado en `/` (con búsqueda, ya completada) — no existe ninguna ruta de detalle por libro (`/libro/:bookId` o similar). Sin esta pieza, un buscador no puede indexar ni enlazar directamente a un libro específico del catálogo, y un visitante no tiene una URL propia para compartir un libro puntual. Además, `PRD.md` §7 (casos de uso) exige mostrarle al visitante público "el PVP y la ubicación física dentro de la librería, si está disponible" — hoy el listado NO muestra ubicación física (solo título/autor/PVP); la ficha es el lugar natural para esa información, que no cabe bien en una tarjeta de grilla compacta.
+**Origen:** `ajustes-finales.md` §"Usuarios no autenticados (clientes)" → "Inicio - Catálogo público" y "Autenticación". Sin dependencias de las demás tareas — quick win, incluye un bug real (no solo una inconsistencia de copy).
 
-**Qué ya existe y se puede reutilizar (confirmado leyendo el código, no adivinado):**
-- El backend ya resuelve un libro por `bookId` con `obtenerPorClave<Libro>(nombreTablaLibros(), { bookId })` (usado hoy en `handlerCambiarEstante`, `server/api/handlers/libros.ts`) — falta exponerlo como endpoint público de solo lectura (`GET /api/libros/:bookId`, sin autenticación, mismo criterio que `GET /api/libros`).
-- `LibrosService` (frontend) hoy solo expone `cargarCatalogo()` (todo el listado) — necesita un método nuevo para pedir un libro puntual, o evaluar si conviene reutilizar `libros()` (el catálogo ya cargado) con un `computed()` cuando ya está en memoria, con fallback a la petición puntual si se entra directo por URL (mismo patrón ya usado en `CambiarEstanteComponent`, ver `MEMORY.md` §2, PR #28 — aunque ahí es una ruta protegida con catálogo ya cargado por sesión, acá es pública y puede ser la primera carga de la página).
-- Para la ubicación física: el `Libro` solo trae `estanteId` (no el nombre del espacio/mueble/ubicación) — hace falta resolver contra `babel-estantes` (mismo patrón de `EstantesService`, pero sin autenticación en este caso al ser una ruta pública) o incluir esos datos ya resueltos en la respuesta del nuevo endpoint de detalle (evaluar cuál conviene más, el endpoint puntual es una sola consulta adicional, no un `Scan`).
-
-**Qué hacer (orden sugerido):**
-1. Backend: `GET /api/libros/:bookId` — endpoint público (sin auth, mismo criterio que `GET /api/libros`), `404` si el `bookId` no existe. Evaluar si conviene resolver `estanteId` → datos del estante en el mismo endpoint (para evitar una segunda petición pública desde el frontend) o dejarlo para un endpoint de estantes público aparte.
-2. Frontend: nueva ruta pública `/libro/:bookId` con `RenderMode.Server` en `app.routes.server.ts` (a diferencia de las rutas protegidas por `AuthGuard`/`RoleGuard`, que son `RenderMode.Client` — ver el comentario ya existente en ese archivo sobre por qué; una ficha pública sin guard sí puede prerenderizarse/servirse en el servidor para SEO, tal como ya anticipa ese mismo comentario).
-3. Enlazar cada tarjeta de `CatalogoPublicoComponent` a su ficha (`/libro/:bookId`).
-4. Mostrar la ubicación física (espacio/mueble/ubicación del estante) en la ficha, cuando esté disponible — cierra el requisito de `PRD.md` §7 que hoy no cumple ni el listado ni ninguna otra pantalla pública.
-5. Metadatos SEO básicos de la ficha (título de página, posiblemente `<meta>` description/Open Graph con portada) — evaluar alcance mínimo razonable, sin sobre-construir.
-6. Cubrir con tests backend y frontend (libro encontrado, no encontrado/404, con y sin estante resuelto).
+**Qué hacer:**
+1. **Bug real:** el título de la pestaña del navegador en `/` queda "pegado" al último libro visitado. Causa confirmada: `Title` de Angular es un servicio singleton; `LibroDetalleComponent` (PR #51) lo sobreescribe con el título del libro (`{{ libro.titulo }} — Catálogo Le Tiende`) pero `CatalogoPublicoComponent` nunca lo resetea al montar. Corregir: `CatalogoPublicoComponent` debe llamar `Title.setTitle(...)` en su propio `ngOnInit` con un título fijo del catálogo (ver punto 2 para el texto exacto a usar como base).
+2. Definir y aplicar un título de página consistente para `/` (el usuario reportó ver "Inicio - Catálogo público" en un lugar y el título de un libro en la pestaña — unificar en un solo texto real, ej. `Catálogo — Le Tiende`, ajustable).
+3. Cambiar el texto que aparece después del logo en `/` de "Catálogo" a **"Catálogo Librería"**.
+4. En `/login`, agregar un vínculo visible para volver al catálogo público (`/`) — para cuando un cliente sin cuenta haga clic en "Ingresar" por error.
 
 **Definition of done:**
-- [ ] `npm run build`, `npm run build:api`, `npm test -- --watch=false`, `npm run test:api` pasan sin errores
-- [ ] Un visitante puede entrar directo a `/libro/:bookId` (sin pasar por el listado) y ver los datos del libro, incluida su ubicación física si está disponible
-- [ ] `/libro/:bookId` con un `bookId` inexistente responde con un estado manejado (404 visible, no un error crudo)
+- [ ] El título de la pestaña del navegador en `/` es siempre el del catálogo, incluso después de haber visitado una ficha de libro y volver
+- [ ] El texto tras el logo en `/` dice "Catálogo Librería"
+- [ ] `/login` tiene un vínculo funcional de regreso a `/`
+- [ ] `npm run build`, `npm test -- --watch=false` pasan sin errores
 - [ ] Verificado en vivo contra `staging`
 
 ---
 
-## Tarea 2 — [DOCS]: plan de modo offline / cola de sincronización para catalogación sin señal
+## Tarea 2 — [FEATURE]: Espacios, Muebles y Ubicaciones (reemplaza Estantes)
 
-**Origen:** `PRD.md` §6 (roadmap, prioridad Baja): "Modo offline / cola de sincronización para catalogación sin señal". Con la ficha de libro (Tarea 1) cerrando el último ítem de prioridad Alta/Media del roadmap, este es el siguiente ítem real pendiente (el otro ítem Baja, empaquetado nativo, está explícitamente fuera del alcance actual — `CLAUDE.md` §2). Es una iniciativa genuinamente compleja — a diferencia de las tareas atómicas recientes, toca la arquitectura del cliente (Service Worker, almacenamiento persistente en el navegador, sincronización en segundo plano) y decisiones de producto no triviales (qué pasa si dos vendedores catalogan el mismo estante sin señal y sincronizan después, cómo se le informa al vendedor que una catalogación quedó en cola vs. confirmada) — amerita diseño explícito antes de escribir código, mismo criterio ya aplicado a la iniciativa de obtención automatizada de info de libros (`plan-obtencion-info-libros.md`, Step 0 = documentación).
-
-**Qué investigar/decidir antes de escribir el plan (no asumir, confirmar contra el código real):**
-- Alcance real del "modo offline": ¿solo el flujo de catalogación (`POST /api/libros`), o también venta (`POST /api/ventas`) y cambio de estante? El roadmap lo menciona solo para "catalogación", pero conviene confirmar si el usuario quiere ampliarlo.
-- Mecanismo de cola: IndexedDB (vía alguna librería, ej. Workbox Background Sync) vs. una implementación propia más simple dado el volumen esperado (un vendedor cataloga, no cientos de operaciones en paralelo).
-- Qué pasa con la resolución automática de metadatos/PVP (`GET /api/metadatos/...`, que SÍ requiere red) cuando no hay señal — probablemente el vendedor completa todo a mano en modo offline, sin autocompletado, y el enriquecimiento automático solo aplica si hay señal al momento de escanear.
-- Cómo se comunica al vendedor visualmente que una catalogación está "en cola, pendiente de sincronizar" vs. "confirmada en el servidor" — no es un detalle menor dado que el vendedor podría catalogar el mismo libro dos veces si no le queda claro que ya quedó en cola.
-- Requiere revisar si Angular SSR + PWA (`@angular/service-worker` ya viene con el scaffold, confirmar si está configurado) ya trae algo de esto de fábrica o si hay que construirlo desde cero.
+**Origen:** `ajustes-finales.md` §"Generales" y §"Administrador → Administración → Estantes". Pieza fundacional de todo el resto del backlog (Tareas C–G dependen de que esta exista) — el resto de la iniciativa no puede avanzar sin este modelo de datos.
 
 **Qué hacer:**
-1. Investigar los puntos de arriba contra el código y configuración real del proyecto (no adivinar el estado de `@angular/service-worker`, confirmarlo).
-2. Escribir `plan-modo-offline.md` en la raíz del repo (mismo nivel que `plan-obtencion-info-libros.md`), con alcance acordado, decisión de mecanismo de cola, manejo de conflictos, y UX de estados (en cola/sincronizado/error).
-3. Actualizar `PRD.md`/`tech-specs.md`/`MEMORY.md`/`TODO.md` según haga falta para reflejar el plan.
-4. Abrir un PR **solo de documentación** (`docs/plan-modo-offline`) — sin tocar código. La implementación queda como tarea(s) atómica(s) futuras, una vez el usuario apruebe el plan.
+1. Diseñar y crear 3 tablas DynamoDB nuevas: `babel-espacios` (`espacioId` PK, `nombre`), `babel-muebles` (`muebleId` PK, `espacioId`, `nombre`), `babel-ubicaciones` (`ubicacionId` PK, `muebleId`, `nombre`) — reemplazan `babel-estantes` (que se elimina de `serverless.yml`; los ~4 registros de prueba en `staging` se pierden sin problema, decisión confirmada con el usuario, no hay datos de producción todavía).
+2. Backend: CRUD para cada una (mismo patrón ya usado en `estantes.ts`/`editoriales-descuentos.ts`: un handler por entidad, escritura exclusiva `administrador`). **Lectura debe ser pública** (sin autenticación) — a diferencia del `GET /api/estantes` actual (que exige `vendedor`/`administrador`), el catálogo público (Tarea F) necesita leer Espacios/Muebles para armar su filtro. Definir reglas de borrado: se sugiere no permitir borrar un Espacio/Mueble que todavía tenga Muebles/Ubicaciones hijos (mismo criterio conservador que otras validaciones del proyecto, ej. ADR-009).
+3. Frontend: reestructurar `/admin/estantes` (misma ruta, contenido nuevo) en 3 pestañas: **Espacios** (campo nombre + botón crear + lista con Editar), **Muebles** (desplegable de Espacio + campo nombre + botón crear + lista), **Ubicaciones** (desplegable de Mueble, dependiente del Espacio elegido, + campo nombre + botón crear + lista). Edición de cada uno permite cambiar su nombre y, para Mueble/Ubicación, reasignar el padre desde un desplegable.
+4. Eliminar `EstantesService`, `GestionEstantesComponent`, `estantes.ts` (handler) y el CRUD `/api/estantes` — reemplazados por lo anterior.
+5. Cubrir con tests backend y frontend (CRUD de las 3 entidades, incluida la relación jerárquica en los desplegables).
 
 **Definition of done:**
-- [ ] `plan-modo-offline.md` existe en la raíz del repo con alcance, mecanismo de cola, manejo de conflictos y UX de estados definidos
-- [ ] No se modificó ningún archivo de código (`.ts`/`.html`) — solo documentación
-- [ ] El usuario revisó y aprobó el plan antes de que se cree cualquier tarea de implementación en este documento
+- [ ] `npm run build`, `npm run build:api`, `npm test -- --watch=false`, `npm run test:api` pasan sin errores
+- [ ] Un administrador puede crear un Espacio, luego un Mueble dentro de ese Espacio, luego una Ubicación dentro de ese Mueble, desde `/admin/estantes`
+- [ ] Renombrar un Espacio o Mueble no rompe la pertenencia de sus hijos ya creados
+- [ ] `GET` de las 3 entidades funciona sin autenticación (lectura pública)
+- [ ] Verificado en vivo contra `staging`
+
+---
+
+## Backlog restante de `ajustes-finales.md` (no activo todavía, ver detalle completo allá)
+
+Se promueven a Tarea 1/2 en este orden, una vez se cierren las actuales — **no se retoma el plan de modo offline ni producción hasta agotar esta lista**:
+
+- **Tarea C** — Migrar `Libro.estanteId` → `Libro.ubicacionId`; ficha de libro muestra Espacio/Mueble/Ubicación como campos independientes (no concatenados). Depende de Tarea 2.
+- **Tarea D** — Vender desde la ficha: `POST /api/ventas` acepta `cantidad`; botón "Vender" + diálogo (cantidad, descuento, forma de pago). Depende de Tarea C.
+- **Tarea E** — Área "Gestionar" (Catalogar rediseñado con panel de ubicación persistente + autocompletado de descuento editorial; Editar reemplaza Cambiar estante, con eliminar libro para administrador). Depende de Tarea 2 y Tarea C.
+- **Tarea F** — Filtrado público por Espacio/Mueble, acumulativo, navegable por URL (listo para QR). Depende de Tarea 2.
+- **Tarea G** — Reporte de Inventario (XLSX). Depende de Tarea 2 y Tarea C.
+
+Después de la Tarea G: retomar el plan de modo offline/cola de sincronización (ya investigado, ver historial de `MEMORY.md`) y evaluar la preparación del primer despliegue a producción.

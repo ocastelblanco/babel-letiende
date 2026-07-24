@@ -6,7 +6,7 @@ Este archivo contiene las directrices permanentes de arquitectura, código, segu
 
 ## 1. Descripción del Proyecto
 
-**Babel** es la aplicación de catalogación e inventario de la librería del centro cultural **Le Tiende** (Bogotá, Colombia). Permite a vendedores catalogar libros escaneando su código de barras (ISBN), completar automáticamente sus datos (autor, portada, editorial, precio de venta al público) y ubicarlos físicamente en un estante. También permite registrar la venta de un libro y, para el administrador, generar reportes financieros y configurar catálogo, usuarios, estantes y descuentos editoriales. Adicionalmente expone un catálogo público de consulta, sin necesidad de autenticación.
+**Babel** es la aplicación de catalogación e inventario de la librería del centro cultural **Le Tiende** (Bogotá, Colombia). Permite a vendedores catalogar libros escaneando su código de barras (ISBN) o buscando por título/autor, completar automáticamente sus datos (autor, portada, editorial, precio de venta al público) y ubicarlos físicamente en una jerarquía de espacio → mueble → ubicación. También permite editar libros ya catalogados, registrar su venta directamente desde la ficha del libro y, para el administrador, generar reportes financieros y de inventario, y configurar catálogo, usuarios, ubicación física y descuentos editoriales. Adicionalmente expone un catálogo público de consulta, sin necesidad de autenticación, con ficha propia por libro y filtrado por ubicación.
 
 El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000 libros**, por lo que el flujo de catalogación es la ruta crítica de rendimiento de todo el sistema.
 
