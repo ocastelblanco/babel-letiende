@@ -5,7 +5,7 @@ import type {
 } from 'aws-lambda';
 import * as XLSX from 'xlsx';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
-import { decrementarSiPositivo, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
+import { decrementarPorCantidadSiSuficiente, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
 
 /**
  * Copia local de `src/app/core/models/libro.model.ts` (misma forma exacta).
@@ -39,6 +39,7 @@ interface Venta {
   ventaId: string;
   bookId: string;
   isbn: string | null;
+  cantidad: number;
   pvp: number;
   porcentajeDescuentoVenta: number;
   precioFinal: number;
@@ -101,9 +102,16 @@ async function exigirAdministrador(headerAuthorization: string | undefined): Pro
   return usuario?.rol === 'administrador' ? email : null;
 }
 
-/** Datos aceptados en el body de `POST /api/ventas` — el resto lo genera/resuelve el backend (ver `handler`). */
+/**
+ * Datos aceptados en el body de `POST /api/ventas` — el resto lo genera/
+ * resuelve el backend (ver `handler`). `cantidad` es requerida (no tiene
+ * default en el backend): el diálogo del frontend siempre la manda
+ * explícita (default 1 en la UI), así el backend no necesita adivinar una
+ * intención no comunicada (TODO.md Tarea 2).
+ */
 interface DatosNuevaVenta {
   bookId: string;
+  cantidad: number;
   formaDePago: FormaDePago;
   porcentajeDescuentoVenta: number;
 }
@@ -125,6 +133,13 @@ export function validarDatosNuevaVenta(cuerpo: unknown): ResultadoValidacion {
     return { valido: false, error: 'El bookId es requerido.' };
   }
   if (
+    typeof datos['cantidad'] !== 'number' ||
+    !Number.isInteger(datos['cantidad']) ||
+    datos['cantidad'] < 1
+  ) {
+    return { valido: false, error: 'La cantidad debe ser un entero mayor o igual a 1.' };
+  }
+  if (
     typeof datos['formaDePago'] !== 'string' ||
     !FORMAS_DE_PAGO.includes(datos['formaDePago'] as FormaDePago)
   ) {
@@ -143,6 +158,7 @@ export function validarDatosNuevaVenta(cuerpo: unknown): ResultadoValidacion {
     valido: true,
     datos: {
       bookId: datos['bookId'],
+      cantidad: datos['cantidad'],
       formaDePago: datos['formaDePago'] as FormaDePago,
       porcentajeDescuentoVenta: datos['porcentajeDescuentoVenta'],
     },
@@ -154,8 +170,14 @@ export function validarDatosNuevaVenta(cuerpo: unknown): ResultadoValidacion {
  * Exige rol `vendedor` o `administrador` en `babel-usuarios` (CLAUDE.md A01)
  * — nunca confía en `pvp`/`costoLibro` enviados desde el cliente (CLAUDE.md
  * A08): ambos se leen del `Libro` real al momento de la venta. Decrementa
- * `cantidadDisponible` de forma condicional (ADR-003/MEMORY.md §7) para
- * evitar sobrevender.
+ * `cantidadDisponible` en `cantidad` de forma condicional (ADR-003/MEMORY.md
+ * §7) para evitar sobrevender, incluso vendiendo varios ejemplares en un solo
+ * registro de `Venta` (TODO.md Tarea 2). `pvp`/`costoLibro` quedan como
+ * snapshot unitario (igual que antes); `precioFinal`/`utilidad` representan
+ * el TOTAL de la transacción (unitario × `cantidad`, con el descuento ya
+ * aplicado sobre ese total) — así cualquier consumidor (ej. el reporte de
+ * `handlerExportar`) puede sumar `utilidad` directamente sin tener que
+ * multiplicar por `cantidad` primero.
  */
 export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -184,25 +206,27 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
       return respuestaJson(404, { error: 'El libro no existe.' });
     }
 
-    const decrementado = await decrementarSiPositivo(
+    const decrementado = await decrementarPorCantidadSiSuficiente(
       nombreTablaLibros(),
       { bookId: datos.bookId },
       'cantidadDisponible',
+      datos.cantidad,
     );
     if (!decrementado) {
-      return respuestaJson(400, { error: 'No quedan ejemplares disponibles de este libro.' });
+      return respuestaJson(400, { error: 'No quedan suficientes ejemplares disponibles de este libro.' });
     }
 
-    const precioFinal = Math.round(libro.pvp * (1 - datos.porcentajeDescuentoVenta / 100));
+    const precioFinal = Math.round(libro.pvp * datos.cantidad * (1 - datos.porcentajeDescuentoVenta / 100));
     const venta: Venta = {
       ventaId: randomUUID(),
       bookId: libro.bookId,
       isbn: libro.isbn,
+      cantidad: datos.cantidad,
       pvp: libro.pvp,
       porcentajeDescuentoVenta: datos.porcentajeDescuentoVenta,
       precioFinal,
       costoLibro: libro.costo,
-      utilidad: precioFinal - libro.costo,
+      utilidad: precioFinal - libro.costo * datos.cantidad,
       formaDePago: datos.formaDePago,
       vendidoPor: email,
       vendidoEn: new Date().toISOString(),

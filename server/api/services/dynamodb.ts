@@ -96,27 +96,29 @@ export async function escanearTodo<T extends object>(nombreTabla: string): Promi
 }
 
 /**
- * Decrementa en 1 un atributo numérico solo si su valor actual es
- * estrictamente mayor que 0 — operación atómica (`ConditionExpression`) para
+ * Decrementa un atributo numérico en `cantidad` solo si su valor actual es
+ * mayor o igual a `cantidad` — operación atómica (`ConditionExpression`) para
  * evitar sobrevender si dos ventas del mismo libro llegan casi al mismo
- * tiempo (`POST /api/ventas`). Devuelve `false` (sin lanzar) si la condición
- * falla, ya sea porque el atributo ya está en 0 o porque el ítem no existe
- * — quien llama decide qué código HTTP corresponde en cada caso.
+ * tiempo (`POST /api/ventas`, TODO.md Tarea 2: vender más de un ejemplar en
+ * una sola `Venta`). Devuelve `false` (sin lanzar) si la condición falla, ya
+ * sea porque no quedan suficientes ejemplares o porque el ítem no existe —
+ * quien llama decide qué código HTTP corresponde en cada caso.
  */
-export async function decrementarSiPositivo(
+export async function decrementarPorCantidadSiSuficiente(
   nombreTabla: string,
   clave: ClaveDynamoDB,
   nombreAtributo: string,
+  cantidad: number,
 ): Promise<boolean> {
   try {
     await documento.send(
       new UpdateCommand({
         TableName: nombreTabla,
         Key: clave,
-        UpdateExpression: 'SET #atributo = #atributo - :uno',
-        ConditionExpression: '#atributo > :cero',
+        UpdateExpression: 'SET #atributo = #atributo - :cantidad',
+        ConditionExpression: '#atributo >= :cantidad',
         ExpressionAttributeNames: { '#atributo': nombreAtributo },
-        ExpressionAttributeValues: { ':uno': 1, ':cero': 0 },
+        ExpressionAttributeValues: { ':cantidad': cantidad },
       }),
     );
     return true;
