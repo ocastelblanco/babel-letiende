@@ -140,11 +140,17 @@ interface LibroConUbicacion extends Libro {
  * puntuales (no un `Scan`): `ubicacionId` → `Ubicacion` → `Mueble` →
  * `Espacio`. Si cualquier eslabón de la cadena ya no existe (dato
  * inconsistente — ej. la ubicación fue borrada pero el libro todavía la
- * referencia), devuelve `null` en vez de lanzar (CLAUDE.md A08).
+ * referencia), devuelve `null` en vez de lanzar (CLAUDE.md A08). También
+ * cubre los libros catalogados antes de la migración `estanteId`→`ubicacionId`
+ * (`TODO.md` Tarea 1): para esos, `ubicacionId` es `undefined`, y llamar a
+ * DynamoDB con una clave `undefined` lanzaría una excepción de validación.
  */
 async function resolverUbicacion(
-  ubicacionId: string,
+  ubicacionId: string | undefined,
 ): Promise<{ espacio: string; mueble: string; ubicacion: string } | null> {
+  if (!ubicacionId) {
+    return null;
+  }
   const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId });
   if (!ubicacion) {
     return null;

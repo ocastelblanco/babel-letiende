@@ -358,6 +358,18 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
     expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(4, 'babel-espacios-test', { espacioId: muebleFalso.espacioId });
   });
 
+  it('responde 200 con ubicacion: null (sin 500) para un libro catalogado antes de la migración a ubicacionId', async () => {
+    const { ubicacionId: _ubicacionId, ...libroSinUbicacionId } = libroFalso;
+    obtenerPorClaveMock.mockResolvedValueOnce({ ...libroSinUbicacionId, ubicacionId: undefined });
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo['ubicacion']).toBeNull();
+    expect(obtenerPorClaveMock).toHaveBeenCalledTimes(1);
+  });
+
   it('devuelve ubicacion: null (sin romper la ficha) cuando el ubicacionId ya no existe', async () => {
     obtenerPorClaveMock.mockResolvedValueOnce(libroFalso).mockResolvedValueOnce(undefined);
 
