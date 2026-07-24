@@ -1,7 +1,11 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { RouterLink } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
+
+/** Título de pestaña del catálogo público — mismo texto en todo momento (ver `ngOnInit`). */
+export const TITULO_CATALOGO_PUBLICO = 'Inicio - Catálogo público';
 
 /** Quita tildes y normaliza mayúsculas para que la búsqueda encuentre "garcia" al buscar "García". */
 function normalizarTexto(valor: string): string {
@@ -38,6 +42,7 @@ function normalizarTexto(valor: string): string {
 })
 export class CatalogoPublicoComponent implements OnInit {
   private readonly librosService = inject(LibrosService);
+  private readonly title = inject(Title);
 
   protected readonly libros = this.librosService.libros;
   protected readonly cargando = this.librosService.cargando;
@@ -58,6 +63,12 @@ export class CatalogoPublicoComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    // `Title` es un servicio singleton — `LibroDetalleComponent` lo
+    // sobreescribe con el título del libro visitado y nunca lo restaura, así
+    // que hay que resetearlo explícitamente al entrar aquí (TODO.md, fixes
+    // rápidos del catálogo público). Sin esto, el título de pestaña queda
+    // pegado al último libro visitado al volver a `/`.
+    this.title.setTitle(TITULO_CATALOGO_PUBLICO);
     void this.librosService.cargarCatalogo();
   }
 }
