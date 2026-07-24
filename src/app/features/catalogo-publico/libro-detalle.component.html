@@ -40,7 +40,106 @@
             <p class="text-sm text-primary/70">Ubicación: {{ libro.ubicacion.ubicacion }}</p>
           </div>
         }
+
+        @if (puedeVender() && libro.cantidadDisponible > 0) {
+          <button
+            type="button"
+            (click)="abrirDialogoVenta()"
+            class="mt-6 flex h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90"
+          >
+            Vender
+          </button>
+        }
+
+        @if (mensajeExitoVenta()) {
+          <p class="mt-4 text-center text-sm font-semibold text-tertiary">{{ mensajeExitoVenta() }}</p>
+        }
       </div>
+
+      @if (dialogoVentaVisible()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-primary/40 px-4">
+          <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+            <h2 class="mb-4 text-lg font-bold text-primary">Vender «{{ libro.titulo }}»</h2>
+
+            <form [formGroup]="formularioVenta" (ngSubmit)="confirmarVenta()" class="flex flex-col gap-4">
+              <div>
+                <label for="cantidad" class="mb-1 block text-sm font-semibold text-primary">Cantidad</label>
+                <input
+                  id="cantidad"
+                  type="number"
+                  formControlName="cantidad"
+                  min="1"
+                  [attr.max]="libro.cantidadDisponible"
+                  class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+                />
+                @if (formularioVenta.controls.cantidad.invalid && formularioVenta.controls.cantidad.touched) {
+                  <p class="mt-1 text-xs text-danger">
+                    La cantidad debe ser un entero entre 1 y {{ libro.cantidadDisponible }}.
+                  </p>
+                }
+              </div>
+
+              <div>
+                <label for="porcentajeDescuentoVenta" class="mb-1 block text-sm font-semibold text-primary">
+                  % Descuento de venta
+                </label>
+                <input
+                  id="porcentajeDescuentoVenta"
+                  type="number"
+                  formControlName="porcentajeDescuentoVenta"
+                  min="0"
+                  max="100"
+                  class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+                />
+                @if (
+                  formularioVenta.controls.porcentajeDescuentoVenta.invalid &&
+                  formularioVenta.controls.porcentajeDescuentoVenta.touched
+                ) {
+                  <p class="mt-1 text-xs text-danger">El descuento debe estar entre 0 y 100.</p>
+                }
+              </div>
+
+              <div>
+                <label for="formaDePago" class="mb-1 block text-sm font-semibold text-primary">Forma de pago</label>
+                <select
+                  id="formaDePago"
+                  formControlName="formaDePago"
+                  class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+                >
+                  <option value="" disabled>Selecciona una forma de pago</option>
+                  @for (forma of formasDePago; track forma) {
+                    <option [value]="forma">{{ forma }}</option>
+                  }
+                </select>
+                @if (formularioVenta.controls.formaDePago.invalid && formularioVenta.controls.formaDePago.touched) {
+                  <p class="mt-1 text-xs text-danger">La forma de pago es requerida.</p>
+                }
+              </div>
+
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  (click)="cerrarDialogoVenta()"
+                  class="h-12 flex-1 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  [disabled]="vendiendo()"
+                >
+                  {{ vendiendo() ? 'Vendiendo…' : 'Confirmar' }}
+                </button>
+              </div>
+
+              @if (mensajeErrorVenta()) {
+                <p class="text-center text-sm text-danger">{{ mensajeErrorVenta() }}</p>
+              }
+            </form>
+          </div>
+        </div>
+      }
     }
   </div>
 </div>
