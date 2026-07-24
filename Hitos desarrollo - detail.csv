@@ -101,3 +101,5 @@ Cloud infraestructure,24/07/2026 12:02,24/07/2026 12:03,0:01:00,AI,Sonnet 5,"Lim
 Backend,24/07/2026 12:03,24/07/2026 12:20,0:17:00,AI,Sonnet 5,Migra Libro.estanteId a ubicacionId (Tarea 1 del motor JIT): backend/frontend/infra + PR #56.,Claude Code,cli,high
 Backend,24/07/2026 14:31,24/07/2026 14:34,0:03:00,AI,Sonnet 5,"Corrige 500 en ficha de libros pre-migracion (ubicacionId undefined), commit adicional en PR #56.",Claude Code,cli,high
 Workspace settting,24/07/2026 14:34,24/07/2026 14:37,0:03:00,AI,Sonnet 5,Agrega CLAUDE.md paragrafo 8 y trackea Hitos desarrollo - detail.csv en el repo.,Claude Code,cli,high
+Backend,24/07/2026 14:56,24/07/2026 15:08,0:12:00,AI,Sonnet 5,Vende desde la ficha del libro (cantidad/descuento/forma de pago): backend/frontend + PR #57.,Claude Code,cli,high
+Workspace settting,24/07/2026 15:08,24/07/2026 15:08,0:00:30,AI,Sonnet 5,Crea la PR #58 (registro de tiempos) tras superarse el error transitorio de GitHub.,Claude Code,cli,medium
