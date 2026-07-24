@@ -1,5 +1,4 @@
 import { Routes } from '@angular/router';
-import { AuthGuard } from './core/auth/auth.guard';
 import { NoAuthGuard } from './core/auth/no-auth.guard';
 import { RoleGuard } from './core/auth/role.guard';
 import { AdminInicioComponent } from './features/admin/admin-inicio.component';
@@ -8,12 +7,10 @@ import { GestionSitiosScrapingComponent } from './features/admin/gestion-sitios-
 import { GestionUbicacionFisicaComponent } from './features/admin/gestion-ubicacion-fisica.component';
 import { GestionUsuariosComponent } from './features/admin/gestion-usuarios.component';
 import { ReportesVentasComponent } from './features/admin/reportes-ventas.component';
-import { CatalogarLibroComponent } from './features/catalogar/catalogar-libro.component';
 import { CatalogoPublicoComponent } from './features/catalogo-publico/catalogo-publico.component';
 import { LibroDetalleComponent } from './features/catalogo-publico/libro-detalle.component';
+import { GestionarComponent } from './features/gestionar/gestionar.component';
 import { LoginComponent } from './features/login/login.component';
-import { CambiarUbicacionComponent } from './features/libros/cambiar-ubicacion.component';
-import { ListaLibrosCatalogadosComponent } from './features/libros/lista-libros-catalogados.component';
 
 export const routes: Routes = [
   // Pública (tech-specs.md §4.2): sin guard, sin sesión requerida.
@@ -29,20 +26,12 @@ export const routes: Routes = [
     canActivate: [NoAuthGuard],
   },
   {
-    path: 'libros',
-    component: ListaLibrosCatalogadosComponent,
-    canActivate: [AuthGuard],
-  },
-  {
-    // Vendedor y administrador pueden mover un libro de ubicación (tech-specs.md §4.2) — solo AuthGuard, no RoleGuard.
-    path: 'libros/:bookId/ubicacion',
-    component: CambiarUbicacionComponent,
-    canActivate: [AuthGuard],
-  },
-  {
-    // POST /api/libros acepta vendedor o administrador (TODO.md, catalogación manual).
-    path: 'catalogar',
-    component: CatalogarLibroComponent,
+    // Área "Gestionar" (`TODO.md`) — reemplaza a `/libros` y `/catalogar`, ya
+    // eliminadas: 2 pestañas (Catalogar/Editar) en un único componente
+    // (`GestionarComponent`). POST/PUT /api/libros aceptan vendedor o
+    // administrador, mismo criterio que antes.
+    path: 'gestionar',
+    component: GestionarComponent,
     canActivate: [RoleGuard(['vendedor', 'administrador'])],
   },
   {

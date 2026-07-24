@@ -8,8 +8,8 @@ import { RenderMode, ServerRoute } from '@angular/ssr';
 // público real sin guard (catálogo público, tech-specs.md §4.5), esa ruta
 // específica puede volver a Prerender para SEO.
 //
-// ⚠️ /libros y /catalogar (protegidas por AuthGuard/RoleGuard) son
-// RenderMode.Client, NO Server, a diferencia del resto: la sesión de
+// ⚠️ /gestionar (protegida por RoleGuard) es RenderMode.Client, NO Server,
+// a diferencia del resto: la sesión de
 // Firebase vive solo en el navegador (IndexedDB del SDK cliente, sin cookie
 // de sesión) — el Lambda ssr nunca puede saber si hay una sesión real. Con
 // Server, el guard se evaluaba en cada carga completa de página SIN acceso
@@ -21,15 +21,7 @@ import { RenderMode, ServerRoute } from '@angular/ssr';
 // (`AuthService.esperarListo()`, ver `auth.guard.ts`). Ver MEMORY.md §7.
 export const serverRoutes: ServerRoute[] = [
   {
-    path: 'libros',
-    renderMode: RenderMode.Client
-  },
-  {
-    path: 'libros/:bookId/ubicacion',
-    renderMode: RenderMode.Client
-  },
-  {
-    path: 'catalogar',
+    path: 'gestionar',
     renderMode: RenderMode.Client
   },
   {
