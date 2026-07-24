@@ -4,8 +4,8 @@ import { NoAuthGuard } from './core/auth/no-auth.guard';
 import { RoleGuard } from './core/auth/role.guard';
 import { AdminInicioComponent } from './features/admin/admin-inicio.component';
 import { GestionDescuentosEditorialesComponent } from './features/admin/gestion-descuentos-editoriales.component';
-import { GestionEstantesComponent } from './features/admin/gestion-estantes.component';
 import { GestionSitiosScrapingComponent } from './features/admin/gestion-sitios-scraping.component';
+import { GestionUbicacionFisicaComponent } from './features/admin/gestion-ubicacion-fisica.component';
 import { GestionUsuariosComponent } from './features/admin/gestion-usuarios.component';
 import { ReportesVentasComponent } from './features/admin/reportes-ventas.component';
 import { CatalogarLibroComponent } from './features/catalogar/catalogar-libro.component';
@@ -52,9 +52,11 @@ export const routes: Routes = [
     canActivate: [RoleGuard('administrador')],
   },
   {
-    // CRUD de estantes (tech-specs.md §4.2, TODO.md Tarea 2) — solo administrador, mismo patrón que /admin.
-    path: 'admin/estantes',
-    component: GestionEstantesComponent,
+    // CRUD del modelo jerárquico de ubicación física Espacio → Mueble →
+    // Ubicación (tech-specs.md §4.2, TODO.md Tarea 2) — solo administrador,
+    // mismo patrón que /admin. Reemplaza a la antigua /admin/estantes.
+    path: 'admin/ubicaciones',
+    component: GestionUbicacionFisicaComponent,
     canActivate: [RoleGuard('administrador')],
   },
   {

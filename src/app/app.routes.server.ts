@@ -37,7 +37,7 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Client
   },
   {
-    path: 'admin/estantes',
+    path: 'admin/ubicaciones',
     renderMode: RenderMode.Client
   },
   {
