@@ -106,13 +106,37 @@ describe('handler (/api/editoriales-descuentos)', () => {
     expect(respuesta).toMatchObject({ statusCode: 401 });
   });
 
-  it('responde 403 cuando el rol no es administrador', async () => {
+  it('GET responde 200 para un vendedor autenticado (autocompletado en Gestionar/Catalogar)', async () => {
     verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
     obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    escanearTodoMock.mockResolvedValue([]);
+
+    const respuesta = await handler(eventoFalso('GET', { authorization: 'Bearer token' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+  });
+
+  it('GET responde 403 sin fila en babel-usuarios (rol insuficiente)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue(undefined);
 
     const respuesta = await handler(eventoFalso('GET', { authorization: 'Bearer token' }), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 403 });
+  });
+
+  it('responde 403 en POST/PUT/DELETE cuando el rol es vendedor (exigen administrador exclusivamente)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+
+    const respuesta = await handler(
+      eventoFalso('POST', { authorization: 'Bearer token', body: datosNuevoValidos }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(guardarMock).not.toHaveBeenCalled();
   });
 
   describe('con un administrador autenticado', () => {
