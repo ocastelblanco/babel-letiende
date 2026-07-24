@@ -3,8 +3,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AuthService } from '../../core/auth/auth.service';
+import { EditorialesDescuentosService } from '../../core/api/editoriales-descuentos.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { MetadatosService } from '../../core/api/metadatos.service';
+import type { DescuentoEditorial } from '../../core/models/descuento-editorial.model';
+import type { Espacio } from '../../core/models/espacio.model';
+import type { Mueble } from '../../core/models/mueble.model';
 import type { Ubicacion } from '../../core/models/ubicacion.model';
 import { CatalogarLibroComponent } from './catalogar-libro.component';
 
@@ -43,6 +47,8 @@ vi.mock('@zxing/browser', () => ({
   }),
 }));
 
+const espacioFalso: Espacio = { espacioId: 'espacio-1', nombre: 'Sala principal' };
+const muebleFalso: Mueble = { muebleId: 'mueble-1', espacioId: 'espacio-1', nombre: 'Biblioteca 1' };
 const ubicacionFalsa: Ubicacion = {
   ubicacionId: 'ubicacion-1',
   muebleId: 'mueble-1',
@@ -58,13 +64,15 @@ const datosValidos = {
   pvp: 45000,
   porcentajeDescuentoEditorial: 35,
   cantidadTotal: 2,
-  ubicacionId: 'ubicacion-1',
 };
 
 const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null, pvp: null };
 
-function configurarPrueba() {
+function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
+  const cargarEspaciosMock = vi.fn().mockResolvedValue(undefined);
+  const cargarMueblesMock = vi.fn().mockResolvedValue(undefined);
   const cargarUbicacionesMock = vi.fn().mockResolvedValue(undefined);
+  const cargarDescuentosMock = vi.fn().mockResolvedValue(undefined);
   const obtenerIdTokenMock = vi.fn().mockResolvedValue('token-valido');
   // Por defecto no encuentra nada — las pruebas de autocompletado sobrescriben
   // esta resolución con `mockResolvedValueOnce`/`mockResolvedValue` según el caso.
@@ -84,6 +92,11 @@ function configurarPrueba() {
       {
         provide: UbicacionFisicaService,
         useValue: {
+          espacios: signal([espacioFalso]),
+          errorEspacios: signal(false),
+          cargarEspacios: cargarEspaciosMock,
+          muebles: signal([muebleFalso]),
+          cargarMuebles: cargarMueblesMock,
           ubicaciones: signal([ubicacionFalsa]),
           errorUbicaciones: signal(false),
           cargarUbicaciones: cargarUbicacionesMock,
@@ -97,6 +110,13 @@ function configurarPrueba() {
           buscarPvp: buscarPvpMock,
         },
       },
+      {
+        provide: EditorialesDescuentosService,
+        useValue: {
+          descuentos: signal(descuentos),
+          cargarDescuentos: cargarDescuentosMock,
+        },
+      },
     ],
   });
 
@@ -108,14 +128,24 @@ function configurarPrueba() {
     fixture,
     httpMock,
     obtenerIdTokenMock,
+    cargarEspaciosMock,
+    cargarMueblesMock,
     cargarUbicacionesMock,
+    cargarDescuentosMock,
     obtenerMetadatosMock,
     buscarCandidatosMock,
     buscarPvpMock,
   };
 }
 
+/** Selecciona la ubicación del panel directamente en el componente (fuera del `FormGroup` reactivo) antes de enviar el formulario. */
+function seleccionarUbicacionPanel(fixture: ComponentFixture<CatalogarLibroComponent>, ubicacionId: string): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (fixture.componentInstance as any).panelUbicacionId.set(ubicacionId);
+}
+
 function enviarFormulario(fixture: ComponentFixture<CatalogarLibroComponent>, datos: typeof datosValidos): void {
+  seleccionarUbicacionPanel(fixture, 'ubicacion-1');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (fixture.componentInstance as any).formulario.setValue(datos);
   const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
@@ -135,11 +165,29 @@ describe('CatalogarLibroComponent', () => {
     httpMock.verify();
   });
 
-  it('carga las ubicaciones al inicializar', () => {
+  it('carga espacios, muebles, ubicaciones y descuentos editoriales al inicializar', () => {
     const resultado = configurarPrueba();
     httpMock = resultado.httpMock;
 
+    expect(resultado.cargarEspaciosMock).toHaveBeenCalledTimes(1);
+    expect(resultado.cargarMueblesMock).toHaveBeenCalledTimes(1);
     expect(resultado.cargarUbicacionesMock).toHaveBeenCalledTimes(1);
+    expect(resultado.cargarDescuentosMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('no envía la petición y muestra un mensaje cuando el formulario es válido pero no se eligió ubicación', async () => {
+    const { fixture, httpMock: mock } = configurarPrueba();
+    httpMock = mock;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (fixture.componentInstance as any).formulario.setValue(datosValidos);
+    const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    formulario.dispatchEvent(new Event('submit'));
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    httpMock.expectNone('/api/libros');
+    expect(fixture.nativeElement.textContent).toContain('Selecciona la ubicación del libro');
   });
 
   it('envía POST /api/libros con el ID Token real y muestra el mensaje de éxito', async () => {
@@ -171,7 +219,7 @@ describe('CatalogarLibroComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('catalogado correctamente');
   });
 
-  it('limpia el formulario tras un guardado exitoso', async () => {
+  it('limpia el formulario tras un guardado exitoso, pero conserva la ubicación del panel', async () => {
     const { fixture, httpMock: mock } = configurarPrueba();
     httpMock = mock;
 
@@ -183,11 +231,12 @@ describe('CatalogarLibroComponent', () => {
     await Promise.resolve();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const formulario = (fixture.componentInstance as any).formulario;
-    expect(formulario.value.titulo).toBe('');
-    expect(formulario.value.ubicacionId).toBe('');
+    const componente = fixture.componentInstance as any;
+    expect(componente.formulario.value.titulo).toBe('');
     // El porcentaje de descuento editorial se conserva entre libros seguidos.
-    expect(formulario.value.porcentajeDescuentoEditorial).toBe(35);
+    expect(componente.formulario.value.porcentajeDescuentoEditorial).toBe(35);
+    // El panel "Ubicación del libro" NUNCA se limpia — persiste entre catalogaciones seguidas.
+    expect(componente.panelUbicacionId()).toBe('ubicacion-1');
   });
 
   it('muestra un mensaje de error cuando POST /api/libros falla', async () => {
@@ -750,6 +799,149 @@ describe('CatalogarLibroComponent', () => {
       // sobrescribe lo ya escrito a mano, es una selección explícita.
       expect(componente.formulario.value.autor).toBe('Gabriel García Márquez');
       expect(componente.formulario.value.editorial).toBe('Sudamericana');
+    });
+  });
+
+  describe('panel "Ubicación del libro" (cascada Espacio → Mueble → Ubicación)', () => {
+    it('el select de Mueble solo lista los muebles del espacio elegido', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.panelEspacioId.set('espacio-1');
+      expect(componente.panelMueblesDelEspacio()).toEqual([muebleFalso]);
+
+      componente.panelEspacioId.set('espacio-inexistente');
+      expect(componente.panelMueblesDelEspacio()).toEqual([]);
+    });
+
+    it('el select de Ubicación solo lista las ubicaciones del mueble elegido', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.panelMuebleId.set('mueble-1');
+      expect(componente.panelUbicacionesDelMueble()).toEqual([ubicacionFalsa]);
+
+      componente.panelMuebleId.set('mueble-inexistente');
+      expect(componente.panelUbicacionesDelMueble()).toEqual([]);
+    });
+
+    it('cambiar el Espacio limpia la selección de Mueble y Ubicación', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.panelMuebleId.set('mueble-1');
+      componente.panelUbicacionId.set('ubicacion-1');
+
+      componente.alCambiarPanelEspacio();
+
+      expect(componente.panelMuebleId()).toBe('');
+      expect(componente.panelUbicacionId()).toBe('');
+    });
+
+    it('cambiar el Mueble limpia la selección de Ubicación', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.panelUbicacionId.set('ubicacion-1');
+
+      componente.alCambiarPanelMueble();
+
+      expect(componente.panelUbicacionId()).toBe('');
+    });
+
+    it('el panel persiste tras un guardado exitoso, aunque el resto del formulario se limpie', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+
+      enviarFormulario(fixture, datosValidos);
+      await Promise.resolve();
+      await Promise.resolve();
+      httpMock.expectOne('/api/libros').flush({ titulo: 'Libro de prueba' });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.panelUbicacionId()).toBe('ubicacion-1');
+    });
+  });
+
+  describe('autocompletado de porcentajeDescuentoEditorial', () => {
+    const descuentoSudamericana: DescuentoEditorial = {
+      editorial: 'Sudamericana',
+      porcentajePorDefecto: 40,
+      porcentajesDisponibles: [40],
+    };
+
+    it('autocompleta el porcentaje al perder el foco de Editorial cuando coincide (insensible a mayúsculas/tildes)', async () => {
+      const { fixture } = configurarPrueba([descuentoSudamericana]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      const campoEditorial = fixture.nativeElement.querySelector('#editorial') as HTMLInputElement;
+      campoEditorial.value = 'sudaméricana';
+      campoEditorial.dispatchEvent(new Event('input'));
+      campoEditorial.dispatchEvent(new Event('blur'));
+
+      expect(componente.formulario.value.porcentajeDescuentoEditorial).toBe(40);
+    });
+
+    it('no autocompleta cuando ninguna editorial configurada coincide', async () => {
+      const { fixture } = configurarPrueba([descuentoSudamericana]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      const campoEditorial = fixture.nativeElement.querySelector('#editorial') as HTMLInputElement;
+      campoEditorial.value = 'Editorial sin configurar';
+      campoEditorial.dispatchEvent(new Event('input'));
+      campoEditorial.dispatchEvent(new Event('blur'));
+
+      expect(componente.formulario.value.porcentajeDescuentoEditorial).toBe(35);
+    });
+
+    it('no pisa el porcentaje si el vendedor ya lo modificó a mano antes de que la editorial coincida', async () => {
+      const { fixture } = configurarPrueba([descuentoSudamericana]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      const campoDescuento = fixture.nativeElement.querySelector(
+        '#porcentajeDescuentoEditorial',
+      ) as HTMLInputElement;
+      campoDescuento.value = '20';
+      campoDescuento.dispatchEvent(new Event('input'));
+
+      const campoEditorial = fixture.nativeElement.querySelector('#editorial') as HTMLInputElement;
+      campoEditorial.value = 'Sudamericana';
+      campoEditorial.dispatchEvent(new Event('input'));
+      campoEditorial.dispatchEvent(new Event('blur'));
+
+      expect(componente.formulario.value.porcentajeDescuentoEditorial).toBe(20);
+    });
+
+    it('vuelve a autocompletar en la siguiente catalogación tras un guardado exitoso', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba([descuentoSudamericana]);
+      httpMock = mock;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      // El vendedor modifica el descuento a mano para este primer libro.
+      componente.marcarDescuentoTocadoManualmente();
+      enviarFormulario(fixture, datosValidos);
+      await Promise.resolve();
+      await Promise.resolve();
+      httpMock.expectOne('/api/libros').flush({ titulo: 'Libro de prueba' });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Libro siguiente: el autocompletado debe volver a funcionar.
+      const campoEditorial = fixture.nativeElement.querySelector('#editorial') as HTMLInputElement;
+      campoEditorial.value = 'Sudamericana';
+      campoEditorial.dispatchEvent(new Event('input'));
+      campoEditorial.dispatchEvent(new Event('blur'));
+
+      expect(componente.formulario.value.porcentajeDescuentoEditorial).toBe(40);
     });
   });
 });

@@ -2,6 +2,63 @@
   <div class="mx-auto max-w-xl">
     <h1 class="mb-6 text-2xl font-bold text-primary">Catalogar libro</h1>
 
+    <div class="mb-4 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <h2 class="text-sm font-semibold text-primary">Ubicación del libro</h2>
+
+      <div>
+        <label for="panelEspacioId" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
+        <select
+          id="panelEspacioId"
+          [value]="panelEspacioId()"
+          (change)="panelEspacioId.set($any($event.target).value); alCambiarPanelEspacio()"
+          class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+        >
+          <option value="" disabled>Selecciona un espacio</option>
+          @for (espacio of espacios(); track espacio.espacioId) {
+            <option [value]="espacio.espacioId">{{ espacio.nombre }}</option>
+          }
+        </select>
+        @if (errorEspacios()) {
+          <p class="mt-1 text-xs text-danger">No se pudieron cargar los espacios.</p>
+        }
+      </div>
+
+      <div>
+        <label for="panelMuebleId" class="mb-1 block text-sm font-semibold text-primary">Mueble</label>
+        <select
+          id="panelMuebleId"
+          [value]="panelMuebleId()"
+          (change)="panelMuebleId.set($any($event.target).value); alCambiarPanelMueble()"
+          [disabled]="!panelEspacioId()"
+          class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value="" disabled>Selecciona un mueble</option>
+          @for (mueble of panelMueblesDelEspacio(); track mueble.muebleId) {
+            <option [value]="mueble.muebleId">{{ mueble.nombre }}</option>
+          }
+        </select>
+      </div>
+
+      <div>
+        <label for="panelUbicacionId" class="mb-1 block text-sm font-semibold text-primary">Ubicación</label>
+        <select
+          id="panelUbicacionId"
+          [value]="panelUbicacionId()"
+          (change)="panelUbicacionId.set($any($event.target).value)"
+          [disabled]="!panelMuebleId()"
+          class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value="" disabled>Selecciona una ubicación</option>
+          @for (ubicacion of panelUbicacionesDelMueble(); track ubicacion.ubicacionId) {
+            <option [value]="ubicacion.ubicacionId">{{ ubicacion.nombre }}</option>
+          }
+        </select>
+        @if (errorUbicaciones()) {
+          <p class="mt-1 text-xs text-danger">No se pudieron cargar las ubicaciones.</p>
+        }
+      </div>
+    </div>
+
     <form
       [formGroup]="formulario"
       (ngSubmit)="guardar()"
@@ -138,6 +195,7 @@
           id="editorial"
           type="text"
           formControlName="editorial"
+          (blur)="alPerderFocoEditorial()"
           class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
         />
       </div>
@@ -177,6 +235,7 @@
             id="porcentajeDescuentoEditorial"
             type="number"
             formControlName="porcentajeDescuentoEditorial"
+            (input)="marcarDescuentoTocadoManualmente()"
             class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
           />
           @if (formulario.controls.porcentajeDescuentoEditorial.invalid && formulario.controls.porcentajeDescuentoEditorial.touched) {
@@ -185,39 +244,17 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label for="cantidadTotal" class="mb-1 block text-sm font-semibold text-primary">Cantidad</label>
-          <input
-            id="cantidadTotal"
-            type="number"
-            formControlName="cantidadTotal"
-            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
-          />
-          @if (formulario.controls.cantidadTotal.invalid && formulario.controls.cantidadTotal.touched) {
-            <p class="mt-1 text-xs text-danger">La cantidad debe ser mayor a 0.</p>
-          }
-        </div>
-
-        <div>
-          <label for="ubicacionId" class="mb-1 block text-sm font-semibold text-primary">Ubicación</label>
-          <select
-            id="ubicacionId"
-            formControlName="ubicacionId"
-            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
-          >
-            <option value="" disabled>Selecciona una ubicación</option>
-            @for (ubicacion of ubicaciones(); track ubicacion.ubicacionId) {
-              <option [value]="ubicacion.ubicacionId">{{ ubicacion.nombre }}</option>
-            }
-          </select>
-          @if (formulario.controls.ubicacionId.invalid && formulario.controls.ubicacionId.touched) {
-            <p class="mt-1 text-xs text-danger">La ubicación es requerida.</p>
-          }
-          @if (errorUbicaciones()) {
-            <p class="mt-1 text-xs text-danger">No se pudieron cargar las ubicaciones.</p>
-          }
-        </div>
+      <div>
+        <label for="cantidadTotal" class="mb-1 block text-sm font-semibold text-primary">Cantidad</label>
+        <input
+          id="cantidadTotal"
+          type="number"
+          formControlName="cantidadTotal"
+          class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+        />
+        @if (formulario.controls.cantidadTotal.invalid && formulario.controls.cantidadTotal.touched) {
+          <p class="mt-1 text-xs text-danger">La cantidad debe ser mayor a 0.</p>
+        }
       </div>
 
       <button
