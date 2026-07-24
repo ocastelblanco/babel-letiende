@@ -36,7 +36,7 @@ function configurarPrueba(usuarioResuelto: Usuario | null) {
 }
 
 describe('RoleGuard', () => {
-  it('bloquea y redirige a /libros cuando no hay sesión (usuario null)', async () => {
+  it('bloquea y redirige a / cuando no hay sesión (usuario null)', async () => {
     const { navigateMock } = configurarPrueba(null);
 
     const resultado = await TestBed.runInInjectionContext(() =>
@@ -44,10 +44,10 @@ describe('RoleGuard', () => {
     );
 
     expect(resultado).toBe(false);
-    expect(navigateMock).toHaveBeenCalledWith(['/libros']);
+    expect(navigateMock).toHaveBeenCalledWith(['/']);
   });
 
-  it('bloquea y redirige a /libros cuando el rol no coincide (ej. 403 o rol distinto)', async () => {
+  it('bloquea y redirige a / cuando el rol no coincide (ej. 403 o rol distinto)', async () => {
     const usuarioVendedor: Usuario = {
       email: 'vendedor@letiende.co',
       nombre: 'Vendedor de prueba',
@@ -62,7 +62,7 @@ describe('RoleGuard', () => {
     );
 
     expect(resultado).toBe(false);
-    expect(navigateMock).toHaveBeenCalledWith(['/libros']);
+    expect(navigateMock).toHaveBeenCalledWith(['/']);
   });
 
   it('permite el acceso cuando el rol coincide', async () => {
@@ -101,7 +101,7 @@ describe('RoleGuard', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it('bloquea y redirige a /libros con una lista de roles cuando el rol del usuario no está incluida', async () => {
+  it('bloquea y redirige a / con una lista de roles cuando el rol del usuario no está incluida', async () => {
     const usuarioSinFila: Usuario | null = null;
     const { navigateMock } = configurarPrueba(usuarioSinFila);
 
@@ -110,6 +110,6 @@ describe('RoleGuard', () => {
     );
 
     expect(resultado).toBe(false);
-    expect(navigateMock).toHaveBeenCalledWith(['/libros']);
+    expect(navigateMock).toHaveBeenCalledWith(['/']);
   });
 });
