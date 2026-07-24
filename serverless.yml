@@ -451,8 +451,8 @@ functions:
     description: >-
       CRUD /api/espacios — GET público (sin token), POST/PUT/DELETE exigen
       administrador (CLAUDE.md A01, ADR-008). Primer nivel del modelo
-      jerárquico de ubicación física Espacio → Mueble → Ubicación (TODO.md
-      Tarea 2), que eventualmente reemplaza a `babel-estantes`.
+      Espacio → Mueble → Ubicación (TODO.md Tarea 2), reemplaza a
+      `babel-estantes`.
     environment:
       TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
       TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
