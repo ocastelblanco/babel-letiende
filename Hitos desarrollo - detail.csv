@@ -1,0 +1,105 @@
+stage,start,finish,time,role,model,milestone,tool,device,effort
+Specs definition,16/07/2026 15:00,16/07/2026 15:01,0:01:00,human,OCM,Creación de repositorio 'babel-letiende'.,Github,mobile,high
+Specs definition,16/07/2026 15:01,16/07/2026 16:23,1:22:00,human,OCM,Creación de prompt de especificaciones iniciales.,Claude Code,mobile,high
+Specs definition,16/07/2026 16:23,16/07/2026 16:38,0:15:00,AI,Sonnet 5,"Creación del estado inicial, carga de dependencias, inicio del motor JIT y creación de la PR.",Claude Code,mobile,high
+Specs definition,16/07/2026 18:50,16/07/2026 19:05,0:15:00,human,OCM,Revisión de la documentación y generación de comentarios.,Github,mobile,high
+Specs definition,16/07/2026 19:05,16/07/2026 19:17,0:12:00,human,OCM,Creación de prompt de precisión de conceptos.,Claude Code,mobile,high
+Specs definition,16/07/2026 19:17,16/07/2026 19:22,0:05:00,AI,Sonnet 5,"Ajuste de documentación inicial, commit/push a la rama y PR actual.",Claude Code,mobile,high
+Specs definition,16/07/2026 19:22,16/07/2026 19:27,0:05:00,human,OCM,Creación de prompt de pregunta sobre compartición de sistema de autenticación entre Comandante y Babel.,Claude Code,mobile,high
+Specs definition,16/07/2026 19:27,16/07/2026 19:38,0:11:00,AI,Sonnet 5,"Ajuste de documentación inicial, commit/push a la rama y PR actual.",Claude Code,mobile,high
+Specs definition,16/07/2026 19:38,16/07/2026 19:43,0:05:00,human,OCM,"Revisión de ajustes, aprobación de la PR, fusión y eliminación de la featured branch en remoto.",Github,mobile,high
+Workspace settting,17/07/2026 12:10,17/07/2026 12:16,0:06:00,human,OCM,Creación de prompt de vinculación local de skills necesarias.,Claude Code,cli,medium
+Workspace settting,17/07/2026 12:16,17/07/2026 12:19,0:03:00,AI,Sonnet 5,Creación de simlinks locales y adición a .gitignore.,Claude Code,cli,high
+Workspace settting,17/07/2026 12:21,17/07/2026 12:22,0:01:00,human,OCM,Creación de prompt de creación de README.md.,Claude Code,cli,medium
+Workspace settting,17/07/2026 12:22,17/07/2026 12:24,0:02:00,AI,Sonnet 5,Creación de README.md.,Claude Code,cli,high
+Scaffold,17/07/2026 12:26,17/07/2026 13:05,0:39:00,AI,Sonnet 5,Inicio con la tarea 1.,Claude Code,cli,high
+Scaffold,17/07/2026 13:09,17/07/2026 13:10,0:01:00,human,OCM,Validación y aprobación de PR.,Github,web,low
+Cloud infraestructure,17/07/2026 13:14,17/07/2026 13:21,0:07:00,AI,Sonnet 5,Inicio con la tarea 2.,Claude Code,cli,high
+Cloud infraestructure,17/07/2026 13:21,17/07/2026 13:22,0:01:00,human,OCM,Aclaración sobre montaje de 2 Lambdas.,Claude Code,cli,medium
+Cloud infraestructure,17/07/2026 13:22,17/07/2026 14:10,0:48:00,AI,Sonnet 5,Continuación con la tarea 2.,Claude Code,cli,high
+Cloud infraestructure,17/07/2026 15:10,17/07/2026 15:15,0:05:00,human,OCM,Adición de seccret keys al repo y prompt de solicitud de nuevo despliegue.,Claude Code,cli,medium
+Cloud infraestructure,17/07/2026 15:15,17/07/2026 15:18,0:03:00,AI,Sonnet 5,"Ajuste de configuración para incluir secretos Serverless y AWS, para CI/CD.",Claude Code,cli,high
+Cloud infraestructure,17/07/2026 15:20,17/07/2026 15:21,0:01:00,human,OCM,Validación y aprobación de PR.,Github,web,low
+Auth connection,17/07/2026 15:25,17/07/2026 15:39,0:14:00,AI,Sonnet 5,"Autenticación con Google Firebase, usando el proyecto Comandante.",Claude Code,cli,high
+Auth connection,17/07/2026 15:42,17/07/2026 15:43,0:01:00,human,OCM,Validación y aprobación de PR.,Github,web,low
+Frontend,17/07/2026 15:57,17/07/2026 16:11,0:14:00,AI,Sonnet 5,Montaje del primer componente: Login.,Claude Code,cli,high
+Frontend,17/07/2026 16:13,17/07/2026 16:16,0:03:00,human,OCM,Validación y creación de prompt para error en flujo de publicación a stagging.,Claude Code,cli,low
+Frontend,17/07/2026 16:16,17/07/2026 16:19,0:03:00,AI,Fable 5,Solución a error de flujo de publicación a stagging.,Claude Code,cli,high
+Frontend,17/07/2026 16:25,17/07/2026 16:32,0:07:00,human,OCM,"Creación de prompt para ajuste visual, siguiendo estilos de Comandante.",Claude Code,cli,medium
+Frontend,17/07/2026 16:32,17/07/2026 16:44,0:12:00,AI,Sonnet 5,Ajustes visuales para alinearse con Comandante.,Claude Code,cli,high
+Frontend,17/07/2026 16:46,17/07/2026 16:47,0:01:00,human,OCM,Validación y aprobación de PR.,Github,web,low
+Frontend,17/07/2026 16:50,17/07/2026 16:58,0:08:00,human,OCM,Creación de prompt de solución de problema de autenticación.,Claude Code,cli,high
+Frontend,17/07/2026 16:58,17/07/2026 17:06,0:08:00,AI,Sonnet 5,Solución a problema de autenticación.,Claude Code,cli,high
+Frontend,17/07/2026 17:07,17/07/2026 17:07,0:00:30,human,OCM,Reporte de mensaje de error de DevTools.,Claude Code,cli,low
+Frontend,17/07/2026 17:07,17/07/2026 17:10,0:03:00,AI,Sonnet 5,Solución a mensaje de error de DevTools.,Claude Code,cli,high
+Frontend,17/07/2026 17:17,17/07/2026 17:21,0:04:00,human,OCM,Creación de prompt de creación de flujo CI/CD stagging y de copia detallada de UX/UI de Comandante (Ionic).,Claude Code,cli,medium
+Frontend,17/07/2026 17:21,17/07/2026 17:52,0:31:00,AI,Sonnet 5,"Creación de flujo CI/CD stagging, aplicación detallada de estilos UX/UI de Comandante.",Claude Code,cli,high
+Frontend,17/07/2026 17:52,17/07/2026 17:53,0:01:00,human,OCM,Validación y aprobación de PR.,Github,web,low
+Frontend,17/07/2026 17:56,17/07/2026 17:58,0:02:00,human,OCM,Creación de prompt para generación de set de íconos PWA.,Claude Code,cli,low
+Frontend,17/07/2026 17:58,17/07/2026 18:04,0:06:00,AI,Sonnet 5,Generación de set de íconos PWA.,Claude Code,cli,high
+Frontend,17/07/2026 18:02,17/07/2026 18:03,0:01:00,human,OCM,Solicitud de alistamiento para continuar en Claude Code mobile.,Claude Code,cli,low
+Frontend,17/07/2026 18:03,17/07/2026 18:04,0:01:00,AI,Sonnet 5,Alistamiento para continuar en Claude Code mobile.,Claude Code,cli,high
+Backend,17/07/2026 20:06,17/07/2026 20:18,0:12:00,AI,Sonnet 5,Actualización de repo (pull) y ejecución de siguiente tarea: tablas DynamoDB y modelo de datos.,Claude Code,mobile,high
+Cloud infraestructure,18/07/2026 11:14,18/07/2026 11:25,0:11:00,human,OCM,Creación de prompt para revisión de independencia del proceso de desarrollo de la plataforma.,Claude Code,mobile,high
+Cloud infraestructure,18/07/2026 11:26,18/07/2026 11:28,0:02:00,AI,Fable 5,"Validación de repositorio para que se pueda avanzar desde CLI, Mobile, Web o Desktop.",Claude Code,mobile,high
+Cloud infraestructure,18/07/2026 11:28,18/07/2026 11:36,0:08:00,human,OCM,Creación de prompt de solicitud de instrucciones para la creación de una nueva cuenta de servicio y para la aplicación de acciones de independización de infraestructura.,Claude Code,mobile,high
+Cloud infraestructure,18/07/2026 11:36,18/07/2026 11:41,0:05:00,AI,Fable 5,Ajuste de workflows para independización de infraestructura y generación de instrucciones para GCP.,Claude Code,mobile,high
+Cloud infraestructure,18/07/2026 11:41,18/07/2026 11:48,0:07:00,human,OCM,Seguimiento de instrucciones en GCP.,GCP,web,high
+Backend,18/07/2026 12:50,18/07/2026 12:55,0:05:00,human,OCM,Prompt de inicio de tarea.,Claude Code,mobile,low
+Backend,18/07/2026 12:56,18/07/2026 13:25,0:29:00,AI,Sonnet 5,Inicio de tarea de endpoint de usuario logueado.,Claude Code,mobile,high
+Backend,18/07/2026 13:25,18/07/2026 13:31,0:06:00,human,OCM,Ajuste de permisos IAM en Firebase.,GCP,web,low
+Backend,18/07/2026 13:31,18/07/2026 13:40,0:09:00,AI,Sonnet 5,Finalización de la tarea de endpoint de usuario logueado.,Claude Code,mobile,high
+Backend,18/07/2026 13:44,18/07/2026 13:45,0:01:00,human,OCM,Validación y aprobación de PR.,Github,mobile,low
+Backend,18/07/2026 19:55,18/07/2026 20:05,0:10:00,AI,Sonnet 5,Tarea de API de libros y RoleGuard.,Claude Code,mobile,high
+Frontend,18/07/2026 20:23,18/07/2026 20:46,0:23:00,AI,Sonnet 5,UsuariosService y RoleGuard.,Claude Code,mobile,high
+Frontend,18/07/2026 20:48,18/07/2026 21:08,0:20:00,AI,Sonnet 5,LibrosService y CatalogoPublicoComponent.,Claude Code,mobile,high
+Frontend,18/07/2026 21:10,18/07/2026 21:40,0:30:00,AI,Sonnet 5,handlerCrear y catalogarLibro.,Claude Code,mobile,high
+Frontend,18/07/2026 22:20,18/07/2026 22:50,0:30:00,AI,Sonnet 5,Ajuste de errores y creación de set de datos de prueba.,Claude Code,mobile,high
+Backend,19/07/2026 10:20,19/07/2026 10:43,0:23:00,AI,Sonnet 5,CRUD /api/estantes,Claude Code,mobile,high
+Backend,19/07/2026 10:46,19/07/2026 11:04,0:18:00,AI,Sonnet 5,POST /api/ventas,Claude Code,mobile,high
+Backend,19/07/2026 11:09,19/07/2026 11:32,0:23:00,AI,Sonnet 5,CRUD /api/usuarios,Claude Code,mobile,high
+Frontend,19/07/2026 13:07,19/07/2026 13:21,0:14:00,AI,Sonnet 5,Catalogación manual en el frontend (formulario POST /api/libros + GET /api/estantes),Claude Code,mobile,high
+Frontend,19/07/2026 13:21,19/07/2026 13:25,0:04:00,human,OCM,Creación de prompt con error de flujo de autenticación.,Claude Code,mobile,high
+Frontend,19/07/2026 13:25,19/07/2026 13:39,0:14:00,AI,Sonnet 5,Solución de error.,Claude Code,mobile,high
+Frontend,19/07/2026 13:45,19/07/2026 13:49,0:04:00,human,OCM,Validación de solución a error y prompt de nuevo error.,Claude Code,mobile,high
+Frontend,19/07/2026 13:49,19/07/2026 14:04,0:15:00,AI,Sonnet 5,Solución de error.,Claude Code,mobile,high
+Frontend,19/07/2026 14:08,19/07/2026 14:11,0:03:00,human,OCM,Validación de solución a error.,Claude Code,mobile,high
+Frontend,19/07/2026 14:11,19/07/2026 14:16,0:05:00,AI,Sonnet 5,Documentación y cierre de fix.,Claude Code,mobile,high
+Backend,19/07/2026 22:06,19/07/2026 22:42,0:36:00,AI,Sonnet 5,CRUD /api/editoriales-descuentos,Claude Code,mobile,high
+Backend,20/07/2026 12:07,20/07/2026 12:32,0:25:00,AI,Sonnet 5,PATCH /api/libros/:bookId/estante,Claude Code,mobile,high
+Backend,20/07/2026 16:08,20/07/2026 16:32,0:24:00,AI,Sonnet 5,GET /api/ventas,Claude Code,mobile,high
+Backend,20/07/2026 16:42,20/07/2026 17:04,0:22:00,AI,Fable 5,Solución a GSI vendidoEn-index,Claude Code,mobile,high
+Frontend,20/07/2026 17:44,20/07/2026 18:02,0:18:00,AI,Sonnet 5,Creación de CambiarEstanteComponent,Claude Code,mobile,high
+Frontend,20/07/2026 18:25,20/07/2026 18:34,0:09:00,AI,Sonnet 5,Sección /admin — placeholder de navegación + RoleGuard('administrador'),Claude Code,mobile,high
+Frontend,20/07/2026 18:34,20/07/2026 18:36,0:02:00,human,OCM,Validación de /admin,Github,mobile,low
+Frontend,21/07/2026 15:20,21/07/2026 15:30,0:10:00,AI,Sonnet 5,Escaneo de código de barras con cámara,Claude Code,cli,high
+Frontend,21/07/2026 15:43,21/07/2026 15:58,0:15:00,AI,Sonnet 5,Solución de error de exceso de carga a Lambda.,Claude Code,cli,high
+Frontend,21/07/2026 16:16,21/07/2026 16:23,0:07:00,AI,Sonnet 5,"CRUD de estantes en /admin/estantes, primera pantalla admin.",Claude Code,cli,high
+Backend,21/07/2026 17:59,21/07/2026 18:17,0:18:00,AI,Sonnet 5,Autocompleta metadatos del libro por ISBN vía api.letiende.co.,Claude Code,cli,high
+Backend,21/07/2026 18:30,21/07/2026 18:37,0:07:00,human,OCM,Creación de secret API_LETIENDE_BASE_URL y despliegue en staging.,Github,web,medium
+Backend,21/07/2026 18:40,21/07/2026 18:50,0:10:00,AI,Sonnet 5,Solución de problema con API.,Claude Code,cli,high
+Backend,21/07/2026 19:00,21/07/2026 19:46,0:46:00,human,OCM,Prompt de definición de flujo de carga de información y PVP desde la API y sitios web.,Claude Code,cli,high
+Specs definition,21/07/2026 19:55,21/07/2026 20:25,0:30:00,AI,Opus 4.8,Plan de acción de flujo de carga de datos de libros.,Claude Code,cli,high
+Backend,22/07/2026 10:13,22/07/2026 10:30,0:17:00,AI,Sonnet 5,"CRUD de sitios de scraping en /admin/sitios, lista info/pvp.",Claude Code,cli,high
+Auth connection,22/07/2026 10:35,22/07/2026 10:43,0:08:00,human,OCM,Prompt de error de selección de cuentas de Google desde Chrome macOS.,Claude Code,cli,medium
+Auth connection,22/07/2026 10:43,22/07/2026 10:46,0:03:00,AI,Sonnet 5,Fuerza el selector de cuentas de Google en el login.,Claude Code,cli,high
+Cloud infraestructure,22/07/2026 10:48,22/07/2026 11:09,0:21:00,AI,Sonnet 5,"Diagnostica solapamiento de deploys, restaura infra, siembra sitios.",Claude Code,cli,high
+Cloud infraestructure,22/07/2026 11:12,22/07/2026 11:28,0:16:00,AI,Sonnet 5,"Re-deploy en staging, siembra de datos de sitios web, documentación.",Claude Code,cli,high
+Backend,22/07/2026 11:50,22/07/2026 12:12,0:22:00,AI,Sonnet 5,"Motor de scraping por ISBN + guardia SSRF fija (server/api/services/scraping.ts), 4 adaptadores reales (Lerner, Nacional, Tornamesa, Busca Libre).",Claude Code,cli,high
+Specs definition,22/07/2026 12:17,22/07/2026 12:19,0:02:00,AI,Sonnet 5,Responde preguntas sobre el orden de fallbacks y la obligatoriedad del scraping para el PVP (sin cambios de código).,Claude Code,cli,high
+Specs definition,22/07/2026 12:23,22/07/2026 12:27,0:04:00,AI,Sonnet 5,"Compara velocidad, calidad y seguridad de los 4 adaptadores de scraping (Lerner, Nacional, Tornamesa, Busca Libre), excluyendo PVP.",Claude Code,cli,high
+Specs definition,22/07/2026 12:38,22/07/2026 12:52,0:14:00,AI,Sonnet 5,"Documenta la siguiente tarea (reordenamiento arrastrable en /admin/sitios) en TODO.md/MEMORY.md, sin iniciar la implementación.",Claude Code,cli,high
+Frontend,22/07/2026 15:54,22/07/2026 16:08,0:14:00,AI,Sonnet 5,"Reordenamiento arrastrable de sitios de scraping en /admin/sitios (@angular/cdk), prioridad manual eliminada.",Claude Code,cli,high
+Frontend,22/07/2026 16:33,22/07/2026 16:39,0:06:00,AI,Sonnet 5,"Ajustes de UX en /admin/sitios: botón Agregar flotante y deshabilitado en uso, Editar/Eliminar apilados.",Claude Code,cli,high
+Backend,22/07/2026 16:49,22/07/2026 17:07,0:18:00,AI,Sonnet 5,"Integra scraping en paralelo + PVP en /api/metadatos/:isbn (Task C), cierra la iniciativa de obtención de info de libros.",Claude Code,cli,high
+Frontend,22/07/2026 17:19,22/07/2026 17:31,0:12:00,AI,Sonnet 5,"GestionUsuariosComponent en /admin/usuarios, con salvaguarda visual de ADR-009 (no auto-eliminación/degradación).",Claude Code,cli,high
+Frontend,22/07/2026 17:43,22/07/2026 17:56,0:13:00,AI,Sonnet 5,"DescuentosEditorialesComponent en /admin/editoriales, completa los 4 CRUD de administración pendientes.",Claude Code,cli,high
+Cloud infraestructure,22/07/2026 18:46,22/07/2026 18:47,0:01:00,AI,Sonnet 5,Limpieza de repo local tras fusionar PR #44; TODO.md queda listo para la siguiente tarea sin iniciarla.,Claude Code,cli,high
+Backend,23/07/2026 08:32,23/07/2026 09:31,0:59:00,AI,Sonnet 5,"GET /api/ventas/exportar (XLSX) + ReportesVentasComponent, cubre todos los ítems Media del roadmap con backend listo.",Claude Code,cli,high
+Cloud infraestructure,23/07/2026 09:34,23/07/2026 09:35,0:01:00,AI,Sonnet 5,Limpieza de repo local tras fusionar PR #45.,Claude Code,cli,high
+Cloud infraestructure,24/07/2026 12:02,24/07/2026 12:03,0:01:00,AI,Sonnet 5,"Limpieza de repo local tras fusionar PR #55 (main actualizado, rama docs borrada).",Claude Code,cli,high
+Backend,24/07/2026 12:03,24/07/2026 12:20,0:17:00,AI,Sonnet 5,Migra Libro.estanteId a ubicacionId (Tarea 1 del motor JIT): backend/frontend/infra + PR #56.,Claude Code,cli,high
+Backend,24/07/2026 14:31,24/07/2026 14:34,0:03:00,AI,Sonnet 5,"Corrige 500 en ficha de libros pre-migracion (ubicacionId undefined), commit adicional en PR #56.",Claude Code,cli,high
+Workspace settting,24/07/2026 14:34,24/07/2026 14:37,0:03:00,AI,Sonnet 5,Agrega CLAUDE.md paragrafo 8 y trackea Hitos desarrollo - detail.csv en el repo.,Claude Code,cli,high
+Backend,24/07/2026 14:56,24/07/2026 15:08,0:12:00,AI,Sonnet 5,Vende desde la ficha del libro (cantidad/descuento/forma de pago): backend/frontend + PR #57.,Claude Code,cli,high
+Workspace settting,24/07/2026 15:08,24/07/2026 15:08,0:00:30,AI,Sonnet 5,Crea la PR #58 (registro de tiempos) tras superarse el error transitorio de GitHub.,Claude Code,cli,medium
