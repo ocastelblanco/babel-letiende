@@ -1,9 +1,10 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Title } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
 import type { Libro } from '../../core/models/libro.model';
-import { CatalogoPublicoComponent } from './catalogo-publico.component';
+import { CatalogoPublicoComponent, TITULO_CATALOGO_PUBLICO } from './catalogo-publico.component';
 
 const libroFalso: Libro = {
   isbn: '9780000000000',
@@ -71,6 +72,23 @@ describe('CatalogoPublicoComponent', () => {
     const { fixture } = configurarPrueba({ libros: [], cargando: false, error: false });
 
     expect(fixture.nativeElement.textContent).toContain('Todavía no hay libros disponibles');
+  });
+
+  it('muestra "Catálogo Librería" como encabezado tras el logo', () => {
+    const { fixture } = configurarPrueba({ libros: [], cargando: false, error: false });
+
+    const encabezado = fixture.nativeElement.querySelector('h1') as HTMLElement;
+    expect(encabezado.textContent).toContain('Catálogo Librería');
+  });
+
+  it('siempre resetea el título de la pestaña, aunque haya quedado sobrescrito por una ficha de libro visitada antes', () => {
+    // Simula el escenario real del bug: el título quedó "pegado" al de un
+    // libro visitado antes de entrar/volver a `/` (`Title` es singleton).
+    document.title = 'Cuentos de amor — Catálogo Le Tiende';
+
+    configurarPrueba({ libros: [], cargando: false, error: false });
+
+    expect(TestBed.inject(Title).getTitle()).toBe(TITULO_CATALOGO_PUBLICO);
   });
 
   it('muestra el título, autor y PVP formateado de cada libro', () => {

@@ -1,14 +1,18 @@
 import { Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 
 /**
  * Pantalla de ingreso con Google (tech-specs.md §4.2, ruta /login).
  * El manejo de errores nunca expone el mensaje crudo del SDK de Firebase ni
  * detalles internos al usuario (CLAUDE.md, A05) — solo un mensaje genérico.
+ * Incluye un vínculo de regreso al catálogo público (`TODO.md`, fixes
+ * rápidos del catálogo público) — para un cliente sin cuenta que haga clic
+ * en "Ingresar" por error.
  */
 @Component({
   selector: 'app-login',
+  imports: [RouterLink],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })
