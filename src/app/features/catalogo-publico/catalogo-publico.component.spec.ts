@@ -1,9 +1,13 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
+import type { Espacio } from '../../core/models/espacio.model';
 import type { Libro } from '../../core/models/libro.model';
+import type { Mueble } from '../../core/models/mueble.model';
+import type { Ubicacion } from '../../core/models/ubicacion.model';
 import { CatalogoPublicoComponent, TITULO_CATALOGO_PUBLICO } from './catalogo-publico.component';
 
 const libroFalso: Libro = {
@@ -25,11 +29,32 @@ const libroFalso: Libro = {
   actualizadoEn: '2026-07-19T00:00:00.000Z',
 };
 
-function configurarPrueba(estado: { libros: Libro[]; cargando: boolean; error: boolean }) {
+const espacioPrincipal: Espacio = { espacioId: 'espacio-1', nombre: 'Sala principal' };
+const espacioVip: Espacio = { espacioId: 'espacio-2', nombre: 'Sala VIP' };
+const muebleBiblioteca1: Mueble = { muebleId: 'mueble-1', espacioId: 'espacio-1', nombre: 'Biblioteca 1' };
+const muebleBiblioteca2: Mueble = { muebleId: 'mueble-2', espacioId: 'espacio-2', nombre: 'Biblioteca 2' };
+const ubicacion1: Ubicacion = { ubicacionId: 'ubicacion-1', muebleId: 'mueble-1', nombre: 'Estante 1' };
+const ubicacion2: Ubicacion = { ubicacionId: 'ubicacion-2', muebleId: 'mueble-2', nombre: 'Estante 2' };
+
+function configurarPrueba(
+  estado: { libros: Libro[]; cargando: boolean; error: boolean },
+  opciones: {
+    espacios?: Espacio[];
+    muebles?: Mueble[];
+    ubicaciones?: Ubicacion[];
+    queryParams?: Record<string, string>;
+  } = {},
+) {
   const cargarCatalogoMock = vi.fn().mockResolvedValue(undefined);
+  const navigateMock = vi.fn();
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
+      { provide: Router, useValue: { navigate: navigateMock } },
+      {
+        provide: ActivatedRoute,
+        useValue: { snapshot: { queryParamMap: convertToParamMap(opciones.queryParams ?? {}) } },
+      },
       {
         provide: LibrosService,
         useValue: {
@@ -39,6 +64,20 @@ function configurarPrueba(estado: { libros: Libro[]; cargando: boolean; error: b
           cargarCatalogo: cargarCatalogoMock,
         },
       },
+      {
+        provide: UbicacionFisicaService,
+        useValue: {
+          espacios: signal(opciones.espacios ?? [espacioPrincipal, espacioVip]),
+          muebles: signal(opciones.muebles ?? [muebleBiblioteca1, muebleBiblioteca2]),
+          ubicaciones: signal(opciones.ubicaciones ?? [ubicacion1, ubicacion2]),
+          errorEspacios: signal(false),
+          errorMuebles: signal(false),
+          errorUbicaciones: signal(false),
+          cargarEspacios: vi.fn().mockResolvedValue(undefined),
+          cargarMuebles: vi.fn().mockResolvedValue(undefined),
+          cargarUbicaciones: vi.fn().mockResolvedValue(undefined),
+        },
+      },
     ],
   });
 
@@ -46,7 +85,7 @@ function configurarPrueba(estado: { libros: Libro[]; cargando: boolean; error: b
     CatalogoPublicoComponent,
   );
   fixture.detectChanges();
-  return { fixture, cargarCatalogoMock };
+  return { fixture, cargarCatalogoMock, navigateMock };
 }
 
 describe('CatalogoPublicoComponent', () => {
@@ -190,6 +229,142 @@ describe('CatalogoPublicoComponent', () => {
       const texto = fixture.nativeElement.textContent;
       expect(texto).toContain('Cien años de soledad');
       expect(texto).toContain('Aniquilación');
+    });
+  });
+
+  describe('filtro por ubicación (Espacio/Mueble)', () => {
+    // `libroFalso` está en ubicacion-1 (mueble-1, espacio-1); este segundo libro está en ubicacion-2 (mueble-2, espacio-2).
+    const libroEnOtraUbicacion: Libro = {
+      ...libroFalso,
+      bookId: 'book-2',
+      titulo: 'Aniquilación',
+      autor: 'Michel Houellebecq',
+      ubicacionId: 'ubicacion-2',
+    };
+
+    function selectEspacio(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLSelectElement {
+      return fixture.nativeElement.querySelectorAll('select')[0] as HTMLSelectElement;
+    }
+
+    function selectMueble(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLSelectElement {
+      return fixture.nativeElement.querySelectorAll('select')[1] as HTMLSelectElement;
+    }
+
+    function elegir(select: HTMLSelectElement, valor: string): void {
+      select.value = valor;
+      select.dispatchEvent(new Event('change'));
+    }
+
+    function escribirBusqueda(fixture: ComponentFixture<CatalogoPublicoComponent>, texto: string): void {
+      const campo = fixture.nativeElement.querySelector('input[type="search"]') as HTMLInputElement;
+      campo.value = texto;
+      campo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('sin filtro de ubicación, muestra todo el catálogo', () => {
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Cien años de soledad');
+      expect(texto).toContain('Aniquilación');
+    });
+
+    it('filtra por Espacio (resuelve ubicacionId → muebleId → espacioId)', () => {
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      elegir(selectEspacio(fixture), 'espacio-2');
+      fixture.detectChanges();
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Aniquilación');
+      expect(texto).not.toContain('Cien años de soledad');
+    });
+
+    it('filtra por Mueble', () => {
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      elegir(selectMueble(fixture), 'mueble-2');
+      fixture.detectChanges();
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Aniquilación');
+      expect(texto).not.toContain('Cien años de soledad');
+    });
+
+    it('el filtro de ubicación es acumulativo con la búsqueda de texto', () => {
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      elegir(selectEspacio(fixture), 'espacio-1');
+      escribirBusqueda(fixture, 'aniquilacion');
+
+      expect(fixture.nativeElement.textContent).toContain('No se encontraron libros para tu búsqueda');
+    });
+
+    it('el select de Mueble se limita al Espacio elegido, y cambiar de Espacio limpia el Mueble', () => {
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      elegir(selectEspacio(fixture), 'espacio-1');
+      fixture.detectChanges();
+      let opciones = selectMueble(fixture).querySelectorAll('option');
+      expect(Array.from(opciones).map((o) => o.textContent?.trim())).toEqual(['Todos los muebles', 'Biblioteca 1']);
+
+      elegir(selectMueble(fixture), 'mueble-1');
+      fixture.detectChanges();
+      elegir(selectEspacio(fixture), 'espacio-2');
+      fixture.detectChanges();
+
+      expect(selectMueble(fixture).value).toBe('');
+      opciones = selectMueble(fixture).querySelectorAll('option');
+      expect(Array.from(opciones).map((o) => o.textContent?.trim())).toEqual(['Todos los muebles', 'Biblioteca 2']);
+    });
+
+    it('preselecciona los selects desde los query params ?espacio=&mueble= al entrar', () => {
+      const { fixture } = configurarPrueba(
+        { libros: [libroFalso, libroEnOtraUbicacion], cargando: false, error: false },
+        { queryParams: { espacio: 'espacio-2', mueble: 'mueble-2' } },
+      );
+
+      expect(selectEspacio(fixture).value).toBe('espacio-2');
+      expect(selectMueble(fixture).value).toBe('mueble-2');
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Aniquilación');
+      expect(texto).not.toContain('Cien años de soledad');
+    });
+
+    it('cambiar el Espacio actualiza los query params de la URL', () => {
+      const { fixture, navigateMock } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      elegir(selectEspacio(fixture), 'espacio-2');
+
+      expect(navigateMock).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({ queryParams: { espacio: 'espacio-2', mueble: null } }),
+      );
     });
   });
 });
