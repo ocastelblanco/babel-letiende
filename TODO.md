@@ -2,33 +2,11 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Prioridad de selección aplicada (2026-07-24, revalidada tras sincronizar con `origin/main`):** la Tarea E (área "Gestionar") se completó y fusionó como PR #60 — `GestionarComponent` (`/gestionar`, 2 pestañas), `PUT`/`DELETE`/`GET /api/libros/inventario` nuevos en el backend, `ListaLibrosCatalogadosComponent`/`CambiarUbicacionComponent`/`/libros`/`AuthGuard` eliminados (ver `ajustes-finales.md`, Tarea E marcada `[x]`, y `MEMORY.md` §2/§9 para el detalle completo). Sube a **Tarea 1** la Tarea F (filtrado público por ubicación) — ya estaba en el TODO como Tarea 2, sin cambios de contenido, y sus dependencias (Tarea B) ya están fusionadas. Se agrega como **Tarea 2** la Tarea G (Reporte de Inventario XLSX) del backlog ordenado de `ajustes-finales.md` — depende de B y C, ambas ya fusionadas, sin bloqueo. Ambas tareas son independientes entre sí: una toca únicamente `CatalogoPublicoComponent` (frontend), la otra agrega un endpoint nuevo (`server/api/handlers/libros.ts` o uno dedicado) y extiende `ReportesVentasComponent`/`/admin/reportes`.
+**Prioridad de selección aplicada (2026-07-25):** la Tarea F (filtrado público por ubicación) se completó (PR #62) — 2 `<select>` (Espacio/Mueble) acumulativos con la búsqueda de texto, query params `?espacio=&mueble=` en ambas direcciones, y un bug real de Angular corregido de paso (`[value]` en un `<select>` nativo sin Reactive Forms no selecciona la opción si las `<option>` del `@for` aún no existían en el DOM — reemplazado por `[selected]` por opción). 8 tests unitarios nuevos. Verificado en vivo por el usuario en `staging` tras resolver un conflicto real de fusión con el PR #61 (ambos tocaban `Hitos desarrollo - detail.csv`), resuelto con un merge normal (no rebase) conservando ambas filas. Sube a **Tarea 1** la Tarea G (Reporte de Inventario XLSX) — ya estaba en el TODO como Tarea 2, sin cambios de contenido. **No se agrega una Tarea 2 nueva:** revisando `PRD.md` §6 (roadmap) y `ajustes-finales.md` §"Backlog ordenado de implementación" completos, la Tarea G es el único ítem Alta/Media pendiente en todo el proyecto — no hay ningún gap de seguridad abierto en `MEMORY.md` §7 (los únicos `⚠️` sin "RESUELTO" son una lección de proceso ya aplicada y un incidente ya remediado, ninguno requiere código nuevo) ni otro ítem de roadmap independiente de la Tarea G. Lo único que sigue tras la Tarea G (modo offline/cola de sincronización, primer despliegue a producción) está **explícitamente bloqueado hasta cerrarla** (decisión del usuario, `ajustes-finales.md`) — no puede correr en paralelo, así que no califica como "independiente" para ocupar el segundo slot. El motor JIT queda deliberadamente con 1 sola tarea activa hasta que la Tarea G cierre y desbloquee el siguiente bloque de trabajo.
 
 ---
 
-## Tarea 1 — [FEATURE]: filtrado público por ubicación (Espacio/Mueble)
-
-**Origen:** `ajustes-finales.md` Tarea F. Depende solo de la Tarea B (ya fusionada, PR #54) — independiente de la Tarea 2 de abajo (Reporte de Inventario), así que no hay que esperarla.
-
-**Qué ya existe y se puede reutilizar:**
-- `GET /api/espacios`/`GET /api/muebles` ya son públicos (sin token) — sirven directamente para poblar los 2 selects de filtro sin crear ningún endpoint nuevo.
-- `CatalogoPublicoComponent` ya resuelve el filtro de texto (título/autor/ISBN) en el **cliente**, sobre el `libros()` signal completo de `LibrosService` (decisión ya documentada en el propio componente) — el filtro por Espacio/Mueble debe seguir el mismo criterio (acumulativo con el texto, todo en el cliente, sin tocar `GET /api/libros`), ya que el catálogo completo ya viaja al cliente hoy sin paginación.
-- `Libro` (tras la Tarea C) ya trae `ubicacionId` — para filtrar por Mueble/Espacio hace falta resolver `ubicacionId → muebleId → espacioId` en el cliente usando los listados de `UbicacionFisicaService` (`ubicaciones`/`muebles`, ya expuestos), no una llamada nueva por libro.
-
-**Qué hacer (orden sugerido):**
-1. Frontend: `CatalogoPublicoComponent` agrega 2 `<select>` (Espacio, Mueble — dependiente del Espacio elegido, mismo patrón de cascada que `UbicacionFisicaService` ya usa en `/admin/ubicaciones`), poblados con `GET /api/espacios`/`GET /api/muebles`. El filtro es acumulativo con la búsqueda de texto ya existente (todos los criterios activos deben cumplirse a la vez).
-2. Soportar query params `?espacio=<espacioId>&mueble=<muebleId>` para pre-filtrar al entrar a `/` (habilita el caso de uso QR — confirmado en `ajustes-finales.md`: solo la URL filtrable, no la generación de la imagen del código). Sincronizar los selects con la URL en ambas direcciones (cambiar el select actualiza la URL; entrar con query params preselecciona los selects).
-3. Cubrir con tests frontend (filtro acumulativo texto+espacio+mueble, cascada Mueble depende de Espacio, pre-filtrado vía query params).
-
-**Definition of done:**
-- [ ] `npm run build`, `npm test -- --watch=false` pasan sin errores
-- [ ] Un visitante sin autenticar puede filtrar el catálogo por Espacio y por Mueble (acumulativo entre sí y con la búsqueda de texto)
-- [ ] Entrar a `/?espacio=X&mueble=Y` pre-filtra el catálogo con esos valores
-- [ ] Verificado en vivo contra `staging`
-
----
-
-## Tarea 2 — [FEATURE]: Reporte de Inventario (XLSX)
+## Tarea 1 — [FEATURE]: Reporte de Inventario (XLSX)
 
 **Origen:** `ajustes-finales.md` Tarea G (última del backlog ordenado antes de retomar modo offline/producción). Depende de la Tarea B (Espacios/Muebles/Ubicaciones, PR #54) y la Tarea C (`Libro.ubicacionId`, PR #56) — ambas ya fusionadas, sin bloqueo.
 
@@ -51,4 +29,4 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 ---
 
-Después de la Tarea 2: retomar el plan de modo offline/cola de sincronización y evaluar la preparación del primer despliegue a producción (`ajustes-finales.md`).
+Después de la Tarea 1: retomar el plan de modo offline/cola de sincronización y evaluar la preparación del primer despliegue a producción (`ajustes-finales.md`) — ahí se recalculará también la siguiente Tarea 2.
