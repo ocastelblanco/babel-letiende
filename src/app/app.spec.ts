@@ -100,6 +100,23 @@ describe('App', () => {
     expect(fixture.nativeElement.textContent).toContain('Administración');
   });
 
+  it('no muestra el enlace al Catálogo sin sesión', () => {
+    configurarPrueba();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('a[href="/"]')).toBeNull();
+  });
+
+  it('muestra el enlace al Catálogo para cualquier usuario con sesión', () => {
+    configurarPrueba({
+      usuario: usuarioFirebaseFalso,
+      usuarioActual: { ...administradorFalso, rol: 'vendedor' },
+    });
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('a[href="/"]')).not.toBeNull();
+  });
+
   it('resuelve el usuario actual al iniciar sesión', () => {
     const { obtenerUsuarioActualMock } = configurarPrueba({ usuario: usuarioFirebaseFalso });
     const fixture = TestBed.createComponent(App);

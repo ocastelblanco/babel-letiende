@@ -1,5 +1,4 @@
 import { Component, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { CatalogarLibroComponent } from './catalogar-libro.component';
 import { EditarLibroComponent } from './editar-libro.component';
 
@@ -19,7 +18,7 @@ type Pestaña = 'catalogar' | 'editar';
  */
 @Component({
   selector: 'app-gestionar',
-  imports: [RouterLink, CatalogarLibroComponent, EditarLibroComponent],
+  imports: [CatalogarLibroComponent, EditarLibroComponent],
   templateUrl: './gestionar.component.html',
 })
 export class GestionarComponent {
