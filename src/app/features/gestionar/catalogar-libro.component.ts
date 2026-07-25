@@ -1,30 +1,55 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import type { IScannerControls } from '@zxing/browser';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { EditorialesDescuentosService } from '../../core/api/editoriales-descuentos.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.service';
 
 const PVP_MAXIMO = 5_000_000;
 
+/** Quita tildes y normaliza mayúsculas para comparar nombres de editorial sin distinguir acentos/mayúsculas — mismo criterio que `catalogo-publico.component.ts`. */
+function normalizarTexto(valor: string): string {
+  return valor
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 /**
- * Flujo de catalogación (`TODO.md`, roadmap Alta) — captura los campos del
- * libro contra `POST /api/libros`, ya verificado en vivo. El ISBN puede
- * llegar por escaneo con cámara (`@zxing/browser`) o entrada manual; en
- * ambos casos dispara la búsqueda de metadatos (`MetadatosService`) que
- * pre-carga título/autor/editorial/portada/pvp — siempre editables por el
- * vendedor. El PVP llega desde el fallback de scraping que orquesta
- * `GET /api/metadatos/:isbn` (`TODO.md`, Tarea 1 — Task C), nunca desde
+ * Pestaña "Catalogar" del área "Gestionar" (`/gestionar`, `TODO.md`) —
+ * captura los campos del libro contra `POST /api/libros`, ya verificado en
+ * vivo. El ISBN puede llegar por escaneo con cámara (`@zxing/browser`) o
+ * entrada manual; en ambos casos dispara la búsqueda de metadatos
+ * (`MetadatosService`) que pre-carga título/autor/editorial/portada/pvp —
+ * siempre editables por el vendedor. El PVP llega desde el fallback de
+ * scraping que orquesta `GET /api/metadatos/:isbn`, nunca desde
  * `api.letiende.co`.
  *
  * La validación del formulario es solo UX: `POST /api/libros` vuelve a
  * validar y recalcula `costo`/`utilidadCatalogo`/`bookId`/`creadoPor` en el
  * backend — este componente nunca envía ni confía en esos valores
  * (`CLAUDE.md` A08).
+ *
+ * Panel "Ubicación del libro" (Espacio → Mueble → Ubicación, `ajustes-finales.md`
+ * §"Catalogar"): a diferencia del resto del formulario, vive FUERA del
+ * `FormGroup` reactivo (signals `panelEspacioId`/`panelMuebleId`/
+ * `panelUbicacionId`, cascada igual que `GestionUbicacionFisicaComponent`) y
+ * NO se limpia en `reiniciarFormulario()` — persiste entre catalogaciones
+ * seguidas a propósito, porque el flujo real es catalogar todos los libros
+ * de un mismo mueble/ubicación de forma consecutiva.
+ *
+ * Autocompletado de `porcentajeDescuentoEditorial`: al cambiar `editorial`
+ * (por escaneo/búsqueda o escritura manual), si el nombre coincide
+ * (insensible a mayúsculas/tildes) con una fila de
+ * `EditorialesDescuentosService.descuentos`, se pre-carga su
+ * `porcentajePorDefecto` — pero nunca si el vendedor ya tocó el campo a mano
+ * (`descuentoTocadoManualmente`), para no pisar una corrección explícita.
  */
 @Component({
   selector: 'app-catalogar-libro',
@@ -37,9 +62,30 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly ubicacionFisicaService = inject(UbicacionFisicaService);
   private readonly metadatosService = inject(MetadatosService);
+  private readonly editorialesDescuentosService = inject(EditorialesDescuentosService);
 
+  protected readonly espacios = this.ubicacionFisicaService.espacios;
+  protected readonly errorEspacios = this.ubicacionFisicaService.errorEspacios;
+  protected readonly muebles = this.ubicacionFisicaService.muebles;
   protected readonly ubicaciones = this.ubicacionFisicaService.ubicaciones;
   protected readonly errorUbicaciones = this.ubicacionFisicaService.errorUbicaciones;
+
+  /** Panel "Ubicación del libro" — persiste entre catalogaciones seguidas, nunca se limpia en `reiniciarFormulario()`. */
+  protected readonly panelEspacioId = signal('');
+  protected readonly panelMuebleId = signal('');
+  protected readonly panelUbicacionId = signal('');
+
+  /** Muebles del espacio elegido en el panel (cascada Espacio → Mueble). */
+  protected readonly panelMueblesDelEspacio = computed(() =>
+    this.muebles().filter((mueble) => mueble.espacioId === this.panelEspacioId()),
+  );
+  /** Ubicaciones del mueble elegido en el panel (cascada Mueble → Ubicación). */
+  protected readonly panelUbicacionesDelMueble = computed(() =>
+    this.ubicaciones().filter((ubicacion) => ubicacion.muebleId === this.panelMuebleId()),
+  );
+
+  /** `true` si el vendedor ya editó `porcentajeDescuentoEditorial` a mano — bloquea el autocompletado hasta la próxima catalogación. */
+  protected readonly descuentoTocadoManualmente = signal(false);
 
   protected readonly guardando = signal(false);
   protected readonly mensajeExito = signal<string | null>(null);
@@ -75,11 +121,62 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     pvp: [0, [Validators.required, Validators.min(1), Validators.max(PVP_MAXIMO)]],
     porcentajeDescuentoEditorial: [35, [Validators.required, Validators.min(0), Validators.max(100)]],
     cantidadTotal: [1, [Validators.required, Validators.min(1)]],
-    ubicacionId: ['', Validators.required],
   });
 
   ngOnInit(): void {
+    void this.ubicacionFisicaService.cargarEspacios();
+    void this.ubicacionFisicaService.cargarMuebles();
     void this.ubicacionFisicaService.cargarUbicaciones();
+    void this.editorialesDescuentosService.cargarDescuentos();
+  }
+
+  /** Cambiar el Espacio en el panel recalcula las opciones de Mueble y limpia la selección previa (cascada) — mismo patrón que `GestionUbicacionFisicaComponent`. */
+  protected alCambiarPanelEspacio(): void {
+    this.panelMuebleId.set('');
+    this.panelUbicacionId.set('');
+  }
+
+  /** Cambiar el Mueble en el panel recalcula las opciones de Ubicación y limpia la selección previa (cascada). */
+  protected alCambiarPanelMueble(): void {
+    this.panelUbicacionId.set('');
+  }
+
+  /** Marca `porcentajeDescuentoEditorial` como tocado a mano — bloquea el autocompletado hasta la próxima catalogación (`reiniciarFormulario`). */
+  protected marcarDescuentoTocadoManualmente(): void {
+    this.descuentoTocadoManualmente.set(true);
+  }
+
+  /**
+   * Se dispara al perder el foco el campo Editorial cuando se escribe a
+   * mano. Autocompleta `porcentajeDescuentoEditorial` si el nombre coincide
+   * con una fila configurada — mismo trigger interno que usan
+   * `buscarYPrecargarMetadatos`/`seleccionarCandidato` cuando la editorial
+   * llega por escaneo/búsqueda.
+   */
+  protected alPerderFocoEditorial(): void {
+    this.autocompletarDescuentoEditorial(this.formulario.controls.editorial.value);
+  }
+
+  /**
+   * Autocompleta `porcentajeDescuentoEditorial` con el `porcentajePorDefecto`
+   * configurado para la editorial (comparación insensible a
+   * mayúsculas/tildes, `normalizarTexto`) — nunca si el vendedor ya tocó el
+   * campo a mano (`descuentoTocadoManualmente`).
+   */
+  private autocompletarDescuentoEditorial(nombreEditorial: string): void {
+    if (this.descuentoTocadoManualmente()) {
+      return;
+    }
+    const normalizado = normalizarTexto(nombreEditorial);
+    if (normalizado === '') {
+      return;
+    }
+    const coincidencia = this.editorialesDescuentosService
+      .descuentos()
+      .find((descuento) => normalizarTexto(descuento.editorial) === normalizado);
+    if (coincidencia) {
+      this.formulario.controls.porcentajeDescuentoEditorial.setValue(coincidencia.porcentajePorDefecto);
+    }
   }
 
   ngOnDestroy(): void {
@@ -180,6 +277,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       }
       if ((sobrescribir || controles.editorial.value.trim() === '') && metadatos.editorial) {
         controles.editorial.setValue(metadatos.editorial);
+        this.autocompletarDescuentoEditorial(metadatos.editorial);
       }
       if ((sobrescribir || controles.portadaUrl.value.trim() === '') && metadatos.portadaUrl) {
         controles.portadaUrl.setValue(metadatos.portadaUrl);
@@ -253,6 +351,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     }
     if (candidato.editorial) {
       controles.editorial.setValue(candidato.editorial);
+      this.autocompletarDescuentoEditorial(candidato.editorial);
     }
     if (candidato.portadaUrl) {
       controles.portadaUrl.setValue(candidato.portadaUrl);
@@ -299,6 +398,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       this.formulario.markAllAsTouched();
       return;
     }
+    const ubicacionId = this.panelUbicacionId();
+    if (!ubicacionId) {
+      this.mensajeError.set('Selecciona la ubicación del libro (Espacio, Mueble y Ubicación) antes de guardar.');
+      return;
+    }
 
     const valores = this.formulario.getRawValue();
     const cuerpo = {
@@ -310,7 +414,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       pvp: valores.pvp,
       porcentajeDescuentoEditorial: valores.porcentajeDescuentoEditorial,
       cantidadTotal: valores.cantidadTotal,
-      ubicacionId: valores.ubicacionId,
+      ubicacionId,
     };
 
     this.guardando.set(true);
@@ -344,10 +448,18 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * Limpia el formulario tras un guardado exitoso, conservando
    * `porcentajeDescuentoEditorial` (típicamente el mismo entre libros
    * seguidos de la misma editorial) — agiliza la catalogación en serie.
+   *
+   * A diferencia del resto del formulario, el panel "Ubicación del libro"
+   * (`panelEspacioId`/`panelMuebleId`/`panelUbicacionId`) NUNCA se limpia
+   * aquí — persiste entre catalogaciones seguidas a propósito
+   * (`ajustes-finales.md` §"Catalogar"). `descuentoTocadoManualmente` sí se
+   * reinicia: el próximo libro puede ser de otra editorial y merece su
+   * propio autocompletado.
    */
   private reiniciarFormulario(): void {
     this.candidatos.set([]);
     this.candidatosNoEncontrados.set(false);
+    this.descuentoTocadoManualmente.set(false);
     const porcentajeActual = this.formulario.controls.porcentajeDescuentoEditorial.value;
     this.formulario.reset({
       isbn: '',
@@ -358,7 +470,6 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       pvp: 0,
       porcentajeDescuentoEditorial: porcentajeActual,
       cantidadTotal: 1,
-      ubicacionId: '',
     });
   }
 }

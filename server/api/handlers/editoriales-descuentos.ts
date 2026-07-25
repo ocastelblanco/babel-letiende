@@ -47,12 +47,26 @@ function nombreTablaUsuarios(): string {
 
 /**
  * Verifica el ID Token y exige rol `administrador` exclusivamente (CLAUDE.md
- * A01) — mismo patrón que `estantes.ts`/`usuarios.ts`.
+ * A01) — mismo patrón que `estantes.ts`/`usuarios.ts`. Usado por
+ * `POST`/`PUT`/`DELETE`: solo el administrador configura los descuentos.
  */
 async function exigirAdministrador(headerAuthorization: string | undefined): Promise<string | null> {
   const { email } = await verificarTokenDesdeHeader(headerAuthorization);
   const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
   return usuario?.rol === 'administrador' ? email : null;
+}
+
+/**
+ * Verifica el ID Token y exige rol `vendedor` o `administrador`. Usado
+ * únicamente por `GET`: el área "Gestionar" (pestaña "Catalogar", `TODO.md`)
+ * necesita leer los descuentos configurados para autocompletar
+ * `porcentajeDescuentoEditorial` al catalogar — un vendedor solo puede leer,
+ * nunca escribir esta configuración (CLAUDE.md A01).
+ */
+async function exigirVendedorOAdministrador(headerAuthorization: string | undefined): Promise<string | null> {
+  const { email } = await verificarTokenDesdeHeader(headerAuthorization);
+  const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+  return usuario && (usuario.rol === 'vendedor' || usuario.rol === 'administrador') ? email : null;
 }
 
 /** Datos aceptados en el body de `POST`/`PUT /api/editoriales-descuentos` — sin `editorial` en `PUT` (clave primaria, va en el path). */
@@ -124,11 +138,16 @@ export function validarDatosNuevoDescuentoEditorial(cuerpo: unknown): ResultadoV
 }
 
 /**
- * CRUD `/api/editoriales-descuentos` (tech-specs.md §5, "Admin"): las 4
- * operaciones exigen rol `administrador` exclusivamente. Un solo Lambda
- * para los 4 verbos (ADR-008, mismo patrón que `estantes.ts`/`usuarios.ts`),
- * distinguidos por `event.requestContext.http.method`. `editorial` es la
- * clave primaria de `babel-editoriales-descuentos`, no se genera.
+ * CRUD `/api/editoriales-descuentos` (tech-specs.md §5, "Admin"). Un solo
+ * Lambda para los 4 verbos (ADR-008, mismo patrón que
+ * `estantes.ts`/`usuarios.ts`), distinguidos por
+ * `event.requestContext.http.method`. `editorial` es la clave primaria de
+ * `babel-editoriales-descuentos`, no se genera.
+ *
+ * `GET` exige `vendedor` o `administrador` — a diferencia de
+ * `POST`/`PUT`/`DELETE` (exclusivos de `administrador`), el área
+ * "Gestionar" (pestaña "Catalogar", `TODO.md`) necesita leerlos para
+ * autocompletar `porcentajeDescuentoEditorial`.
  *
  * `POST` sobre una `editorial` que ya existe responde `409` en vez de
  * sobrescribir en silencio — misma decisión ya tomada para `POST
@@ -136,19 +155,25 @@ export function validarDatosNuevoDescuentoEditorial(cuerpo: unknown): ResultadoV
  */
 export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
+    const metodo = event.requestContext.http.method;
+    const editorialObjetivo = event.pathParameters?.['editorial'];
+
+    if (metodo === 'GET') {
+      const email = await exigirVendedorOAdministrador(event.headers['authorization']);
+      if (!email) {
+        return respuestaJson(403, {
+          error: 'Este correo no está autorizado para ver descuentos editoriales en Babel.',
+        });
+      }
+      const descuentos = await escanearTodo<DescuentoEditorial>(nombreTablaEditorialesDescuentos());
+      return respuestaJson(200, descuentos);
+    }
+
     const email = await exigirAdministrador(event.headers['authorization']);
     if (!email) {
       return respuestaJson(403, {
         error: 'Este correo no está autorizado para administrar descuentos editoriales en Babel.',
       });
-    }
-
-    const metodo = event.requestContext.http.method;
-    const editorialObjetivo = event.pathParameters?.['editorial'];
-
-    if (metodo === 'GET') {
-      const descuentos = await escanearTodo<DescuentoEditorial>(nombreTablaEditorialesDescuentos());
-      return respuestaJson(200, descuentos);
     }
 
     if (metodo === 'POST') {

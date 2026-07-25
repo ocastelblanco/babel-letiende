@@ -1,0 +1,275 @@
+import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import type { IScannerControls } from '@zxing/browser';
+import { AuthService } from '../../core/auth/auth.service';
+import { LibrosService } from '../../core/api/libros.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
+import { UsuariosService } from '../../core/api/usuarios.service';
+import type { Libro } from '../../core/models/libro.model';
+import { PvpPipe } from '../../shared/pipes/pvp.pipe';
+
+const PVP_MAXIMO = 5_000_000;
+
+/** Quita tildes y normaliza mayúsculas — mismo criterio que `catalogo-publico.component.ts`/`catalogar-libro.component.ts`. */
+function normalizarTexto(valor: string): string {
+  return valor
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Pestaña "Editar" del área "Gestionar" (`/gestionar`, `TODO.md`) — lista
+ * TODOS los libros catalogados, incluidos los agotados
+ * (`LibrosService.cargarInventario`, `GET /api/libros/inventario`): a
+ * diferencia del catálogo público (`GET /api/libros`), esta es la pantalla
+ * de inventario, donde también hace falta poder editar/eliminar un libro sin
+ * ejemplares disponibles.
+ *
+ * Filtro por título/autor/ISBN resuelto en el cliente (mismo criterio que
+ * `CatalogoPublicoComponent`) — reutiliza el mismo lector de código de
+ * barras (`@zxing/browser`, EAN-13) ya construido en `CatalogarLibroComponent`
+ * para completar el campo ISBN del filtro por escaneo.
+ *
+ * Editar abre un formulario con la cascada Espacio → Mueble → Ubicación
+ * (mismo patrón que `GestionUbicacionFisicaComponent`) más
+ * cantidad/PVP/descuento editorial, contra `PUT /api/libros/:bookId`.
+ * "ELIMINAR LIBRO" (`DELETE /api/libros/:bookId`) es visible solo para
+ * `administrador` — misma salvaguarda visual (ADR-009) que
+ * `GestionUsuariosComponent`: la autorización real siempre la revalida el
+ * backend (`CLAUDE.md` A01), este componente nunca decide por sí mismo.
+ */
+@Component({
+  selector: 'app-editar-libro',
+  imports: [ReactiveFormsModule, PvpPipe],
+  templateUrl: './editar-libro.component.html',
+})
+export class EditarLibroComponent implements OnInit, OnDestroy {
+  private readonly fb = inject(FormBuilder);
+  private readonly authService = inject(AuthService);
+  private readonly usuariosService = inject(UsuariosService);
+  private readonly librosService = inject(LibrosService);
+  private readonly ubicacionFisicaService = inject(UbicacionFisicaService);
+
+  protected readonly espacios = this.ubicacionFisicaService.espacios;
+  protected readonly muebles = this.ubicacionFisicaService.muebles;
+  protected readonly ubicaciones = this.ubicacionFisicaService.ubicaciones;
+
+  protected readonly inventario = this.librosService.inventario;
+  protected readonly cargandoInventario = this.librosService.cargandoInventario;
+  protected readonly errorInventario = this.librosService.errorInventario;
+
+  /** `true` si el usuario autenticado es administrador — guard visual de "ELIMINAR LIBRO" (ADR-009), se apoya en `authService.usuario()` para desaparecer de inmediato al cerrar sesión. */
+  protected readonly esAdministrador = computed(
+    () => this.authService.usuario() !== null && this.usuariosService.usuarioActual()?.rol === 'administrador',
+  );
+
+  protected readonly filtro = signal('');
+  protected readonly librosFiltrados = computed(() => {
+    const normalizado = normalizarTexto(this.filtro());
+    const isbnBuscado = this.filtro().trim();
+    if (normalizado === '') {
+      return this.inventario();
+    }
+    return this.inventario().filter(
+      (libro) =>
+        normalizarTexto(libro.titulo).includes(normalizado) ||
+        normalizarTexto(libro.autor).includes(normalizado) ||
+        (libro.isbn !== null && libro.isbn.includes(isbnBuscado)),
+    );
+  });
+
+  /** Referencia al `<video>` del escáner del filtro. */
+  private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
+  protected readonly escaneando = signal(false);
+  protected readonly errorEscaneo = signal<string | null>(null);
+  private controlesEscaner: IScannerControls | null = null;
+
+  /** `null` en modo lista; el `bookId` de la fila en edición. */
+  protected readonly libroEditandoId = signal<string | null>(null);
+  protected readonly editEspacioId = signal('');
+  protected readonly editMuebleId = signal('');
+  protected readonly editUbicacionId = signal('');
+
+  /** Muebles del espacio elegido en el formulario de edición (cascada Espacio → Mueble). */
+  protected readonly editMueblesDelEspacio = computed(() =>
+    this.muebles().filter((mueble) => mueble.espacioId === this.editEspacioId()),
+  );
+  /** Ubicaciones del mueble elegido en el formulario de edición (cascada Mueble → Ubicación). */
+  protected readonly editUbicacionesDelMueble = computed(() =>
+    this.ubicaciones().filter((ubicacion) => ubicacion.muebleId === this.editMuebleId()),
+  );
+
+  protected readonly formularioEdicion = this.fb.nonNullable.group({
+    cantidadTotal: [0, [Validators.required, Validators.min(0)]],
+    pvp: [0, [Validators.required, Validators.min(1), Validators.max(PVP_MAXIMO)]],
+    porcentajeDescuentoEditorial: [0, [Validators.required, Validators.min(0), Validators.max(100)]],
+  });
+
+  protected readonly guardando = signal(false);
+  protected readonly eliminandoBookId = signal<string | null>(null);
+  protected readonly mensajeExito = signal<string | null>(null);
+  protected readonly mensajeError = signal<string | null>(null);
+
+  ngOnInit(): void {
+    void this.librosService.cargarInventario();
+    void this.ubicacionFisicaService.cargarEspacios();
+    void this.ubicacionFisicaService.cargarMuebles();
+    void this.ubicacionFisicaService.cargarUbicaciones();
+  }
+
+  ngOnDestroy(): void {
+    this.detenerEscaneo();
+  }
+
+  /** Activa la cámara y busca un EAN-13 para completar el filtro — mismo patrón que `CatalogarLibroComponent.iniciarEscaneo`. */
+  protected async iniciarEscaneo(): Promise<void> {
+    this.errorEscaneo.set(null);
+
+    const video = this.videoEscaner()?.nativeElement;
+    if (!video) {
+      this.errorEscaneo.set('No se pudo iniciar la cámara. Ingresa el ISBN manualmente.');
+      return;
+    }
+
+    this.escaneando.set(true);
+
+    const hints = new Map<DecodeHintType, BarcodeFormat[]>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13]);
+    const lector = new BrowserMultiFormatReader(hints);
+
+    try {
+      this.controlesEscaner = await lector.decodeFromConstraints(
+        { video: { facingMode: 'environment' } },
+        video,
+        (resultado) => {
+          if (resultado) {
+            this.filtro.set(resultado.getText());
+            this.detenerEscaneo();
+          }
+        },
+      );
+    } catch {
+      this.escaneando.set(false);
+      this.errorEscaneo.set('No se pudo acceder a la cámara. Verifica los permisos o ingresa el ISBN manualmente.');
+    }
+  }
+
+  protected detenerEscaneo(): void {
+    this.controlesEscaner?.stop();
+    this.controlesEscaner = null;
+    this.escaneando.set(false);
+  }
+
+  /** Nombre de la ubicación dado su id, para mostrarla en cada fila de la lista. */
+  protected nombreUbicacion(ubicacionId: string): string {
+    return this.ubicaciones().find((ubicacion) => ubicacion.ubicacionId === ubicacionId)?.nombre ?? 'Sin ubicación';
+  }
+
+  /** Abre el formulario de edición precargado con los datos actuales del libro, incluida la cascada Espacio/Mueble resuelta desde su `ubicacionId`. */
+  protected editar(libro: Libro): void {
+    this.mensajeExito.set(null);
+    this.mensajeError.set(null);
+    this.libroEditandoId.set(libro.bookId);
+
+    const ubicacionActual = this.ubicaciones().find((ubicacion) => ubicacion.ubicacionId === libro.ubicacionId);
+    const muebleActual = ubicacionActual
+      ? this.muebles().find((mueble) => mueble.muebleId === ubicacionActual.muebleId)
+      : undefined;
+    this.editEspacioId.set(muebleActual?.espacioId ?? '');
+    this.editMuebleId.set(ubicacionActual?.muebleId ?? '');
+    this.editUbicacionId.set(libro.ubicacionId ?? '');
+
+    this.formularioEdicion.setValue({
+      cantidadTotal: libro.cantidadTotal,
+      pvp: libro.pvp,
+      porcentajeDescuentoEditorial: libro.porcentajeDescuentoEditorial,
+    });
+  }
+
+  protected cancelarEdicion(): void {
+    this.libroEditandoId.set(null);
+    this.editEspacioId.set('');
+    this.editMuebleId.set('');
+    this.editUbicacionId.set('');
+    this.formularioEdicion.reset({ cantidadTotal: 0, pvp: 0, porcentajeDescuentoEditorial: 0 });
+  }
+
+  /** Cambiar el Espacio recalcula las opciones de Mueble y limpia la selección previa (cascada) — mismo patrón que `GestionUbicacionFisicaComponent`. */
+  protected alCambiarEditEspacio(): void {
+    this.editMuebleId.set('');
+    this.editUbicacionId.set('');
+  }
+
+  /** Cambiar el Mueble recalcula las opciones de Ubicación y limpia la selección previa (cascada). */
+  protected alCambiarEditMueble(): void {
+    this.editUbicacionId.set('');
+  }
+
+  protected async guardarEdicion(): Promise<void> {
+    this.mensajeExito.set(null);
+    this.mensajeError.set(null);
+
+    if (this.formularioEdicion.invalid) {
+      this.formularioEdicion.markAllAsTouched();
+      return;
+    }
+    const bookId = this.libroEditandoId();
+    const ubicacionId = this.editUbicacionId();
+    if (!bookId) {
+      return;
+    }
+    if (!ubicacionId) {
+      this.mensajeError.set('Selecciona Espacio, Mueble y Ubicación antes de guardar.');
+      return;
+    }
+
+    this.guardando.set(true);
+    try {
+      const valores = this.formularioEdicion.getRawValue();
+      const resultado = await this.librosService.editarLibro(bookId, {
+        ubicacionId,
+        cantidadTotal: valores.cantidadTotal,
+        pvp: valores.pvp,
+        porcentajeDescuentoEditorial: valores.porcentajeDescuentoEditorial,
+      });
+
+      if (resultado.exito) {
+        this.mensajeExito.set('Libro actualizado correctamente.');
+        this.cancelarEdicion();
+      } else {
+        this.mensajeError.set(resultado.error);
+      }
+    } finally {
+      this.guardando.set(false);
+    }
+  }
+
+  /** Elimina el libro tras confirmar — visible solo para `administrador` (guard visual, plantilla), el backend vuelve a exigirlo (CLAUDE.md A01). */
+  protected async eliminar(libro: Libro): Promise<void> {
+    this.mensajeExito.set(null);
+    this.mensajeError.set(null);
+
+    if (!confirm(`¿Eliminar el libro "${libro.titulo}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    this.eliminandoBookId.set(libro.bookId);
+    try {
+      const resultado = await this.librosService.eliminarLibro(libro.bookId);
+      if (resultado.exito) {
+        this.mensajeExito.set('Libro eliminado correctamente.');
+        if (this.libroEditandoId() === libro.bookId) {
+          this.cancelarEdicion();
+        }
+      } else {
+        this.mensajeError.set(resultado.error);
+      }
+    } finally {
+      this.eliminandoBookId.set(null);
+    }
+  }
+}

@@ -1,0 +1,385 @@
+import { signal } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { AuthService } from '../../core/auth/auth.service';
+import { LibrosService } from '../../core/api/libros.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
+import { UsuariosService } from '../../core/api/usuarios.service';
+import type { Espacio } from '../../core/models/espacio.model';
+import type { Libro } from '../../core/models/libro.model';
+import type { Mueble } from '../../core/models/mueble.model';
+import type { Ubicacion } from '../../core/models/ubicacion.model';
+import type { Usuario } from '../../core/models/usuario.model';
+import { EditarLibroComponent } from './editar-libro.component';
+
+// `auth.service.ts` (importado arriba solo como token de DI) importa el SDK
+// real de Firebase a nivel de módulo — mismo mock que en el resto de specs.
+vi.mock('firebase/app', () => ({ initializeApp: vi.fn(() => ({})) }));
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({})),
+  onAuthStateChanged: vi.fn(),
+  signInWithPopup: vi.fn(),
+  signOut: vi.fn(),
+  GoogleAuthProvider: vi.fn(),
+}));
+
+// Sin cámara real en CI/sandbox — mismo mock mínimo que en `catalogar-libro.component.spec.ts`.
+const detenerEscaneoMock = vi.fn();
+let callbackDecodificacion: ((resultado: { getText: () => string } | undefined) => void) | undefined;
+const decodeFromConstraintsMock = vi.fn(
+  (_constraints: unknown, _video: unknown, callback: (resultado: { getText: () => string } | undefined) => void) => {
+    callbackDecodificacion = callback;
+    return Promise.resolve({ stop: detenerEscaneoMock });
+  },
+);
+vi.mock('@zxing/browser', () => ({
+  BrowserMultiFormatReader: vi.fn(function BrowserMultiFormatReaderFalso() {
+    return { decodeFromConstraints: decodeFromConstraintsMock };
+  }),
+}));
+
+const espacioFalso: Espacio = { espacioId: 'espacio-1', nombre: 'Sala principal' };
+const muebleFalso: Mueble = { muebleId: 'mueble-1', espacioId: 'espacio-1', nombre: 'Biblioteca 1' };
+const ubicacionFalsa: Ubicacion = { ubicacionId: 'ubicacion-1', muebleId: 'mueble-1', nombre: 'Estante 1' };
+
+const libroFalso: Libro = {
+  isbn: '9780000000000',
+  bookId: 'libro-1',
+  titulo: 'Cien años de soledad',
+  autor: 'Gabriel García Márquez',
+  editorial: 'Sudamericana',
+  portadaUrl: null,
+  pvp: 45000,
+  porcentajeDescuentoEditorial: 35,
+  costo: 29250,
+  utilidadCatalogo: 15750,
+  cantidadTotal: 2,
+  cantidadDisponible: 1,
+  ubicacionId: 'ubicacion-1',
+  creadoPor: 'vendedor@letiende.co',
+  creadoEn: '2026-01-01T00:00:00.000Z',
+  actualizadoEn: '2026-01-01T00:00:00.000Z',
+};
+
+const libroAgotado: Libro = { ...libroFalso, bookId: 'libro-2', titulo: 'Otro libro', autor: 'Otro autor', isbn: null, cantidadDisponible: 0 };
+
+const vendedorFalso: Usuario = {
+  email: 'vendedor@letiende.co',
+  nombre: 'Vendedor',
+  fotoUrl: null,
+  rol: 'vendedor',
+  creadoEn: '2026-01-01T00:00:00.000Z',
+};
+const administradorFalso: Usuario = { ...vendedorFalso, email: 'admin@letiende.co', rol: 'administrador' };
+
+function configurarPrueba(
+  opciones: { rol?: Usuario | null; libros?: Libro[] } = {},
+) {
+  const cargarInventarioMock = vi.fn().mockResolvedValue(undefined);
+  const cargarEspaciosMock = vi.fn().mockResolvedValue(undefined);
+  const cargarMueblesMock = vi.fn().mockResolvedValue(undefined);
+  const cargarUbicacionesMock = vi.fn().mockResolvedValue(undefined);
+  const editarLibroMock = vi.fn().mockResolvedValue({ exito: true });
+  const eliminarLibroMock = vi.fn().mockResolvedValue({ exito: true });
+  const usuario = opciones.rol ?? null;
+
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: AuthService, useValue: { usuario: signal(usuario ? { email: usuario.email } : null) } },
+      { provide: UsuariosService, useValue: { usuarioActual: signal(usuario) } },
+      {
+        provide: LibrosService,
+        useValue: {
+          inventario: signal(opciones.libros ?? [libroFalso, libroAgotado]),
+          cargandoInventario: signal(false),
+          errorInventario: signal(false),
+          cargarInventario: cargarInventarioMock,
+          editarLibro: editarLibroMock,
+          eliminarLibro: eliminarLibroMock,
+        },
+      },
+      {
+        provide: UbicacionFisicaService,
+        useValue: {
+          espacios: signal([espacioFalso]),
+          muebles: signal([muebleFalso]),
+          ubicaciones: signal([ubicacionFalsa]),
+          cargarEspacios: cargarEspaciosMock,
+          cargarMuebles: cargarMueblesMock,
+          cargarUbicaciones: cargarUbicacionesMock,
+        },
+      },
+    ],
+  });
+
+  const fixture: ComponentFixture<EditarLibroComponent> = TestBed.createComponent(EditarLibroComponent);
+  fixture.detectChanges();
+
+  return {
+    fixture,
+    cargarInventarioMock,
+    cargarEspaciosMock,
+    cargarMueblesMock,
+    cargarUbicacionesMock,
+    editarLibroMock,
+    eliminarLibroMock,
+  };
+}
+
+function botonPorTexto(fixture: ComponentFixture<EditarLibroComponent>, texto: string): HTMLButtonElement | undefined {
+  return Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
+    (boton) => boton.textContent?.trim() === texto,
+  );
+}
+
+describe('EditarLibroComponent', () => {
+  beforeEach(() => {
+    callbackDecodificacion = undefined;
+    decodeFromConstraintsMock.mockClear();
+    detenerEscaneoMock.mockClear();
+  });
+
+  it('carga el inventario y la ubicación física al inicializar', () => {
+    const { cargarInventarioMock, cargarEspaciosMock, cargarMueblesMock, cargarUbicacionesMock } = configurarPrueba();
+
+    expect(cargarInventarioMock).toHaveBeenCalledTimes(1);
+    expect(cargarEspaciosMock).toHaveBeenCalledTimes(1);
+    expect(cargarMueblesMock).toHaveBeenCalledTimes(1);
+    expect(cargarUbicacionesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('lista todos los libros del inventario, incluidos los agotados', () => {
+    const { fixture } = configurarPrueba();
+
+    expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
+    expect(fixture.nativeElement.textContent).toContain('Otro libro');
+  });
+
+  describe('filtro por título/autor/ISBN', () => {
+    it('filtra por título (insensible a mayúsculas/tildes)', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.filtro.set('cien anos');
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
+      expect(fixture.nativeElement.textContent).not.toContain('Otro libro');
+    });
+
+    it('filtra por autor', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.filtro.set('Otro autor');
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Otro libro');
+      expect(fixture.nativeElement.textContent).not.toContain('Cien años de soledad');
+    });
+
+    it('filtra por ISBN', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.filtro.set('9780000000000');
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
+      expect(fixture.nativeElement.textContent).not.toContain('Otro libro');
+    });
+
+    it('muestra un mensaje cuando el filtro no encuentra resultados', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.filtro.set('no existe ningún libro así');
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('No se encontraron libros.');
+    });
+
+    it('el botón "Escanear ISBN" completa el filtro con el resultado del scanner', async () => {
+      const { fixture } = configurarPrueba();
+
+      botonPorTexto(fixture, 'Escanear ISBN')?.click();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(decodeFromConstraintsMock).toHaveBeenCalledTimes(1);
+      callbackDecodificacion?.({ getText: () => '9780000000000' });
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.filtro()).toBe('9780000000000');
+      expect(componente.escaneando()).toBe(false);
+      expect(detenerEscaneoMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('guard visual "ELIMINAR LIBRO" (ADR-009)', () => {
+    it('no muestra el botón para un vendedor', () => {
+      const { fixture } = configurarPrueba({ rol: vendedorFalso });
+
+      expect(botonPorTexto(fixture, 'Eliminar libro')).toBeFalsy();
+    });
+
+    it('muestra el botón para un administrador', () => {
+      const { fixture } = configurarPrueba({ rol: administradorFalso });
+
+      expect(botonPorTexto(fixture, 'Eliminar libro')).toBeTruthy();
+    });
+
+    it('no muestra el botón sin sesión', () => {
+      const { fixture } = configurarPrueba({ rol: null });
+
+      expect(botonPorTexto(fixture, 'Eliminar libro')).toBeFalsy();
+    });
+  });
+
+  describe('editar un libro', () => {
+    it('abre el formulario precargado, resolviendo la cascada Espacio/Mueble desde la ubicación actual', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.editar(libroFalso);
+      fixture.detectChanges();
+
+      expect(componente.libroEditandoId()).toBe('libro-1');
+      expect(componente.editEspacioId()).toBe('espacio-1');
+      expect(componente.editMuebleId()).toBe('mueble-1');
+      expect(componente.editUbicacionId()).toBe('ubicacion-1');
+      expect(componente.formularioEdicion.value.cantidadTotal).toBe(2);
+      expect(componente.formularioEdicion.value.pvp).toBe(45000);
+      expect(componente.formularioEdicion.value.porcentajeDescuentoEditorial).toBe(35);
+    });
+
+    it('cambiar el Espacio limpia Mueble y Ubicación (cascada)', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+
+      componente.alCambiarEditEspacio();
+
+      expect(componente.editMuebleId()).toBe('');
+      expect(componente.editUbicacionId()).toBe('');
+    });
+
+    it('cancelar la edición vuelve a la lista sin guardar', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+
+      componente.cancelarEdicion();
+      fixture.detectChanges();
+
+      expect(componente.libroEditandoId()).toBeNull();
+      expect(fixture.nativeElement.querySelector('form')).toBeFalsy();
+    });
+
+    it('guardarEdicion llama a LibrosService.editarLibro con ubicacionId/cantidadTotal/pvp/porcentajeDescuentoEditorial', async () => {
+      const { fixture, editarLibroMock } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      componente.formularioEdicion.setValue({ cantidadTotal: 5, pvp: 60000, porcentajeDescuentoEditorial: 40 });
+
+      await componente.guardarEdicion();
+
+      expect(editarLibroMock).toHaveBeenCalledWith('libro-1', {
+        ubicacionId: 'ubicacion-1',
+        cantidadTotal: 5,
+        pvp: 60000,
+        porcentajeDescuentoEditorial: 40,
+      });
+      expect(componente.libroEditandoId()).toBeNull();
+    });
+
+    it('muestra un mensaje y no llama a la API si no se seleccionó una ubicación completa', async () => {
+      const { fixture, editarLibroMock } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.libroEditandoId.set('libro-1');
+      componente.formularioEdicion.setValue({ cantidadTotal: 5, pvp: 60000, porcentajeDescuentoEditorial: 40 });
+      // Sin cascada resuelta: editUbicacionId queda en '' por defecto.
+
+      await componente.guardarEdicion();
+
+      expect(editarLibroMock).not.toHaveBeenCalled();
+      expect(componente.mensajeError()).toContain('Selecciona Espacio, Mueble y Ubicación');
+    });
+
+    it('muestra el mensaje de error del backend cuando editarLibro falla', async () => {
+      const { fixture, editarLibroMock } = configurarPrueba();
+      editarLibroMock.mockResolvedValue({ exito: false, error: 'La ubicación indicada no existe.' });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+
+      await componente.guardarEdicion();
+      fixture.detectChanges();
+
+      expect(componente.mensajeError()).toBe('La ubicación indicada no existe.');
+      // No vuelve a la lista si falló.
+      expect(componente.libroEditandoId()).toBe('libro-1');
+    });
+  });
+
+  describe('eliminar un libro (solo administrador)', () => {
+    let confirmSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      confirmSpy = vi.spyOn(window, 'confirm');
+    });
+
+    afterEach(() => {
+      confirmSpy.mockRestore();
+    });
+
+    it('pide confirmación y llama a LibrosService.eliminarLibro cuando se confirma', async () => {
+      confirmSpy.mockReturnValue(true);
+      const { fixture, eliminarLibroMock } = configurarPrueba({ rol: administradorFalso });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      await componente.eliminar(libroFalso);
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(eliminarLibroMock).toHaveBeenCalledWith('libro-1');
+      expect(componente.mensajeExito()).toBe('Libro eliminado correctamente.');
+    });
+
+    it('no llama a la API si se cancela la confirmación', async () => {
+      confirmSpy.mockReturnValue(false);
+      const { fixture, eliminarLibroMock } = configurarPrueba({ rol: administradorFalso });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      await componente.eliminar(libroFalso);
+
+      expect(eliminarLibroMock).not.toHaveBeenCalled();
+    });
+
+    it('muestra el mensaje de error del backend cuando eliminarLibro falla', async () => {
+      confirmSpy.mockReturnValue(true);
+      const { fixture, eliminarLibroMock } = configurarPrueba({ rol: administradorFalso });
+      eliminarLibroMock.mockResolvedValue({
+        exito: false,
+        error: 'Este correo no está autorizado para eliminar libros en Babel.',
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      await componente.eliminar(libroFalso);
+
+      expect(componente.mensajeError()).toBe('Este correo no está autorizado para eliminar libros en Babel.');
+    });
+  });
+});

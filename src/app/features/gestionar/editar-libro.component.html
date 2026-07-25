@@ -1,0 +1,207 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-xl">
+    <h1 class="mb-6 text-2xl font-bold text-primary">Editar libros</h1>
+
+    @if (mensajeExito()) {
+      <p class="mb-4 text-center text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
+    }
+    @if (mensajeError()) {
+      <p class="mb-4 text-center text-sm text-danger">{{ mensajeError() }}</p>
+    }
+
+    @if (libroEditandoId() === null) {
+      <div class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <label for="filtro" class="mb-1 block text-sm font-semibold text-primary">Buscar por título, autor o ISBN</label>
+        <div class="flex gap-2">
+          <input
+            id="filtro"
+            type="text"
+            [value]="filtro()"
+            (input)="filtro.set($any($event.target).value)"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          <button
+            type="button"
+            (click)="escaneando() ? detenerEscaneo() : iniciarEscaneo()"
+            class="shrink-0 rounded-xl border border-primary/20 px-3 py-2 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            {{ escaneando() ? 'Detener' : 'Escanear ISBN' }}
+          </button>
+        </div>
+
+        <video
+          #videoEscaner
+          autoplay
+          muted
+          playsinline
+          class="w-full rounded-xl"
+          [class.hidden]="!escaneando()"
+        ></video>
+
+        @if (errorEscaneo()) {
+          <p class="text-xs text-danger">{{ errorEscaneo() }}</p>
+        }
+      </div>
+
+      @if (cargandoInventario()) {
+        <p class="text-center text-sm text-primary/60">Cargando inventario…</p>
+      }
+      @if (errorInventario()) {
+        <p class="text-center text-sm text-danger">No se pudo cargar el inventario.</p>
+      }
+
+      <ul class="flex flex-col gap-3">
+        @for (libro of librosFiltrados(); track libro.bookId) {
+          <li class="flex flex-col gap-2 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+            <p class="text-sm font-semibold text-primary">{{ libro.titulo }}</p>
+            <p class="text-xs text-primary/70">{{ libro.autor }}</p>
+            @if (libro.isbn) {
+              <p class="text-xs text-primary/60">ISBN {{ libro.isbn }}</p>
+            }
+            <p class="text-xs text-primary/60">
+              {{ nombreUbicacion(libro.ubicacionId) }} · {{ libro.cantidadDisponible }}/{{ libro.cantidadTotal }}
+              disponibles · {{ libro.pvp | pvp }}
+            </p>
+            <div class="mt-1 flex gap-2">
+              <button
+                type="button"
+                (click)="editar(libro)"
+                class="h-10 flex-1 rounded-xl border border-primary/20 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+              >
+                Editar
+              </button>
+              @if (esAdministrador()) {
+                <button
+                  type="button"
+                  (click)="eliminar(libro)"
+                  [disabled]="eliminandoBookId() === libro.bookId"
+                  class="h-10 flex-1 rounded-xl border border-danger/40 text-sm font-semibold uppercase text-danger transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {{ eliminandoBookId() === libro.bookId ? 'Eliminando…' : 'Eliminar libro' }}
+                </button>
+              }
+            </div>
+          </li>
+        } @empty {
+          <p class="text-center text-sm text-primary/60">No se encontraron libros.</p>
+        }
+      </ul>
+    } @else {
+      <form
+        [formGroup]="formularioEdicion"
+        (ngSubmit)="guardarEdicion()"
+        class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+      >
+        <div>
+          <label for="editEspacioId" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
+          <select
+            id="editEspacioId"
+            [value]="editEspacioId()"
+            (change)="editEspacioId.set($any($event.target).value); alCambiarEditEspacio()"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+          >
+            <option value="" disabled>Selecciona un espacio</option>
+            @for (espacio of espacios(); track espacio.espacioId) {
+              <option [value]="espacio.espacioId">{{ espacio.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div>
+          <label for="editMuebleId" class="mb-1 block text-sm font-semibold text-primary">Mueble</label>
+          <select
+            id="editMuebleId"
+            [value]="editMuebleId()"
+            (change)="editMuebleId.set($any($event.target).value); alCambiarEditMueble()"
+            [disabled]="!editEspacioId()"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="" disabled>Selecciona un mueble</option>
+            @for (mueble of editMueblesDelEspacio(); track mueble.muebleId) {
+              <option [value]="mueble.muebleId">{{ mueble.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div>
+          <label for="editUbicacionId" class="mb-1 block text-sm font-semibold text-primary">Ubicación</label>
+          <select
+            id="editUbicacionId"
+            [value]="editUbicacionId()"
+            (change)="editUbicacionId.set($any($event.target).value)"
+            [disabled]="!editMuebleId()"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="" disabled>Selecciona una ubicación</option>
+            @for (ubicacion of editUbicacionesDelMueble(); track ubicacion.ubicacionId) {
+              <option [value]="ubicacion.ubicacionId">{{ ubicacion.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div>
+          <label for="editCantidadTotal" class="mb-1 block text-sm font-semibold text-primary">Cantidad (ejemplares)</label>
+          <input
+            id="editCantidadTotal"
+            type="number"
+            formControlName="cantidadTotal"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formularioEdicion.controls.cantidadTotal.invalid && formularioEdicion.controls.cantidadTotal.touched) {
+            <p class="mt-1 text-xs text-danger">La cantidad debe ser 0 o mayor.</p>
+          }
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="editPvp" class="mb-1 block text-sm font-semibold text-primary">PVP (COP)</label>
+            <input
+              id="editPvp"
+              type="number"
+              formControlName="pvp"
+              class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+            />
+            @if (formularioEdicion.controls.pvp.invalid && formularioEdicion.controls.pvp.touched) {
+              <p class="mt-1 text-xs text-danger">El PVP debe ser mayor a 0.</p>
+            }
+          </div>
+
+          <div>
+            <label for="editPorcentajeDescuentoEditorial" class="mb-1 block text-sm font-semibold text-primary">
+              % descuento editorial
+            </label>
+            <input
+              id="editPorcentajeDescuentoEditorial"
+              type="number"
+              formControlName="porcentajeDescuentoEditorial"
+              class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+            />
+            @if (
+              formularioEdicion.controls.porcentajeDescuentoEditorial.invalid &&
+              formularioEdicion.controls.porcentajeDescuentoEditorial.touched
+            ) {
+              <p class="mt-1 text-xs text-danger">Debe estar entre 0 y 100.</p>
+            }
+          </div>
+        </div>
+
+        <div class="mt-2 flex gap-2">
+          <button
+            type="button"
+            (click)="cancelarEdicion()"
+            class="h-12 flex-1 rounded-2xl border border-primary/20 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            [disabled]="guardando()"
+            class="h-12 flex-1 rounded-2xl bg-primary text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
+          </button>
+        </div>
+      </form>
+    }
+  </div>
+</div>

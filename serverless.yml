@@ -322,13 +322,14 @@ functions:
           path: /api/libros
           method: post
 
-  cambiarUbicacionLibro:
-    handler: dist-server/api/handlers/libros.handlerCambiarUbicacion
-    role: !GetAtt CambiarUbicacionLibroLambdaRole.Arn
+  editarLibro:
+    handler: dist-server/api/handlers/libros.handlerEditar
+    role: !GetAtt EditarLibroLambdaRole.Arn
     description: >-
-      PATCH /api/libros/:bookId/ubicacion — cambia la ubicación de un libro,
-      exige rol vendedor o administrador (CLAUDE.md A01, ADR-008, TODO.md
-      Tarea 1 — placeholder mínimo hasta la Tarea E).
+      PUT /api/libros/:bookId — edita ubicacionId/cantidadTotal/pvp/
+      porcentajeDescuentoEditorial de un libro, exige rol vendedor o
+      administrador (CLAUDE.md A01, ADR-008, área "Gestionar" pestaña
+      "Editar"). Reemplaza a cambiarUbicacionLibro.
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
@@ -340,9 +341,10 @@ functions:
         - 'dist-server/api/handlers/libros.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
-        # Misma función (libros.ts) que GET/POST — mismo cuidado documentado
-        # arriba (MEMORY.md §7): un import nuevo a nivel superior afecta a
-        # las 3 funciones Lambda que comparten este archivo, no solo esta.
+        # Misma función (libros.ts) que GET/POST/DELETE/inventario — mismo
+        # cuidado documentado arriba (MEMORY.md §7): un import nuevo a nivel
+        # superior afecta a todas las funciones Lambda que comparten este
+        # archivo, no solo esta.
         - 'node_modules/**'
         # Recorta paquetes solo-frontend/dev-tooling — lista completa y
         # razón de cada exclusión documentada en la función `usuariosMe`
@@ -379,8 +381,125 @@ functions:
         - 'node_modules/@firebase/app-types/**'
     events:
       - httpApi:
-          path: /api/libros/{bookId}/ubicacion
-          method: patch
+          path: /api/libros/{bookId}
+          method: put
+
+  eliminarLibro:
+    handler: dist-server/api/handlers/libros.handlerEliminar
+    role: !GetAtt EliminarLibroLambdaRole.Arn
+    description: >-
+      DELETE /api/libros/:bookId — elimina un libro, exige rol
+      administrador exclusivamente (CLAUDE.md A01, ADR-008, área
+      "Gestionar" pestaña "Editar", botón ELIMINAR LIBRO).
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST/PUT/inventario — mismo
+        # cuidado documentado arriba (MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/libros/{bookId}
+          method: delete
+
+  librosInventario:
+    handler: dist-server/api/handlers/libros.handlerInventario
+    role: !GetAtt LibrosInventarioLambdaRole.Arn
+    description: >-
+      GET /api/libros/inventario — listado completo de libros (incluidos
+      agotados), exige rol vendedor o administrador (CLAUDE.md A01, área
+      "Gestionar" pestaña "Editar"). Ruta estática, prioridad sobre
+      /api/libros/{bookId}.
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST/PUT/DELETE — mismo cuidado
+        # documentado arriba (MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/libros/inventario
+          method: get
 
   espacios:
     handler: dist-server/api/handlers/ubicacion-fisica.handlerEspacios
@@ -859,8 +978,9 @@ functions:
     handler: dist-server/api/handlers/editoriales-descuentos.handler
     role: !GetAtt EditorialesDescuentosLambdaRole.Arn
     description: >-
-      CRUD /api/editoriales-descuentos — exige rol administrador
-      exclusivamente (CLAUDE.md A01, ADR-008).
+      CRUD /api/editoriales-descuentos — GET exige vendedor o
+      administrador (autocompletado en Gestionar/Catalogar), POST/PUT/
+      DELETE exigen administrador exclusivamente (CLAUDE.md A01, ADR-008).
     environment:
       TABLA_EDITORIALES_DESCUENTOS: ${self:custom.nombresTablas.editorialesDescuentos}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
@@ -1360,10 +1480,10 @@ resources:
                     - !GetAtt TablaUsuarios.Arn
                     - !GetAtt TablaUbicaciones.Arn
 
-    CambiarUbicacionLibroLambdaRole:
+    EditarLibroLambdaRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: babel-cambiar-ubicacion-libro-role-${sls:stage}
+        RoleName: babel-editar-libro-role-${sls:stage}
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -1379,7 +1499,7 @@ resources:
           # (GetItem) babel-usuarios para resolver el rol del token — sin
           # acceso de escritura a ninguna tabla salvo babel-libros
           # (CLAUDE.md A05, ADR-008).
-          - PolicyName: babel-cambiar-ubicacion-libro-dynamodb-${sls:stage}
+          - PolicyName: babel-editar-libro-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
               Statement:
@@ -1394,6 +1514,71 @@ resources:
                     - dynamodb:GetItem
                   Resource:
                     - !GetAtt TablaUbicaciones.Arn
+                    - !GetAtt TablaUsuarios.Arn
+
+    EliminarLibroLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-eliminar-libro-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Lee/elimina babel-libros, solo lee (GetItem) babel-usuarios para
+          # resolver el rol del token — sin acceso de escritura a ninguna
+          # otra tabla (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-eliminar-libro-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:DeleteItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+
+    LibrosInventarioLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-libros-inventario-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lectura (Scan) sobre babel-libros y solo lee (GetItem)
+          # babel-usuarios para resolver el rol del token (CLAUDE.md A05,
+          # ADR-008).
+          - PolicyName: babel-libros-inventario-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
                     - !GetAtt TablaUsuarios.Arn
 
     EspaciosLambdaRole:

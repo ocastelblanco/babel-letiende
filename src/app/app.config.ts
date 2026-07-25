@@ -18,8 +18,8 @@ export const appConfig: ApplicationConfig = {
     // necesario para que las URLs relativas (`/api/...`) funcionen en SSR.
     provideHttpClient(withFetch(), withInterceptors([absoluteUrlInterceptor])),
     // Instancia el AuthService al arrancar la app para que el listener de
-    // sesión de Firebase (onAuthStateChanged) arranque antes de que el
-    // AuthGuard evalúe el Signal `usuario` en la primera navegación.
+    // sesión de Firebase (onAuthStateChanged) arranque antes de que
+    // NoAuthGuard/RoleGuard evalúen el Signal `usuario` en la primera navegación.
     provideAppInitializer(() => {
       inject(AuthService);
     }),
