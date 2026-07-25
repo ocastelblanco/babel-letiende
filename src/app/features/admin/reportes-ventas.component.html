@@ -71,5 +71,29 @@
         {{ exportando() ? 'Exportando…' : 'Exportar a Excel' }}
       </button>
     </form>
+
+    <div class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <h2 class="text-lg font-bold text-primary">Reporte de inventario</h2>
+      <p class="text-sm text-primary/70">
+        Exporta el inventario completo (ISBN, título, autor, editorial, PVP, descuento editorial, cantidad y
+        ubicación) a un archivo Excel.
+      </p>
+
+      @if (mensajeExitoInventario()) {
+        <p class="text-sm font-semibold text-tertiary">{{ mensajeExitoInventario() }}</p>
+      }
+      @if (mensajeErrorInventario()) {
+        <p class="text-sm text-danger">{{ mensajeErrorInventario() }}</p>
+      }
+
+      <button
+        type="button"
+        (click)="exportarInventario()"
+        class="flex h-12 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        [disabled]="exportandoInventario()"
+      >
+        {{ exportandoInventario() ? 'Exportando…' : 'Exportar inventario a Excel' }}
+      </button>
+    </div>
   </div>
 </div>

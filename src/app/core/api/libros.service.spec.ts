@@ -38,6 +38,8 @@ const libroFalso: Libro = {
 
 describe('LibrosService', () => {
   let httpMock: HttpTestingController;
+  let createObjectURLSpy: ReturnType<typeof vi.fn>;
+  let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
 
   function configurarPrueba(idTokenResuelto: string | null = null) {
     TestBed.configureTestingModule({
@@ -50,6 +52,13 @@ describe('LibrosService', () => {
     httpMock = TestBed.inject(HttpTestingController);
     return TestBed.inject(LibrosService);
   }
+
+  beforeEach(() => {
+    createObjectURLSpy = vi.fn().mockReturnValue('blob:falso');
+    revokeObjectURLSpy = vi.fn();
+    URL.createObjectURL = createObjectURLSpy as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = revokeObjectURLSpy as unknown as typeof URL.revokeObjectURL;
+  });
 
   afterEach(() => {
     httpMock.verify();
@@ -256,6 +265,46 @@ describe('LibrosService', () => {
         exito: false,
         error: 'Este correo no está autorizado para eliminar libros en Babel.',
       });
+    });
+  });
+
+  describe('exportarInventario', () => {
+    it('devuelve exito: false sin llamar a la API cuando no hay sesión', async () => {
+      const servicio = configurarPrueba(null);
+
+      const resultado = await servicio.exportarInventario();
+
+      expect(resultado).toEqual({ exito: false, error: expect.any(String) });
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
+    });
+
+    it('descarga el archivo y devuelve éxito cuando /api/libros/exportar responde 200', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.exportarInventario();
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/libros/exportar');
+      expect(peticion.request.method).toBe('GET');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-valido');
+      peticion.flush(new Blob(['contenido-falso']));
+
+      expect(await promesa).toEqual({ exito: true });
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:falso');
+    });
+
+    it('devuelve el mensaje de error del backend cuando el rol no es administrador (403), sin descargar nada', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.exportarInventario();
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/libros/exportar')
+        .flush(new Blob(['{}']), { status: 403, statusText: 'Forbidden' });
+
+      const resultado = await promesa;
+      expect(resultado.exito).toBe(false);
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
     });
   });
 });

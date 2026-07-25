@@ -20,13 +20,17 @@ export interface DatosEditarLibro {
  */
 export type ResultadoOperacionLibro = { exito: true } | { exito: false; error: string };
 
+/** Resultado de `exportarInventario` — mismo patrón que `ResultadoExportarVentas` (`ventas.service.ts`): nunca lanza, para que el componente muestre un mensaje en vez de una excepción sin manejar. */
+export type ResultadoExportarInventario = { exito: true } | { exito: false; error: string };
+
 /**
  * Cliente de `/api/libros` (tech-specs.md §5). `GET /api/libros` y
  * `GET /api/libros/:bookId` son públicos, sin autenticación. `cargarInventario`
- * (`GET /api/libros/inventario`), `editarLibro` (`PUT /api/libros/:bookId`) y
- * `eliminarLibro` (`DELETE /api/libros/:bookId`) exigen sesión — el backend
- * valida siempre el rol real contra `babel-usuarios` (CLAUDE.md A01); este
- * servicio nunca decide por sí mismo si el usuario puede escribir.
+ * (`GET /api/libros/inventario`), `editarLibro` (`PUT /api/libros/:bookId`),
+ * `eliminarLibro` (`DELETE /api/libros/:bookId`) y `exportarInventario`
+ * (`GET /api/libros/exportar`) exigen sesión — el backend valida siempre el
+ * rol real contra `babel-usuarios` (CLAUDE.md A01); este servicio nunca
+ * decide por sí mismo si el usuario puede escribir/exportar.
  */
 @Injectable({ providedIn: 'root' })
 export class LibrosService {
@@ -177,5 +181,45 @@ export class LibrosService {
     } catch (error) {
       return { exito: false, error: this.mensajeError(error, 'No se pudo eliminar el libro. Intenta de nuevo.') };
     }
+  }
+
+  /**
+   * Llama `GET /api/libros/exportar` con el ID Token actual y dispara la
+   * descarga del `.xlsx` recibido (`ajustes-finales.md` Tarea G) — mismo
+   * patrón que `VentasService.exportarVentas` (blob binario, sin filtros).
+   * Nunca lanza: ante sesión ausente, `403` (exclusivo de `administrador`,
+   * CLAUDE.md A01) o error de red, devuelve `{ exito: false, error }`.
+   */
+  async exportarInventario(): Promise<ResultadoExportarInventario> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return { exito: false, error: 'No se pudo exportar el inventario. Intenta de nuevo.' };
+    }
+
+    try {
+      const archivo = await firstValueFrom(
+        this.http.get('/api/libros/exportar', {
+          headers: { Authorization: `Bearer ${idToken}` },
+          responseType: 'blob',
+        }),
+      );
+      this.descargarArchivo(archivo);
+      return { exito: true };
+    } catch (error) {
+      return {
+        exito: false,
+        error: this.mensajeError(error, 'No se pudo exportar el inventario. Intenta de nuevo.'),
+      };
+    }
+  }
+
+  /** Dispara la descarga de un blob en el navegador con un `<a>` temporal — mismo patrón que `VentasService`. */
+  private descargarArchivo(archivo: Blob): void {
+    const url = URL.createObjectURL(archivo);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = 'reporte-inventario.xlsx';
+    enlace.click();
+    URL.revokeObjectURL(url);
   }
 }

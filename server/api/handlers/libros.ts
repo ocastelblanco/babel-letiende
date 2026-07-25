@@ -3,6 +3,7 @@ import type {
   APIGatewayProxyHandlerV2,
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
+import * as XLSX from 'xlsx';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import { eliminar, escanearMayorQue, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
 
@@ -557,6 +558,87 @@ export const handlerInventario: APIGatewayProxyHandlerV2 = async (event): Promis
 
     const libros = await escanearTodo<Libro>(nombreTablaLibros());
     return respuestaJson(200, libros);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `GET /api/libros/exportar` — genera un archivo `.xlsx` con el inventario
+ * completo de libros (`ajustes-finales.md` Tarea G, `TODO.md` Tarea 1),
+ * junto al reporte de ventas ya existente en `/admin/reportes`. Exige rol
+ * `administrador` EXCLUSIVAMENTE (mismo criterio que
+ * `GET /api/ventas/exportar`: información de negocio sensible — costo y
+ * volumen de inventario). Ruta estática, sin conflicto con
+ * `/api/libros/{bookId}` (mismo criterio que `/api/libros/inventario`).
+ *
+ * Resuelve Espacio/Mueble/Ubicación por libro con 3 `escanearTodo` en
+ * paralelo (uno por tabla) en vez de reutilizar `resolverUbicacion` por
+ * cada libro (que haría 3 `GetItem` por fila) — a este volumen (miles de
+ * libros, pero solo decenas de ubicaciones distintas) es más barato cargar
+ * las 3 tablas de ubicación una sola vez y resolver cada libro con 3
+ * `Map.get()` en memoria.
+ *
+ * `Cantidad` reporta `cantidadDisponible` (no `cantidadTotal`): un reporte
+ * de inventario existe para conciliar contra el conteo físico en el
+ * estante, y `cantidadDisponible` es lo que debería quedar físicamente
+ * presente (`cantidadTotal` incluye ejemplares ya vendidos).
+ */
+export const handlerExportarInventario: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || usuario.rol !== 'administrador') {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para exportar el inventario en Babel.' });
+    }
+
+    const [libros, ubicaciones, muebles, espacios] = await Promise.all([
+      escanearTodo<Libro>(nombreTablaLibros()),
+      escanearTodo<Ubicacion>(nombreTablaUbicaciones()),
+      escanearTodo<Mueble>(nombreTablaMuebles()),
+      escanearTodo<Espacio>(nombreTablaEspacios()),
+    ]);
+
+    const ubicacionPorId = new Map(ubicaciones.map((ubicacion) => [ubicacion.ubicacionId, ubicacion]));
+    const mueblePorId = new Map(muebles.map((mueble) => [mueble.muebleId, mueble]));
+    const espacioPorId = new Map(espacios.map((espacio) => [espacio.espacioId, espacio]));
+
+    const filas = libros.map((libro) => {
+      const ubicacion = ubicacionPorId.get(libro.ubicacionId);
+      const mueble = ubicacion ? mueblePorId.get(ubicacion.muebleId) : undefined;
+      const espacio = mueble ? espacioPorId.get(mueble.espacioId) : undefined;
+      return {
+        ISBN: libro.isbn ?? '—',
+        Título: libro.titulo,
+        Autor: libro.autor,
+        Editorial: libro.editorial ?? '—',
+        PVP: libro.pvp,
+        'Descuento editorial (%)': libro.porcentajeDescuentoEditorial,
+        Cantidad: libro.cantidadDisponible,
+        Espacio: espacio?.nombre ?? '—',
+        Mueble: mueble?.nombre ?? '—',
+        Ubicación: ubicacion?.nombre ?? '—',
+      };
+    });
+
+    const libroExcel = XLSX.utils.book_new();
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    XLSX.utils.book_append_sheet(libroExcel, hoja, 'Inventario');
+    const contenidoBase64 = XLSX.write(libroExcel, { type: 'base64', bookType: 'xlsx' }) as string;
+
+    return {
+      statusCode: 200,
+      isBase64Encoded: true,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="reporte-inventario.xlsx"',
+      },
+      body: contenidoBase64,
+    };
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

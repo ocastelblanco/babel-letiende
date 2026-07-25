@@ -1,18 +1,26 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { LibrosService } from '../../core/api/libros.service';
 import { FiltrosExportarVentas, VentasService } from '../../core/api/ventas.service';
 import { ReportesVentasComponent } from './reportes-ventas.component';
 
-function configurarPrueba(resultado: { exito: true } | { exito: false; error: string } = { exito: true }) {
+function configurarPrueba(
+  resultado: { exito: true } | { exito: false; error: string } = { exito: true },
+  resultadoInventario: { exito: true } | { exito: false; error: string } = { exito: true },
+) {
   const exportarVentasMock = vi.fn().mockResolvedValue(resultado);
+  const exportarInventarioMock = vi.fn().mockResolvedValue(resultadoInventario);
 
   TestBed.configureTestingModule({
-    providers: [{ provide: VentasService, useValue: { exportarVentas: exportarVentasMock } }],
+    providers: [
+      { provide: VentasService, useValue: { exportarVentas: exportarVentasMock } },
+      { provide: LibrosService, useValue: { exportarInventario: exportarInventarioMock } },
+    ],
   });
 
   const fixture: ComponentFixture<ReportesVentasComponent> = TestBed.createComponent(ReportesVentasComponent);
   fixture.detectChanges();
 
-  return { fixture, exportarVentasMock };
+  return { fixture, exportarVentasMock, exportarInventarioMock };
 }
 
 function botonExportar(fixture: ComponentFixture<ReportesVentasComponent>): HTMLButtonElement {
@@ -79,7 +87,10 @@ describe('ReportesVentasComponent', () => {
     let resolver!: (valor: { exito: true }) => void;
     const exportarVentasMock = vi.fn().mockReturnValue(new Promise((resolve) => (resolver = resolve)));
     TestBed.configureTestingModule({
-      providers: [{ provide: VentasService, useValue: { exportarVentas: exportarVentasMock } }],
+      providers: [
+        { provide: VentasService, useValue: { exportarVentas: exportarVentasMock } },
+        { provide: LibrosService, useValue: { exportarInventario: vi.fn() } },
+      ],
     });
     const fixture: ComponentFixture<ReportesVentasComponent> = TestBed.createComponent(ReportesVentasComponent);
     fixture.detectChanges();
@@ -113,5 +124,74 @@ describe('ReportesVentasComponent', () => {
     expect(fixture.nativeElement.textContent).toContain(
       'Este correo no está autorizado para exportar reportes de ventas en Babel.',
     );
+  });
+
+  describe('reporte de inventario', () => {
+    function botonExportarInventario(fixture: ComponentFixture<ReportesVentasComponent>): HTMLButtonElement {
+      const botones = fixture.nativeElement.querySelectorAll('button[type="button"]') as NodeListOf<HTMLButtonElement>;
+      return botones[botones.length - 1] as HTMLButtonElement;
+    }
+
+    it('muestra la sección de reporte de inventario', () => {
+      const { fixture } = configurarPrueba();
+
+      expect(fixture.nativeElement.textContent).toContain('Reporte de inventario');
+    });
+
+    it('llama a exportarInventario al hacer click en el botón', async () => {
+      const { fixture, exportarInventarioMock } = configurarPrueba();
+
+      botonExportarInventario(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(exportarInventarioMock).toHaveBeenCalledTimes(1);
+      expect(fixture.nativeElement.textContent).toContain('Inventario exportado correctamente.');
+    });
+
+    it('muestra el estado de carga mientras exporta el inventario, independiente del reporte de ventas', async () => {
+      let resolver!: (valor: { exito: true }) => void;
+      const exportarInventarioMock = vi.fn().mockReturnValue(new Promise((resolve) => (resolver = resolve)));
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: VentasService, useValue: { exportarVentas: vi.fn() } },
+          { provide: LibrosService, useValue: { exportarInventario: exportarInventarioMock } },
+        ],
+      });
+      const fixture: ComponentFixture<ReportesVentasComponent> = TestBed.createComponent(ReportesVentasComponent);
+      fixture.detectChanges();
+
+      botonExportarInventario(fixture).click();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(botonExportarInventario(fixture).disabled).toBe(true);
+      expect(botonExportarInventario(fixture).textContent).toContain('Exportando…');
+      expect(botonExportar(fixture).disabled).toBe(false);
+
+      resolver({ exito: true });
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(botonExportarInventario(fixture).disabled).toBe(false);
+    });
+
+    it('muestra un mensaje de error cuando exportarInventario falla', async () => {
+      const { fixture } = configurarPrueba(
+        { exito: true },
+        { exito: false, error: 'Este correo no está autorizado para exportar el inventario en Babel.' },
+      );
+
+      botonExportarInventario(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain(
+        'Este correo no está autorizado para exportar el inventario en Babel.',
+      );
+    });
   });
 });

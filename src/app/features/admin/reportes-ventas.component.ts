@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { LibrosService } from '../../core/api/libros.service';
 import { FiltrosExportarVentas, VentasService } from '../../core/api/ventas.service';
 import { FormaDePago } from '../../core/models/venta.model';
 
@@ -30,12 +31,18 @@ const FORMAS_DE_PAGO: readonly FormaDePago[] = ['efectivo', 'tarjeta', 'transfer
 export class ReportesVentasComponent {
   private readonly fb = inject(FormBuilder);
   private readonly ventasService = inject(VentasService);
+  private readonly librosService = inject(LibrosService);
 
   protected readonly formasDePago = FORMAS_DE_PAGO;
 
   protected readonly exportando = signal(false);
   protected readonly mensajeError = signal<string | null>(null);
   protected readonly mensajeExito = signal<string | null>(null);
+
+  /** Estado del reporte de inventario (`ajustes-finales.md` Tarea G) — independiente del de ventas, sin filtros. */
+  protected readonly exportandoInventario = signal(false);
+  protected readonly mensajeErrorInventario = signal<string | null>(null);
+  protected readonly mensajeExitoInventario = signal<string | null>(null);
 
   protected readonly formulario = this.fb.nonNullable.group({
     desde: [''],
@@ -73,6 +80,24 @@ export class ReportesVentasComponent {
       }
     } finally {
       this.exportando.set(false);
+    }
+  }
+
+  /** Exporta el inventario completo a Excel (`ajustes-finales.md` Tarea G) — sin filtros, a diferencia del reporte de ventas. */
+  protected async exportarInventario(): Promise<void> {
+    this.mensajeExitoInventario.set(null);
+    this.mensajeErrorInventario.set(null);
+
+    this.exportandoInventario.set(true);
+    try {
+      const resultado = await this.librosService.exportarInventario();
+      if (resultado.exito) {
+        this.mensajeExitoInventario.set('Inventario exportado correctamente.');
+      } else {
+        this.mensajeErrorInventario.set(resultado.error);
+      }
+    } finally {
+      this.exportandoInventario.set(false);
     }
   }
 }
