@@ -1,4 +1,5 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
+import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenInvalidoError } from '../lib/verificar-token';
 
@@ -39,6 +40,7 @@ const {
   handlerEditar,
   handlerEliminar,
   handlerInventario,
+  handlerExportarInventario,
   handlerDetalle,
   validarDatosNuevoLibro,
   validarDatosEditarLibro,
@@ -487,6 +489,99 @@ describe('handlerInventario (GET /api/libros/inventario)', () => {
     const cuerpo = JSON.parse(respuesta.body as string) as unknown[];
     expect(cuerpo).toHaveLength(2);
     expect(escanearTodoMock).toHaveBeenCalledWith('babel-libros-test');
+  });
+});
+
+/** Decodifica el `body` base64 de `handlerExportarInventario` a filas planas — mismo patrón que `ventas.spec.ts`, `handlerExportar`. */
+function filasDelXlsx(bodyBase64: string): Record<string, unknown>[] {
+  const libroExcel = XLSX.read(bodyBase64, { type: 'base64' });
+  const hoja = libroExcel.Sheets[libroExcel.SheetNames[0] as string];
+  return XLSX.utils.sheet_to_json(hoja as XLSX.WorkSheet);
+}
+
+describe('handlerExportarInventario (GET /api/libros/exportar)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    process.env['TABLA_MUEBLES'] = 'babel-muebles-test';
+    process.env['TABLA_ESPACIOS'] = 'babel-espacios-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerExportarInventario(eventoConBookId({}), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el rol es vendedor (exige administrador exclusivamente)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+
+    const respuesta = await handlerExportarInventario(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 200 con un .xlsx cuyas filas resuelven Espacio/Mueble/Ubicación por nombre', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+    // `libroFalso.ubicacionId` es 'ubicacion-1' (no 'ubicacion-2', el id de `ubicacionFalsa`) — se usa una
+    // ubicación propia que sí resuelve la cadena completa hasta `muebleFalso`/`espacioFalso`.
+    const ubicacionDeLibroFalso = { ubicacionId: 'ubicacion-1', muebleId: 'mueble-1', nombre: 'Estante 1' };
+    const libroAgotado = {
+      ...libroFalso,
+      bookId: 'libro-2',
+      isbn: null,
+      editorial: null,
+      cantidadDisponible: 0,
+      ubicacionId: 'ubicacion-no-existe',
+    };
+    escanearTodoMock
+      .mockResolvedValueOnce([libroFalso, libroAgotado])
+      .mockResolvedValueOnce([ubicacionDeLibroFalso])
+      .mockResolvedValueOnce([muebleFalso])
+      .mockResolvedValueOnce([espacioFalso]);
+
+    const respuesta = await handlerExportarInventario(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({
+      statusCode: 200,
+      isBase64Encoded: true,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="reporte-inventario.xlsx"',
+      },
+    });
+    const filas = filasDelXlsx(respuesta.body as string);
+    expect(filas).toHaveLength(2);
+    expect(filas[0]).toMatchObject({
+      ISBN: libroFalso.isbn,
+      Título: libroFalso.titulo,
+      Autor: libroFalso.autor,
+      Editorial: libroFalso.editorial,
+      PVP: libroFalso.pvp,
+      'Descuento editorial (%)': libroFalso.porcentajeDescuentoEditorial,
+      Cantidad: libroFalso.cantidadDisponible,
+      Espacio: espacioFalso.nombre,
+      Mueble: muebleFalso.nombre,
+      Ubicación: ubicacionDeLibroFalso.nombre,
+    });
+    // libroAgotado tiene isbn/editorial null y una ubicacionId ('ubicacion-no-existe') que no resuelve — datos inconsistentes, no debe romper el reporte (CLAUDE.md A08).
+    expect(filas[1]).toMatchObject({ ISBN: '—', Editorial: '—', Espacio: '—', Mueble: '—', Ubicación: '—' });
   });
 });
 
