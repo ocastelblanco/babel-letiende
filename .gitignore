@@ -36,3 +36,6 @@ yarn-error.log*
 /.claude/skills/firebase-auth-basics
 /.claude/skills/firebase-basics
 /.claude/skills/angular-new-app
+
+# Oh My Claude plugin
+.omc
