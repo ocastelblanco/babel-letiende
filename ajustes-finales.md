@@ -10,7 +10,7 @@ _width: wide
 
 ## Usuarios no autenticados (clientes)
 
-### Inicio - Catálogo público
+### Inicio - Catálogo público (título: "Catálogo librería - Le Tiende")
 
 - El título del HTML no es consistente; estoy viendo **Inicio - Catálogo público** y, como título de la pestaña del navegador, me aparece 'Cuentos de amor - Le Tiende'.
 - Luego del logo de Le Tiende, el título debe ser 'Catálogo Librería'.

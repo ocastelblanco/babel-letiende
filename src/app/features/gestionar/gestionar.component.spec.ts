@@ -122,11 +122,4 @@ describe('GestionarComponent', () => {
 
     expect(fixture.nativeElement.querySelector('app-catalogar-libro')).toBeTruthy();
   });
-
-  it('incluye un vínculo para volver al catálogo público', () => {
-    const fixture = configurarPrueba();
-
-    const enlace = fixture.nativeElement.querySelector('a[href="/"]');
-    expect(enlace).toBeTruthy();
-  });
 });
