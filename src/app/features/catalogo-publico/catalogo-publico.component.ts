@@ -6,7 +6,7 @@ import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service'
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 
 /** Título de pestaña del catálogo público — mismo texto en todo momento (ver `ngOnInit`). */
-export const TITULO_CATALOGO_PUBLICO = 'Inicio - Catálogo público';
+export const TITULO_CATALOGO_PUBLICO = 'Catálogo librería - Le Tiende';
 
 /** Quita tildes y normaliza mayúsculas para que la búsqueda encuentre "garcia" al buscar "García". */
 function normalizarTexto(valor: string): string {

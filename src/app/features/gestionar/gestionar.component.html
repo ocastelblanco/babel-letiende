@@ -1,36 +1,28 @@
 <div class="bg-surface">
   <div class="mx-auto max-w-xl px-4 pt-4">
-    <a routerLink="/" class="mb-2 inline-block text-sm font-semibold text-secondary underline">
-      ← Volver al Inicio - Catálogo público
-    </a>
-
     <div class="flex gap-2 rounded-2xl bg-white p-1 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
-      <button
-        type="button"
-        (click)="cambiarPestana('catalogar')"
-        [class.bg-primary]="pestanaActiva() === 'catalogar'"
-        [class.text-neutral]="pestanaActiva() === 'catalogar'"
-        [class.text-primary]="pestanaActiva() !== 'catalogar'"
-        class="h-10 flex-1 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
-      >
+      <button type="button"
+              (click)="cambiarPestana('catalogar')"
+              [class.bg-primary]="pestanaActiva() === 'catalogar'"
+              [class.text-neutral]="pestanaActiva() === 'catalogar'"
+              [class.text-primary]="pestanaActiva() !== 'catalogar'"
+              class="h-10 flex-1 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90">
         Catalogar
       </button>
-      <button
-        type="button"
-        (click)="cambiarPestana('editar')"
-        [class.bg-primary]="pestanaActiva() === 'editar'"
-        [class.text-neutral]="pestanaActiva() === 'editar'"
-        [class.text-primary]="pestanaActiva() !== 'editar'"
-        class="h-10 flex-1 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
-      >
+      <button type="button"
+              (click)="cambiarPestana('editar')"
+              [class.bg-primary]="pestanaActiva() === 'editar'"
+              [class.text-neutral]="pestanaActiva() === 'editar'"
+              [class.text-primary]="pestanaActiva() !== 'editar'"
+              class="h-10 flex-1 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90">
         Editar
       </button>
     </div>
   </div>
 
   @if (pestanaActiva() === 'catalogar') {
-    <app-catalogar-libro />
+  <app-catalogar-libro />
   } @else {
-    <app-editar-libro />
+  <app-editar-libro />
   }
 </div>
