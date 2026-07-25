@@ -6,7 +6,7 @@
 
   <main class="mx-auto max-w-5xl">
     @if (!cargando() && !error() && libros().length > 0) {
-      <div class="mb-6">
+      <div class="mb-6 flex flex-col gap-3">
         <input
           type="search"
           placeholder="Buscar por título, autor o ISBN…"
@@ -14,6 +14,32 @@
           (input)="terminoBusqueda.set($any($event.target).value)"
           class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
         />
+
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <select
+            (change)="seleccionarEspacio($any($event.target).value)"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary sm:w-1/2"
+          >
+            <option value="" [selected]="espacioSeleccionado() === ''">Todos los espacios</option>
+            @for (espacio of espacios(); track espacio.espacioId) {
+              <option [value]="espacio.espacioId" [selected]="espacioSeleccionado() === espacio.espacioId">
+                {{ espacio.nombre }}
+              </option>
+            }
+          </select>
+
+          <select
+            (change)="seleccionarMueble($any($event.target).value)"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary sm:w-1/2"
+          >
+            <option value="" [selected]="muebleSeleccionado() === ''">Todos los muebles</option>
+            @for (mueble of mueblesFiltrados(); track mueble.muebleId) {
+              <option [value]="mueble.muebleId" [selected]="muebleSeleccionado() === mueble.muebleId">
+                {{ mueble.nombre }}
+              </option>
+            }
+          </select>
+        </div>
       </div>
     }
 
