@@ -600,6 +600,7 @@ describe('handlerExportarInventario (GET /api/libros/exportar)', () => {
     const filas = filasDelXlsx(respuesta.body as string);
     expect(filas).toHaveLength(2);
     expect(filas[0]).toMatchObject({
+      'Fecha de catalogación': libroFalso.creadoEn,
       ISBN: libroFalso.isbn,
       Título: libroFalso.titulo,
       Autor: libroFalso.autor,
@@ -610,9 +611,18 @@ describe('handlerExportarInventario (GET /api/libros/exportar)', () => {
       Espacio: espacioFalso.nombre,
       Mueble: muebleFalso.nombre,
       Ubicación: ubicacionDeLibroFalso.nombre,
+      'Catalogado por': libroFalso.creadoPor,
     });
     // libroAgotado tiene isbn/editorial null y una ubicacionId ('ubicacion-no-existe') que no resuelve — datos inconsistentes, no debe romper el reporte (CLAUDE.md A08).
-    expect(filas[1]).toMatchObject({ ISBN: '—', Editorial: '—', Espacio: '—', Mueble: '—', Ubicación: '—' });
+    expect(filas[1]).toMatchObject({
+      ISBN: '—',
+      Editorial: '—',
+      Espacio: '—',
+      Mueble: '—',
+      Ubicación: '—',
+      // libroAgotado (cantidadDisponible: 0) sigue apareciendo en el reporte con Cantidad 0 — no se excluye como en el catálogo público.
+      Cantidad: 0,
+    });
   });
 });
 

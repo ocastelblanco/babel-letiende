@@ -622,7 +622,14 @@ export const handlerInventario: APIGatewayProxyHandlerV2 = async (event): Promis
  * `Cantidad` reporta `cantidadDisponible` (no `cantidadTotal`): un reporte
  * de inventario existe para conciliar contra el conteo físico en el
  * estante, y `cantidadDisponible` es lo que debería quedar físicamente
- * presente (`cantidadTotal` incluye ejemplares ya vendidos).
+ * presente (`cantidadTotal` incluye ejemplares ya vendidos) — puede ser 0
+ * (libro agotado, sigue apareciendo en el reporte porque viene de
+ * `escanearTodo`, no del catálogo público que sí los excluye).
+ *
+ * `Fecha de catalogación` (`Libro.creadoEn`) y `Catalogado por`
+ * (`Libro.creadoPor`, el email de quien lo catalogó) — segunda ronda de
+ * `ajustes-2026-07-27.md`, al inicio y al final de las columnas
+ * respectivamente.
  */
 export const handlerExportarInventario: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -649,6 +656,7 @@ export const handlerExportarInventario: APIGatewayProxyHandlerV2 = async (event)
       const mueble = ubicacion ? mueblePorId.get(ubicacion.muebleId) : undefined;
       const espacio = mueble ? espacioPorId.get(mueble.espacioId) : undefined;
       return {
+        'Fecha de catalogación': libro.creadoEn,
         ISBN: libro.isbn ?? '—',
         Título: libro.titulo,
         Autor: libro.autor,
@@ -659,6 +667,7 @@ export const handlerExportarInventario: APIGatewayProxyHandlerV2 = async (event)
         Espacio: espacio?.nombre ?? '—',
         Mueble: mueble?.nombre ?? '—',
         Ubicación: ubicacion?.nombre ?? '—',
+        'Catalogado por': libro.creadoPor,
       };
     });
 
