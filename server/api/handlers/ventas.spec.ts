@@ -473,10 +473,24 @@ describe('handlerExportar (GET /api/ventas/exportar)', () => {
         Editorial: 'Sudamericana',
         ISBN: ventaFalsa1.isbn,
         PVP: ventaFalsa1.pvp,
+        'Descuento de venta': ventaFalsa1.porcentajeDescuentoVenta,
         Costo: ventaFalsa1.costoLibro,
         Utilidad: ventaFalsa1.utilidad,
         'Forma de pago': ventaFalsa1.formaDePago,
       });
+    });
+
+    it('incluye la columna Descuento de venta con el porcentajeDescuentoVenta de cada venta (no el descuento editorial)', async () => {
+      escanearTodoMock.mockResolvedValue([ventaFalsa1, ventaFalsa2]);
+      obtenerPorClaveMock
+        .mockResolvedValueOnce({ bookId: 'book-1', titulo: 'Cien años de soledad', editorial: 'Sudamericana' })
+        .mockResolvedValueOnce({ bookId: 'book-2', titulo: 'Rayuela', editorial: 'Alfaguara' });
+
+      const respuesta = await handlerExportar(eventoListar({ authorization: 'Bearer token' }), {} as never, {} as never);
+
+      const filas = filasDelXlsx(respuesta.body as string);
+      expect(filas[0]?.['Descuento de venta']).toBe(0);
+      expect(filas[1]?.['Descuento de venta']).toBe(10);
     });
 
     it('genera un archivo XLSX válido con 0 filas cuando no hay ventas (no un error)', async () => {

@@ -402,6 +402,11 @@ export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
  * `consultarVentasFiltradas` ya resuelve ese caso con `'—'` de respaldo
  * (CLAUDE.md A08). Devuelve el archivo como `body` en base64
  * (`isBase64Encoded: true`) — API Gateway lo decodifica y sirve como binario.
+ *
+ * Columna "Descuento de venta" (`ajustes-2026-07-27.md`): `porcentajeDescuentoVenta`,
+ * el descuento discrecional que aplicó el vendedor al momento de vender — no
+ * confundir con el "Descuento editorial" del reporte de Inventario
+ * (`porcentajeDescuentoEditorial`, un campo distinto del `Libro`).
  */
 export const handlerExportar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -423,6 +428,7 @@ export const handlerExportar: APIGatewayProxyHandlerV2 = async (event): Promise<
       Editorial: venta.editorialLibro,
       ISBN: venta.isbn ?? '—',
       PVP: venta.pvp,
+      'Descuento de venta': venta.porcentajeDescuentoVenta,
       Costo: venta.costoLibro,
       Utilidad: venta.utilidad,
       'Forma de pago': venta.formaDePago,
