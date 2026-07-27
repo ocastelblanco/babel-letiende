@@ -182,7 +182,7 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | Configuración de descuentos de editorial (CRUD, con autocompletado en catalogación) | Media |
 | Gestión de usuarios (CRUD) | Media |
 | Reportes de ventas + inventario, exportación XLSX | Media |
-| Modo offline / cola de sincronización para catalogación sin señal | Baja — bloqueado hasta cerrar los ajustes de esta sección (ver `TODO.md`) |
+| ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | Baja — bloqueado hasta cerrar los ajustes de esta sección (ver `TODO.md`) |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
 
@@ -230,7 +230,8 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 - La filosofía visual (UX/UI) y el flujo de CI/CD (GitHub Actions) deben ser consistentes con los del proyecto Comandante.
 - Babel comparte el inicio de sesión de Google con Comandante (mismo proyecto de autenticación): un usuario puede tener cuenta en ambas aplicaciones sin registrarse dos veces, pero el rol (administrador/vendedor) se define de forma independiente en cada aplicación y en su propia base de datos — administrar usuarios en una no afecta a la otra.
 - La ubicación física es un modelo jerárquico de tres entidades independientes (Espacio → Mueble → Ubicación, §5.6), relacionadas por identificador, no por nombre: renombrar un Espacio o Mueble nunca desvincula a sus hijos ya creados.
-- El modo offline/cola de sincronización y el primer despliegue a producción quedan deliberadamente pospuestos hasta cerrar el conjunto de ajustes descrito en `ajustes-finales.md` (decisión del usuario, 2026-07-23) — ver el orden de prioridad vigente en `TODO.md`.
+- El primer despliegue a producción queda deliberadamente pospuesto hasta cerrar los ajustes descritos en `ajustes-2026-07-27.md` — ver el orden de prioridad vigente en `TODO.md`.
+- **Modo offline / cola de sincronización — CANCELADO (2026-07-27, decisión del usuario):** los cortes de wifi en la librería son muy infrecuentes (menos de 1 al mes) y ya se resuelven en la práctica compartiendo la conexión de datos móviles del celular con el que se está catalogando. El costo de construir y mantener una cola de sincronización no se justifica frente a ese riesgo real; el equipo prefiere invertir ese esfuerzo en más pruebas funcionales antes de producción. No queda pendiente en el roadmap ni en `TODO.md`.
 
 ---
 
