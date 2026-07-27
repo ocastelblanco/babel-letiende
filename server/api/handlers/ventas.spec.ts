@@ -257,6 +257,7 @@ const ventaFalsa1 = {
   ventaId: 'venta-1',
   bookId: 'book-1',
   isbn: '9780000000000',
+  cantidad: 1,
   pvp: 45000,
   porcentajeDescuentoVenta: 0,
   precioFinal: 45000,
@@ -271,13 +272,14 @@ const ventaFalsa2 = {
   ventaId: 'venta-2',
   bookId: 'book-2',
   isbn: '9780000000002',
+  cantidad: 2,
   pvp: 30000,
   porcentajeDescuentoVenta: 10,
-  precioFinal: 27000,
+  precioFinal: 54000,
   costoLibro: 19500,
-  utilidad: 7500,
+  utilidad: 15000,
   formaDePago: 'tarjeta',
-  vendidoPor: 'vendedor@letiende.co',
+  vendidoPor: 'otro-vendedor@letiende.co',
   vendidoEn: '2026-07-15T00:00:00.000Z',
 };
 
@@ -449,8 +451,8 @@ describe('handlerExportar (GET /api/ventas/exportar)', () => {
     it('genera un archivo XLSX no vacío con las columnas esperadas cuando hay ventas', async () => {
       escanearTodoMock.mockResolvedValue([ventaFalsa1, ventaFalsa2]);
       obtenerPorClaveMock
-        .mockResolvedValueOnce({ bookId: 'book-1', titulo: 'Cien años de soledad', editorial: 'Sudamericana' })
-        .mockResolvedValueOnce({ bookId: 'book-2', titulo: 'Rayuela', editorial: 'Alfaguara' });
+        .mockResolvedValueOnce({ bookId: 'book-1', titulo: 'Cien años de soledad', editorial: 'Sudamericana', porcentajeDescuentoEditorial: 35 })
+        .mockResolvedValueOnce({ bookId: 'book-2', titulo: 'Rayuela', editorial: 'Alfaguara', porcentajeDescuentoEditorial: 40 });
 
       const respuesta = await handlerExportar(eventoListar({ authorization: 'Bearer token' }), {} as never, {} as never);
 
@@ -469,22 +471,33 @@ describe('handlerExportar (GET /api/ventas/exportar)', () => {
       expect(filas).toHaveLength(2);
       expect(filas[0]).toMatchObject({
         'Fecha de venta': ventaFalsa1.vendidoEn,
+        ISBN: ventaFalsa1.isbn,
         Título: 'Cien años de soledad',
         Editorial: 'Sudamericana',
-        ISBN: ventaFalsa1.isbn,
-        PVP: ventaFalsa1.pvp,
+        'Descuento editorial': 35,
+        'PVP unitario': ventaFalsa1.pvp,
+        'Ejemplares vendidos': ventaFalsa1.cantidad,
         'Descuento de venta': ventaFalsa1.porcentajeDescuentoVenta,
-        Costo: ventaFalsa1.costoLibro,
+        'Venta total': ventaFalsa1.precioFinal,
+        Costo: ventaFalsa1.costoLibro * ventaFalsa1.cantidad,
         Utilidad: ventaFalsa1.utilidad,
         'Forma de pago': ventaFalsa1.formaDePago,
+        Vendedor: ventaFalsa1.vendidoPor,
+      });
+      expect(filas[1]).toMatchObject({
+        'Descuento editorial': 40,
+        'Ejemplares vendidos': ventaFalsa2.cantidad,
+        'Venta total': ventaFalsa2.precioFinal,
+        Costo: ventaFalsa2.costoLibro * ventaFalsa2.cantidad,
+        Vendedor: ventaFalsa2.vendidoPor,
       });
     });
 
     it('incluye la columna Descuento de venta con el porcentajeDescuentoVenta de cada venta (no el descuento editorial)', async () => {
       escanearTodoMock.mockResolvedValue([ventaFalsa1, ventaFalsa2]);
       obtenerPorClaveMock
-        .mockResolvedValueOnce({ bookId: 'book-1', titulo: 'Cien años de soledad', editorial: 'Sudamericana' })
-        .mockResolvedValueOnce({ bookId: 'book-2', titulo: 'Rayuela', editorial: 'Alfaguara' });
+        .mockResolvedValueOnce({ bookId: 'book-1', titulo: 'Cien años de soledad', editorial: 'Sudamericana', porcentajeDescuentoEditorial: 35 })
+        .mockResolvedValueOnce({ bookId: 'book-2', titulo: 'Rayuela', editorial: 'Alfaguara', porcentajeDescuentoEditorial: 40 });
 
       const respuesta = await handlerExportar(eventoListar({ authorization: 'Bearer token' }), {} as never, {} as never);
 
@@ -512,7 +525,7 @@ describe('handlerExportar (GET /api/ventas/exportar)', () => {
       expect(respuesta).toMatchObject({ statusCode: 200, isBase64Encoded: true });
       const filas = filasDelXlsx(respuesta.body as string);
       expect(filas).toHaveLength(1);
-      expect(filas[0]).toMatchObject({ Título: '—', Editorial: '—' });
+      expect(filas[0]).toMatchObject({ Título: '—', Editorial: '—', 'Descuento editorial': '—' });
     });
 
     it('aplica los mismos filtros de desde/hasta/formaDePago/editorial que handlerListar', async () => {
