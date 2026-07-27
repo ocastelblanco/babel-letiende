@@ -40,6 +40,50 @@
             }
           </select>
         </div>
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex overflow-hidden rounded-xl border border-primary/20">
+            <button
+              type="button"
+              (click)="seleccionarVista('tarjetas')"
+              [class.bg-primary]="vista() === 'tarjetas'"
+              [class.text-neutral]="vista() === 'tarjetas'"
+              [class.text-primary]="vista() !== 'tarjetas'"
+              class="flex-1 px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 sm:flex-none"
+            >
+              Tarjetas
+            </button>
+            <button
+              type="button"
+              (click)="seleccionarVista('lista')"
+              [class.bg-primary]="vista() === 'lista'"
+              [class.text-neutral]="vista() === 'lista'"
+              [class.text-primary]="vista() !== 'lista'"
+              class="flex-1 px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 sm:flex-none"
+            >
+              Lista
+            </button>
+          </div>
+
+          <div class="flex gap-2">
+            <select
+              (change)="seleccionarCriterioOrden($any($event.target).value)"
+              class="rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+            >
+              <option value="titulo" [selected]="criterioOrden() === 'titulo'">Ordenar por título</option>
+              <option value="autor" [selected]="criterioOrden() === 'autor'">Ordenar por autor</option>
+              <option value="pvp" [selected]="criterioOrden() === 'pvp'">Ordenar por precio</option>
+            </select>
+            <button
+              type="button"
+              (click)="alternarDireccionOrden()"
+              [attr.aria-label]="direccionOrden() === 'asc' ? 'Orden ascendente' : 'Orden descendente'"
+              class="shrink-0 rounded-xl border border-primary/20 px-3 py-2 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+            >
+              {{ direccionOrden() === 'asc' ? '↑' : '↓' }}
+            </button>
+          </div>
+        </div>
       </div>
     }
 
@@ -53,9 +97,9 @@
       <p class="text-center text-primary/70">Todavía no hay libros disponibles.</p>
     } @else if (librosFiltrados().length === 0) {
       <p class="text-center text-primary/70">No se encontraron libros para tu búsqueda.</p>
-    } @else {
+    } @else if (vista() === 'tarjetas') {
       <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-        @for (libro of librosFiltrados(); track libro.bookId) {
+        @for (libro of librosOrdenados(); track libro.bookId) {
           <li>
             <a
               [routerLink]="['/libro', libro.bookId]"
@@ -77,6 +121,36 @@
               <p class="line-clamp-2 text-sm font-semibold text-primary">{{ libro.titulo }}</p>
               <p class="line-clamp-1 text-xs text-primary/70">{{ libro.autor }}</p>
               <p class="mt-auto pt-2 text-sm font-bold text-secondary">{{ libro.pvp | pvp }}</p>
+            </a>
+          </li>
+        }
+      </ul>
+    } @else {
+      <ul class="flex flex-col gap-3">
+        @for (libro of librosOrdenados(); track libro.bookId) {
+          <li>
+            <a
+              [routerLink]="['/libro', libro.bookId]"
+              class="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90"
+            >
+              @if (libro.portadaUrl) {
+                <img
+                  [src]="libro.portadaUrl"
+                  [alt]="libro.titulo"
+                  class="h-16 w-12 shrink-0 rounded-lg object-cover"
+                />
+              } @else {
+                <div
+                  class="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg bg-neutral text-[10px] text-primary/60"
+                >
+                  Sin portada
+                </div>
+              }
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-primary">{{ libro.titulo }}</p>
+                <p class="truncate text-xs text-primary/70">{{ libro.autor }}</p>
+              </div>
+              <p class="shrink-0 text-sm font-bold text-secondary">{{ libro.pvp | pvp }}</p>
             </a>
           </li>
         }
