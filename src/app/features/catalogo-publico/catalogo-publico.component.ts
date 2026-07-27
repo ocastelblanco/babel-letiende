@@ -5,6 +5,10 @@ import { LibrosService } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 
+export type VistaCatalogo = 'tarjetas' | 'lista';
+export type CriterioOrden = 'titulo' | 'autor' | 'pvp';
+export type DireccionOrden = 'asc' | 'desc';
+
 /** Título de pestaña del catálogo público — mismo texto en todo momento (ver `ngOnInit`). */
 export const TITULO_CATALOGO_PUBLICO = 'Catálogo librería - Le Tiende';
 
@@ -47,6 +51,14 @@ function normalizarTexto(valor: string): string {
  * (caso de uso QR, `ajustes-finales.md`: solo la URL filtrable, no la imagen
  * del código) — cambiar un `<select>` actualiza la URL (`replaceUrl`, no
  * ensucia el historial en cada cambio de filtro).
+ *
+ * Vista Tarjetas/Lista y orden (`ajustes-2026-07-27.md` Tarea 1): `vista`
+ * alterna el layout sin recalcular nada; `librosOrdenados` aplica
+ * `criterioOrden`/`direccionOrden` sobre `librosFiltrados` ya filtrado (3
+ * criterios — Título/Autor/PVP — con un botón aparte para invertir la
+ * dirección, decisión confirmada con el usuario en vez de 6 opciones con
+ * dirección explícita en el propio `<select>`). Ninguno de los dos persiste
+ * entre visitas — no lo pidió el documento.
  */
 @Component({
   selector: 'app-catalogo-publico',
@@ -65,6 +77,13 @@ export class CatalogoPublicoComponent implements OnInit {
   protected readonly error = this.librosService.error;
 
   protected readonly terminoBusqueda = signal('');
+
+  /** Vista Tarjetas/Lista (`ajustes-2026-07-27.md`) — por defecto Tarjetas, comportamiento sin cambios si el usuario no toca el toggle. */
+  protected readonly vista = signal<VistaCatalogo>('tarjetas');
+
+  /** Criterio y dirección de orden (`ajustes-2026-07-27.md`, decisión confirmada: 3 opciones + botón de dirección) — Título ascendente por defecto. */
+  protected readonly criterioOrden = signal<CriterioOrden>('titulo');
+  protected readonly direccionOrden = signal<DireccionOrden>('asc');
 
   protected readonly espacios = this.ubicacionFisicaService.espacios;
   protected readonly espacioSeleccionado = signal('');
@@ -110,6 +129,21 @@ export class CatalogoPublicoComponent implements OnInit {
     });
   });
 
+  /** Aplica `criterioOrden`/`direccionOrden` sobre el resultado ya filtrado — Título/Autor comparan con `normalizarTexto` (mismo criterio que la búsqueda), PVP compara numéricamente. */
+  protected readonly librosOrdenados = computed(() => {
+    const criterio = this.criterioOrden();
+    const factor = this.direccionOrden() === 'asc' ? 1 : -1;
+
+    return [...this.librosFiltrados()].sort((a, b) => {
+      if (criterio === 'pvp') {
+        return (a.pvp - b.pvp) * factor;
+      }
+      const campoA = normalizarTexto(criterio === 'titulo' ? a.titulo : a.autor);
+      const campoB = normalizarTexto(criterio === 'titulo' ? b.titulo : b.autor);
+      return campoA.localeCompare(campoB) * factor;
+    });
+  });
+
   ngOnInit(): void {
     // `Title` es un servicio singleton — `LibroDetalleComponent` lo
     // sobreescribe con el título del libro visitado y nunca lo restaura, así
@@ -143,6 +177,18 @@ export class CatalogoPublicoComponent implements OnInit {
   protected seleccionarMueble(muebleId: string): void {
     this.muebleSeleccionado.set(muebleId);
     this.actualizarQueryParams();
+  }
+
+  protected seleccionarVista(vista: VistaCatalogo): void {
+    this.vista.set(vista);
+  }
+
+  protected seleccionarCriterioOrden(criterio: string): void {
+    this.criterioOrden.set(criterio as CriterioOrden);
+  }
+
+  protected alternarDireccionOrden(): void {
+    this.direccionOrden.set(this.direccionOrden() === 'asc' ? 'desc' : 'asc');
   }
 
   private actualizarQueryParams(): void {

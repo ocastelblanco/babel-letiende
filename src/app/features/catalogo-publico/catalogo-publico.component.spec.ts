@@ -367,4 +367,79 @@ describe('CatalogoPublicoComponent', () => {
       );
     });
   });
+
+  describe('vista Tarjetas/Lista y orden (ajustes-2026-07-27.md)', () => {
+    const libroAlfa: Libro = { ...libroFalso, bookId: 'book-alfa', titulo: 'Alfa', autor: 'Alfa', pvp: 10000 };
+    const libroBeta: Libro = { ...libroFalso, bookId: 'book-beta', titulo: 'Beta', autor: 'Bravo', pvp: 30000 };
+    const libroCharlie: Libro = {
+      ...libroFalso,
+      bookId: 'book-charlie',
+      titulo: 'Charlie',
+      autor: 'Charlie',
+      pvp: 20000,
+    };
+    const libros = [libroBeta, libroAlfa, libroCharlie];
+
+    function botonPorTexto(fixture: ComponentFixture<CatalogoPublicoComponent>, texto: string): HTMLButtonElement {
+      const botones = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+      return botones.find((boton) => boton.textContent?.trim() === texto) as HTMLButtonElement;
+    }
+
+    function selectOrden(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLSelectElement {
+      return fixture.nativeElement.querySelectorAll('select')[2] as HTMLSelectElement;
+    }
+
+    function botonDireccion(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLButtonElement {
+      return fixture.nativeElement.querySelector('[aria-label]') as HTMLButtonElement;
+    }
+
+    function titulosEnOrden(fixture: ComponentFixture<CatalogoPublicoComponent>): string[] {
+      const items = Array.from(fixture.nativeElement.querySelectorAll('li')) as HTMLLIElement[];
+      return items.map((li) => (li.querySelector('p') as HTMLElement).textContent?.trim() ?? '');
+    }
+
+    it('muestra la vista de Tarjetas (grid) por defecto', () => {
+      const { fixture } = configurarPrueba({ libros, cargando: false, error: false });
+
+      const lista = fixture.nativeElement.querySelector('ul') as HTMLUListElement;
+      expect(lista.className).toContain('grid');
+    });
+
+    it('el botón "Lista" cambia a la vista de lista (sin grid)', () => {
+      const { fixture } = configurarPrueba({ libros, cargando: false, error: false });
+
+      botonPorTexto(fixture, 'Lista').click();
+      fixture.detectChanges();
+
+      const lista = fixture.nativeElement.querySelector('ul') as HTMLUListElement;
+      expect(lista.className).not.toContain('grid');
+      expect(fixture.nativeElement.textContent).toContain('Alfa');
+    });
+
+    it('ordena por Título ascendente por defecto', () => {
+      const { fixture } = configurarPrueba({ libros, cargando: false, error: false });
+
+      expect(titulosEnOrden(fixture)).toEqual(['Alfa', 'Beta', 'Charlie']);
+    });
+
+    it('ordena por Precio al elegir esa opción en el desplegable', () => {
+      const { fixture } = configurarPrueba({ libros, cargando: false, error: false });
+
+      const select = selectOrden(fixture);
+      select.value = 'pvp';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      expect(titulosEnOrden(fixture)).toEqual(['Alfa', 'Charlie', 'Beta']);
+    });
+
+    it('el botón de dirección invierte el orden (descendente)', () => {
+      const { fixture } = configurarPrueba({ libros, cargando: false, error: false });
+
+      botonDireccion(fixture).click();
+      fixture.detectChanges();
+
+      expect(titulosEnOrden(fixture)).toEqual(['Charlie', 'Beta', 'Alfa']);
+    });
+  });
 });
