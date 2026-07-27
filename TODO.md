@@ -6,30 +6,27 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Tarea 1 completada (2026-07-27):** vista Lista/Tarjetas + orden Título/Autor/Precio en `CatalogoPublicoComponent` (PR #67, fusionado por el usuario). Se promueve el siguiente ítem del backlog (Reporte de ventas — Descuento de venta) al segundo slot activo.
 
+**Tarea 1 (Gestionar > Editar) completada (2026-07-27):** todos los campos del libro editables + paneles como Catalogar (PR #69, probado por el usuario). Con esto se cierra el backlog completo de `ajustes-2026-07-27.md` salvo la pista independiente del generador de QR (ver más abajo). Queda un solo ajuste pendiente de esta ronda (Reporte de ventas) — se promueve **Modo offline** al segundo slot activo como siguiente pieza del roadmap, pero no debe iniciarse hasta cerrar también el Reporte de ventas y confirmar con el usuario que no hay más ajustes de esta ronda.
+
 ---
 
-## Tarea 1 — Gestionar > Editar: todos los campos + paneles como Catalogar
-
-`ajustes-2026-07-27.md`, `src/app/features/gestionar/editar-libro.component.*`, `server/api/handlers/libros.ts`:
-
-- `EditarLibroComponent`/`PUT /api/libros/:bookId` (`DatosEditarLibro`, `validarDatosEditarLibro`) hoy solo permiten editar `ubicacionId`, `cantidadTotal`, `pvp`, `porcentajeDescuentoEditorial`. Extender a TODOS los campos del libro: `titulo`, `autor`, `isbn`, `editorial`, `portadaUrl` (reutilizar el mismo input + lector de código de barras EAN-13 que `CatalogarLibroComponent` para el ISBN).
-- Reorganizar el formulario de edición en dos paneles separados, igual que `CatalogarLibroComponent`: primero un panel **Ubicación del libro** (Espacio/Mueble/Ubicación en cascada, ya existe) y, debajo, un panel **Información del libro** (los campos de arriba).
-- `bookId` (uuid) sigue siendo la clave primaria real en `babel-libros` — editar el ISBN es un cambio de dato seguro, no toca ninguna clave.
-
-## Tarea 2 — Reporte de ventas: columna Descuento de venta
+## Tarea 1 — Reporte de ventas: columna Descuento de venta
 
 `ajustes-2026-07-27.md`, `server/api/handlers/ventas.ts`:
 
 - En `handlerExportar`, agregar `'Descuento de venta': venta.porcentajeDescuentoVenta` a las `filas` del `.xlsx`. El campo ya existe en `VentaConLibro`/`Venta` (`porcentajeDescuentoVenta`, no confundir con `porcentajeDescuentoEditorial`) — no requiere cambios de backend más allá de esta columna.
 
+## Tarea 2 — Modo offline / cola de sincronización
+
+`PRD.md` §6 — sin desglosar todavía en pasos atómicos.
+
+**No iniciar esta tarea todavía**: queda en este slot solo por la regla de "siempre 2 tareas activas" del motor JIT. Antes de arrancarla, cerrar la Tarea 1 (Reporte de ventas) y confirmar con el usuario que no hay más ajustes pendientes de `ajustes-2026-07-27.md`.
+
 ---
 
 ## Backlog (siguiente, tras cerrar la Tarea 1 y 2)
 
-1. **Modo offline / cola de sincronización** para catalogación sin señal (`PRD.md` §6) — sin desglosar todavía en pasos atómicos.
-2. **Primer despliegue a producción** (`PRD.md` §6) — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
-
-No iniciar la tarea de offline ni la de producción sin antes confirmar con el usuario que no hay más ajustes pendientes de esta ronda.
+1. **Primer despliegue a producción** (`PRD.md` §6) — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
 
 ---
 

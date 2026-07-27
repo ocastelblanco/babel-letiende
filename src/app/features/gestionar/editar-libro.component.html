@@ -87,11 +87,9 @@
         }
       </ul>
     } @else {
-      <form
-        [formGroup]="formularioEdicion"
-        (ngSubmit)="guardarEdicion()"
-        class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
-      >
+      <div class="mb-4 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 class="text-sm font-semibold text-primary">Ubicación del libro</h2>
+
         <div>
           <label for="editEspacioId" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
           <select
@@ -137,6 +135,92 @@
               <option [value]="ubicacion.ubicacionId">{{ ubicacion.nombre }}</option>
             }
           </select>
+        </div>
+      </div>
+
+      <form
+        [formGroup]="formularioEdicion"
+        (ngSubmit)="guardarEdicion()"
+        class="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]"
+      >
+        <h2 class="text-sm font-semibold text-primary">Información del libro</h2>
+
+        <div>
+          <label for="editIsbn" class="mb-1 block text-sm font-semibold text-primary">ISBN (opcional)</label>
+          <div class="flex gap-2">
+            <input
+              id="editIsbn"
+              type="text"
+              formControlName="isbn"
+              class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+            />
+            <button
+              type="button"
+              (click)="escaneandoEdicion() ? detenerEscaneoEdicion() : iniciarEscaneoEdicion()"
+              class="shrink-0 rounded-xl border border-primary/20 px-3 py-2 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+            >
+              {{ escaneandoEdicion() ? 'Detener' : 'Escanear ISBN' }}
+            </button>
+          </div>
+
+          <video
+            #videoEscanerEdicion
+            autoplay
+            muted
+            playsinline
+            class="mt-2 w-full rounded-xl"
+            [class.hidden]="!escaneandoEdicion()"
+          ></video>
+
+          @if (errorEscaneoEdicion()) {
+            <p class="mt-1 text-xs text-danger">{{ errorEscaneoEdicion() }}</p>
+          }
+        </div>
+
+        <div>
+          <label for="editTitulo" class="mb-1 block text-sm font-semibold text-primary">Título</label>
+          <input
+            id="editTitulo"
+            type="text"
+            formControlName="titulo"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formularioEdicion.controls.titulo.invalid && formularioEdicion.controls.titulo.touched) {
+            <p class="mt-1 text-xs text-danger">El título es requerido.</p>
+          }
+        </div>
+
+        <div>
+          <label for="editAutor" class="mb-1 block text-sm font-semibold text-primary">Autor</label>
+          <input
+            id="editAutor"
+            type="text"
+            formControlName="autor"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          @if (formularioEdicion.controls.autor.invalid && formularioEdicion.controls.autor.touched) {
+            <p class="mt-1 text-xs text-danger">El autor es requerido.</p>
+          }
+        </div>
+
+        <div>
+          <label for="editEditorial" class="mb-1 block text-sm font-semibold text-primary">Editorial (opcional)</label>
+          <input
+            id="editEditorial"
+            type="text"
+            formControlName="editorial"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+        </div>
+
+        <div>
+          <label for="editPortadaUrl" class="mb-1 block text-sm font-semibold text-primary">URL de portada (opcional)</label>
+          <input
+            id="editPortadaUrl"
+            type="text"
+            formControlName="portadaUrl"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
         </div>
 
         <div>

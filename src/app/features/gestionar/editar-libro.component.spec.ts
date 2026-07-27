@@ -254,9 +254,46 @@ describe('EditarLibroComponent', () => {
       expect(componente.editEspacioId()).toBe('espacio-1');
       expect(componente.editMuebleId()).toBe('mueble-1');
       expect(componente.editUbicacionId()).toBe('ubicacion-1');
+      expect(componente.formularioEdicion.value.isbn).toBe('9780000000000');
+      expect(componente.formularioEdicion.value.titulo).toBe('Cien años de soledad');
+      expect(componente.formularioEdicion.value.autor).toBe('Gabriel García Márquez');
+      expect(componente.formularioEdicion.value.editorial).toBe('Sudamericana');
+      expect(componente.formularioEdicion.value.portadaUrl).toBe('');
       expect(componente.formularioEdicion.value.cantidadTotal).toBe(2);
       expect(componente.formularioEdicion.value.pvp).toBe(45000);
       expect(componente.formularioEdicion.value.porcentajeDescuentoEditorial).toBe(35);
+    });
+
+    it('muestra los dos paneles del formulario: Ubicación del libro e Información del libro', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      fixture.detectChanges();
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Ubicación del libro');
+      expect(texto).toContain('Información del libro');
+    });
+
+    it('el botón "Escanear ISBN" del formulario completa el campo isbn con el resultado del scanner', async () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      fixture.detectChanges();
+
+      botonPorTexto(fixture, 'Escanear ISBN')?.click();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(decodeFromConstraintsMock).toHaveBeenCalledTimes(1);
+      callbackDecodificacion?.({ getText: () => '9781234567897' });
+      fixture.detectChanges();
+
+      expect(componente.formularioEdicion.value.isbn).toBe('9781234567897');
+      expect(componente.escaneandoEdicion()).toBe(false);
+      expect(detenerEscaneoMock).toHaveBeenCalledTimes(1);
     });
 
     it('cambiar el Espacio limpia Mueble y Ubicación (cascada)', () => {
@@ -284,16 +321,30 @@ describe('EditarLibroComponent', () => {
       expect(fixture.nativeElement.querySelector('form')).toBeFalsy();
     });
 
-    it('guardarEdicion llama a LibrosService.editarLibro con ubicacionId/cantidadTotal/pvp/porcentajeDescuentoEditorial', async () => {
+    it('guardarEdicion llama a LibrosService.editarLibro con TODOS los campos del libro', async () => {
       const { fixture, editarLibroMock } = configurarPrueba();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       componente.editar(libroFalso);
-      componente.formularioEdicion.setValue({ cantidadTotal: 5, pvp: 60000, porcentajeDescuentoEditorial: 40 });
+      componente.formularioEdicion.setValue({
+        isbn: '9781234567897',
+        titulo: 'Cien años de soledad (editado)',
+        autor: 'G. García Márquez',
+        editorial: 'Otra editorial',
+        portadaUrl: 'https://example.com/portada.jpg',
+        cantidadTotal: 5,
+        pvp: 60000,
+        porcentajeDescuentoEditorial: 40,
+      });
 
       await componente.guardarEdicion();
 
       expect(editarLibroMock).toHaveBeenCalledWith('libro-1', {
+        isbn: '9781234567897',
+        titulo: 'Cien años de soledad (editado)',
+        autor: 'G. García Márquez',
+        editorial: 'Otra editorial',
+        portadaUrl: 'https://example.com/portada.jpg',
         ubicacionId: 'ubicacion-1',
         cantidadTotal: 5,
         pvp: 60000,
@@ -302,12 +353,45 @@ describe('EditarLibroComponent', () => {
       expect(componente.libroEditandoId()).toBeNull();
     });
 
+    it('envía isbn/editorial/portadaUrl como null cuando quedan vacíos', async () => {
+      const { fixture, editarLibroMock } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      componente.formularioEdicion.setValue({
+        isbn: '',
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        editorial: '',
+        portadaUrl: '',
+        cantidadTotal: 2,
+        pvp: 45000,
+        porcentajeDescuentoEditorial: 35,
+      });
+
+      await componente.guardarEdicion();
+
+      expect(editarLibroMock).toHaveBeenCalledWith(
+        'libro-1',
+        expect.objectContaining({ isbn: null, editorial: null, portadaUrl: null }),
+      );
+    });
+
     it('muestra un mensaje y no llama a la API si no se seleccionó una ubicación completa', async () => {
       const { fixture, editarLibroMock } = configurarPrueba();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       componente.libroEditandoId.set('libro-1');
-      componente.formularioEdicion.setValue({ cantidadTotal: 5, pvp: 60000, porcentajeDescuentoEditorial: 40 });
+      componente.formularioEdicion.setValue({
+        isbn: '',
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        editorial: '',
+        portadaUrl: '',
+        cantidadTotal: 5,
+        pvp: 60000,
+        porcentajeDescuentoEditorial: 40,
+      });
       // Sin cascada resuelta: editUbicacionId queda en '' por defecto.
 
       await componente.guardarEdicion();
