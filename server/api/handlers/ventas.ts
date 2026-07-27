@@ -297,14 +297,22 @@ export function validarFiltrosVentas(
 }
 
 /**
- * Una `Venta` con `titulo`/`editorial` resueltos desde `Libro` por `bookId` —
- * usada internamente por `consultarVentasFiltradas` (necesaria siempre para
- * `handlerExportar`; `handlerListar` la despoja de estos dos campos antes de
- * responder, para no romper su contrato JSON ya establecido).
+ * Una `Venta` con `titulo`/`editorial`/`porcentajeDescuentoEditorial`
+ * resueltos desde `Libro` por `bookId` — usada internamente por
+ * `consultarVentasFiltradas` (necesaria siempre para `handlerExportar`;
+ * `handlerListar` la despoja de estos campos antes de responder, para no
+ * romper su contrato JSON ya establecido).
+ *
+ * `porcentajeDescuentoEditorialLibro` refleja el descuento editorial ACTUAL
+ * del libro, no el que tenía al momento de la venta (mismo criterio que
+ * `tituloLibro`/`editorialLibro` — decisión confirmada del usuario en
+ * `ajustes-2026-07-27.md`: si se edita el libro después, el reporte de
+ * ventas ya registradas también refleja el valor nuevo).
  */
 interface VentaConLibro extends Venta {
   tituloLibro: string;
   editorialLibro: string;
+  porcentajeDescuentoEditorialLibro: number | null;
 }
 
 /**
@@ -358,16 +366,17 @@ async function consultarVentasFiltradas(filtros: FiltrosVentas): Promise<VentaCo
     ...venta,
     tituloLibro: libro?.titulo ?? '—',
     editorialLibro: libro?.editorial ?? '—',
+    porcentajeDescuentoEditorialLibro: libro?.porcentajeDescuentoEditorial ?? null,
   }));
 }
 
 /**
  * `GET /api/ventas` — lista/filtra ventas para reportes (tech-specs.md §5,
  * "Admin"). Exige rol `administrador` exclusivamente. Reusa
- * `consultarVentasFiltradas` pero despoja `tituloLibro`/`editorialLibro`
- * antes de responder — mantiene exactamente el mismo contrato JSON
- * (`Venta[]` planas) que ya consume cualquier cliente existente de este
- * endpoint.
+ * `consultarVentasFiltradas` pero despoja `tituloLibro`/`editorialLibro`/
+ * `porcentajeDescuentoEditorialLibro` antes de responder — mantiene
+ * exactamente el mismo contrato JSON (`Venta[]` planas) que ya consume
+ * cualquier cliente existente de este endpoint.
  */
 export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -382,7 +391,9 @@ export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
     }
 
     const ventasConLibro = await consultarVentasFiltradas(validacion.filtros);
-    const ventas: Venta[] = ventasConLibro.map(({ tituloLibro: _tituloLibro, editorialLibro: _editorialLibro, ...venta }) => venta);
+    const ventas: Venta[] = ventasConLibro.map(
+      ({ tituloLibro: _tituloLibro, editorialLibro: _editorialLibro, porcentajeDescuentoEditorialLibro: _porcentajeDescuentoEditorialLibro, ...venta }) => venta,
+    );
 
     return respuestaJson(200, ventas);
   } catch (error) {
@@ -403,10 +414,17 @@ export const handlerListar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
  * (CLAUDE.md A08). Devuelve el archivo como `body` en base64
  * (`isBase64Encoded: true`) — API Gateway lo decodifica y sirve como binario.
  *
- * Columna "Descuento de venta" (`ajustes-2026-07-27.md`): `porcentajeDescuentoVenta`,
- * el descuento discrecional que aplicó el vendedor al momento de vender — no
- * confundir con el "Descuento editorial" del reporte de Inventario
- * (`porcentajeDescuentoEditorial`, un campo distinto del `Libro`).
+ * Columnas (`ajustes-2026-07-27.md`, segunda ronda): "Descuento de venta" es
+ * `porcentajeDescuentoVenta` — el descuento discrecional que aplicó el
+ * vendedor al momento de vender, no confundir con "Descuento editorial"
+ * (`porcentajeDescuentoEditorialLibro`, resuelto del `Libro` actual — mismo
+ * criterio "valor vigente, no histórico" que ya usan Título/Editorial).
+ * "PVP unitario" y "Ejemplares vendidos" son el precio unitario y la
+ * cantidad de la transacción por separado; "Venta total" es `precioFinal`
+ * (el total ya cobrado); "Costo" se recalcula aquí como costo TOTAL de la
+ * transacción (`costoLibro * cantidad`) — a diferencia del `Venta.costoLibro`
+ * crudo, que es unitario — para que sea comparable con "Venta total" y
+ * "Utilidad" (ambas ya son montos totales, no unitarios).
  */
 export const handlerExportar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -424,14 +442,18 @@ export const handlerExportar: APIGatewayProxyHandlerV2 = async (event): Promise<
 
     const filas = ventas.map((venta) => ({
       'Fecha de venta': venta.vendidoEn,
+      ISBN: venta.isbn ?? '—',
       Título: venta.tituloLibro,
       Editorial: venta.editorialLibro,
-      ISBN: venta.isbn ?? '—',
-      PVP: venta.pvp,
+      'Descuento editorial': venta.porcentajeDescuentoEditorialLibro ?? '—',
+      'PVP unitario': venta.pvp,
+      'Ejemplares vendidos': venta.cantidad,
       'Descuento de venta': venta.porcentajeDescuentoVenta,
-      Costo: venta.costoLibro,
+      'Venta total': venta.precioFinal,
+      Costo: venta.costoLibro * venta.cantidad,
       Utilidad: venta.utilidad,
       'Forma de pago': venta.formaDePago,
+      Vendedor: venta.vendidoPor,
     }));
 
     const libroExcel = XLSX.utils.book_new();
