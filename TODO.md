@@ -8,25 +8,25 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Tarea 1 (Gestionar > Editar) completada (2026-07-27):** todos los campos del libro editables + paneles como Catalogar (PR #69, probado por el usuario). Con esto se cierra el backlog completo de `ajustes-2026-07-27.md` salvo la pista independiente del generador de QR (ver más abajo). Queda un solo ajuste pendiente de esta ronda (Reporte de ventas) — se promueve **Modo offline** al segundo slot activo como siguiente pieza del roadmap, pero no debe iniciarse hasta cerrar también el Reporte de ventas y confirmar con el usuario que no hay más ajustes de esta ronda.
 
----
-
-## Tarea 1 — Reporte de ventas: columna Descuento de venta
-
-`ajustes-2026-07-27.md`, `server/api/handlers/ventas.ts`:
-
-- En `handlerExportar`, agregar `'Descuento de venta': venta.porcentajeDescuentoVenta` a las `filas` del `.xlsx`. El campo ya existe en `VentaConLibro`/`Venta` (`porcentajeDescuentoVenta`, no confundir con `porcentajeDescuentoEditorial`) — no requiere cambios de backend más allá de esta columna.
-
-## Tarea 2 — Modo offline / cola de sincronización
-
-`PRD.md` §6 — sin desglosar todavía en pasos atómicos.
-
-**No iniciar esta tarea todavía**: queda en este slot solo por la regla de "siempre 2 tareas activas" del motor JIT. Antes de arrancarla, cerrar la Tarea 1 (Reporte de ventas) y confirmar con el usuario que no hay más ajustes pendientes de `ajustes-2026-07-27.md`.
+**Reporte de ventas completado (2026-07-27):** columna "Descuento de venta" en `handlerExportar` (PR #70, probado por el usuario en `staging`). Con esto se cierra el backlog completo de `ajustes-2026-07-27.md` — solo queda pendiente la pista independiente del generador de QR (ver más abajo), que el usuario confirmó dejar para después. El roadmap principal retoma sus últimas 2 piezas (`PRD.md` §6): el usuario eligió explícitamente **Modo offline primero**, luego Producción — se llenan los 2 slots activos en ese orden.
 
 ---
 
-## Backlog (siguiente, tras cerrar la Tarea 1 y 2)
+## Tarea 1 — Modo offline / cola de sincronización
 
-1. **Primer despliegue a producción** (`PRD.md` §6) — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
+`PRD.md` §6 — catalogación sin señal. Sin desglosar todavía en pasos atómicos: por su alcance (cola de escritura local, reintentos, resolución de conflictos si dos vendedores catalogan el mismo libro sin conexión, etc.) corresponde una sesión de planeación antes de comprometerse a una implementación, a diferencia de las tareas anteriores de `ajustes-2026-07-27.md` que ya venían con el detalle de producto resuelto.
+
+## Tarea 2 — Primer despliegue a producción
+
+`PRD.md` §6 — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
+
+**No iniciar esta tarea todavía**: el usuario eligió explícitamente empezar por Modo offline (Tarea 1) primero. Queda en este slot solo por la regla de "siempre 2 tareas activas" del motor JIT.
+
+---
+
+## Backlog
+
+Sin ítems — Modo offline y Producción son las 2 últimas piezas del roadmap principal (`PRD.md` §6). Al cerrar cualquiera de las dos, revisar `PRD.md` completo antes de dar por terminado el roadmap (más allá de la pista independiente del generador de QR).
 
 ---
 
