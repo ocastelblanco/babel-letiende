@@ -10,23 +10,35 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Reporte de ventas completado (2026-07-27):** columna "Descuento de venta" en `handlerExportar` (PR #70, probado por el usuario en `staging`). Con esto se cierra el backlog completo de `ajustes-2026-07-27.md` — solo queda pendiente la pista independiente del generador de QR (ver más abajo), que el usuario confirmó dejar para después. El roadmap principal retoma sus últimas 2 piezas (`PRD.md` §6): el usuario eligió explícitamente **Modo offline primero**, luego Producción — se llenan los 2 slots activos en ese orden.
 
+**Modo offline CANCELADO (2026-07-27, decisión explícita del usuario):** antes de planear la implementación (se llegó a producir un plan completo, descartado sin código), el usuario decidió cancelarlo por completo — los cortes de wifi en la librería son muy infrecuentes (menos de 1 al mes) y ya se resuelven compartiendo datos móviles del celular con el que se cataloga; no se justifica el costo de mantener una cola de sincronización. Ver `PRD.md` §6/§9 para el detalle. En su lugar, el usuario trajo 2 ajustes nuevos a los reportes, que ocupan los 2 slots activos antes de retomar Producción.
+
 ---
 
-## Tarea 1 — Modo offline / cola de sincronización
+## Tarea 1 — Reporte de ventas: nuevas columnas y reordenamiento
 
-`PRD.md` §6 — catalogación sin señal. Sin desglosar todavía en pasos atómicos: por su alcance (cola de escritura local, reintentos, resolución de conflictos si dos vendedores catalogan el mismo libro sin conexión, etc.) corresponde una sesión de planeación antes de comprometerse a una implementación, a diferencia de las tareas anteriores de `ajustes-2026-07-27.md` que ya venían con el detalle de producto resuelto.
+`server/api/handlers/ventas.ts` (`handlerExportar`/`consultarVentasFiltradas`):
 
-## Tarea 2 — Primer despliegue a producción
+- Agregar columnas: **Descuento editorial** (`Libro.porcentajeDescuentoEditorial` resuelto por `bookId`, mismo criterio "valor actual" ya usado para Título/Editorial — decisión confirmada del usuario), **Ejemplares vendidos** (`Venta.cantidad`), **Venta total** (`Venta.precioFinal`), **Vendedor** (`Venta.vendidoPor`, el email es suficiente).
+- Cambiar **PVP** → **PVP unitario** (mismo campo, `Venta.pvp`).
+- Cambiar **Costo** para que refleje el costo TOTAL de la transacción (`Venta.costoLibro * Venta.cantidad`), no el costo unitario actual — decisión confirmada del usuario, va entre "Venta total" y "Utilidad".
+- Orden final de columnas: Fecha de venta, ISBN, Título, Editorial, Descuento editorial, PVP unitario, Ejemplares vendidos, Descuento de venta, Venta total, Costo, Utilidad, Forma de pago, Vendedor.
+- `Utilidad` ya está correctamente calculada a nivel de transacción completa (`precioFinal - costoLibro*cantidad`) — no requiere cambios, solo reordenar.
 
-`PRD.md` §6 — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
+## Tarea 2 — Reporte de inventario: fecha de catalogación y catalogador
 
-**No iniciar esta tarea todavía**: el usuario eligió explícitamente empezar por Modo offline (Tarea 1) primero. Queda en este slot solo por la regla de "siempre 2 tareas activas" del motor JIT.
+`server/api/handlers/libros.ts` (`handlerExportarInventario`):
+
+- Agregar **Fecha de catalogación** (`Libro.creadoEn`) al INICIO de las columnas.
+- Agregar **Catalogado por** (`Libro.creadoPor`, el email es suficiente) al FINAL de las columnas.
+- La columna **Cantidad** ya refleja `Libro.cantidadDisponible` (no `cantidadTotal`) vía un `escanearTodo` completo (no filtra libros agotados) — confirmado leyendo el código, ya cumple lo pedido, sin cambios.
 
 ---
 
 ## Backlog
 
-Sin ítems — Modo offline y Producción son las 2 últimas piezas del roadmap principal (`PRD.md` §6). Al cerrar cualquiera de las dos, revisar `PRD.md` completo antes de dar por terminado el roadmap (más allá de la pista independiente del generador de QR).
+1. **Primer despliegue a producción** (`PRD.md` §6) — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
+
+No iniciar producción sin antes cerrar las Tareas 1 y 2 de arriba y confirmar con el usuario que no hay más ajustes pendientes.
 
 ---
 
