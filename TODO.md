@@ -4,17 +4,11 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Prioridad de selección aplicada (2026-07-27):** el usuario cerró su ronda de pruebas manuales en `staging` (pausa iniciada 2026-07-25 tras `ajustes-finales.md` Tareas A-G) y entregó un nuevo lote de ajustes en `ajustes-2026-07-27.md`. El motor JIT se retoma con las 3 tareas que ese documento describe para Babel, en el orden en que aparecen en el documento, **antes** de las 2 últimas piezas del roadmap (modo offline, producción) que quedaron en pausa — instrucción explícita del usuario. La cuarta pieza de `ajustes-2026-07-27.md` — el generador de QR para imprimir — es una herramienta fuera de Babel (no vive en la app, no consume su API) y el usuario la excluyó deliberadamente de este orden: se rastrea aparte, en su propia pista independiente (ver sección al final), sin ocupar ninguno de los 2 slots activos.
 
+**Tarea 1 completada (2026-07-27):** vista Lista/Tarjetas + orden Título/Autor/Precio en `CatalogoPublicoComponent` (PR #67, fusionado por el usuario). Se promueve el siguiente ítem del backlog (Reporte de ventas — Descuento de venta) al segundo slot activo.
+
 ---
 
-## Tarea 1 — Catálogo público: vista Lista/Tarjetas + ordenar
-
-`ajustes-2026-07-27.md`, `src/app/features/catalogo-publico/`:
-
-- Añadir un intercambiador (toggle) en `CatalogoPublicoComponent` entre la vista de Tarjetas actual (`grid`) y una vista de Lista nueva (filas compactas: portada pequeña, título, autor, PVP). Vista por defecto: Tarjetas (sin cambios si el usuario no toca el toggle).
-- Añadir un desplegable para ordenar por Título / Autor / Precio (PVP) — 3 opciones, ascendente por defecto, con un botón/ícono aparte para invertir la dirección (decisión confirmada del usuario, ver `ajustes-2026-07-27.md` "Decisiones técnicas confirmadas").
-- Alcance: solo el catálogo público (`CatalogoPublicoComponent`), no `EditarLibroComponent` (que no lo pidió el documento).
-
-## Tarea 2 — Gestionar > Editar: todos los campos + paneles como Catalogar
+## Tarea 1 — Gestionar > Editar: todos los campos + paneles como Catalogar
 
 `ajustes-2026-07-27.md`, `src/app/features/gestionar/editar-libro.component.*`, `server/api/handlers/libros.ts`:
 
@@ -22,13 +16,18 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 - Reorganizar el formulario de edición en dos paneles separados, igual que `CatalogarLibroComponent`: primero un panel **Ubicación del libro** (Espacio/Mueble/Ubicación en cascada, ya existe) y, debajo, un panel **Información del libro** (los campos de arriba).
 - `bookId` (uuid) sigue siendo la clave primaria real en `babel-libros` — editar el ISBN es un cambio de dato seguro, no toca ninguna clave.
 
+## Tarea 2 — Reporte de ventas: columna Descuento de venta
+
+`ajustes-2026-07-27.md`, `server/api/handlers/ventas.ts`:
+
+- En `handlerExportar`, agregar `'Descuento de venta': venta.porcentajeDescuentoVenta` a las `filas` del `.xlsx`. El campo ya existe en `VentaConLibro`/`Venta` (`porcentajeDescuentoVenta`, no confundir con `porcentajeDescuentoEditorial`) — no requiere cambios de backend más allá de esta columna.
+
 ---
 
 ## Backlog (siguiente, tras cerrar la Tarea 1 y 2)
 
-1. **Reporte de ventas — columna Descuento de venta** (`ajustes-2026-07-27.md`): en `handlerExportar` (`server/api/handlers/ventas.ts`), agregar `'Descuento de venta': venta.porcentajeDescuentoVenta` a las `filas` del `.xlsx`. El campo ya existe en `VentaConLibro`/`Venta` (`porcentajeDescuentoVenta`, no confundir con `porcentajeDescuentoEditorial`) — no requiere cambios de backend más allá de esta columna.
-2. **Modo offline / cola de sincronización** para catalogación sin señal (`PRD.md` §6) — sin desglosar todavía en pasos atómicos.
-3. **Primer despliegue a producción** (`PRD.md` §6) — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
+1. **Modo offline / cola de sincronización** para catalogación sin señal (`PRD.md` §6) — sin desglosar todavía en pasos atómicos.
+2. **Primer despliegue a producción** (`PRD.md` §6) — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
 
 No iniciar la tarea de offline ni la de producción sin antes confirmar con el usuario que no hay más ajustes pendientes de esta ronda.
 
