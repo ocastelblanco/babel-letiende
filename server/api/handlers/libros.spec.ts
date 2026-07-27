@@ -219,6 +219,11 @@ describe('handlerCrear (POST /api/libros)', () => {
 });
 
 const datosEditarValidos = {
+  isbn: '9780000000001',
+  titulo: 'Cien años de soledad (editado)',
+  autor: 'Gabriel García Márquez',
+  editorial: 'Sudamericana',
+  portadaUrl: 'https://example.com/portada.jpg',
   ubicacionId: 'ubicacion-2',
   cantidadTotal: 3,
   pvp: 50000,
@@ -234,6 +239,27 @@ describe('validarDatosEditarLibro', () => {
   it('acepta cantidadTotal en 0 (a diferencia de validarDatosNuevoLibro)', () => {
     const resultado = validarDatosEditarLibro({ ...datosEditarValidos, cantidadTotal: 0 });
     expect(resultado.valido).toBe(true);
+  });
+
+  it('acepta isbn/editorial/portadaUrl ausentes como null', () => {
+    const { isbn: _isbn, editorial: _editorial, portadaUrl: _portadaUrl, ...sinOpcionales } = datosEditarValidos;
+    const resultado = validarDatosEditarLibro(sinOpcionales);
+    expect(resultado.valido).toBe(true);
+    if (resultado.valido) {
+      expect(resultado.datos.isbn).toBeNull();
+      expect(resultado.datos.editorial).toBeNull();
+      expect(resultado.datos.portadaUrl).toBeNull();
+    }
+  });
+
+  it('rechaza sin título', () => {
+    const resultado = validarDatosEditarLibro({ ...datosEditarValidos, titulo: '' });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza sin autor', () => {
+    const resultado = validarDatosEditarLibro({ ...datosEditarValidos, autor: '' });
+    expect(resultado.valido).toBe(false);
   });
 
   it('rechaza sin ubicacionId', () => {
@@ -354,6 +380,11 @@ describe('handlerEditar (PUT /api/libros/:bookId)', () => {
       expect(libroGuardado['pvp']).toBe(50000);
       expect(libroGuardado['costo']).toBe(32500);
       expect(libroGuardado['utilidadCatalogo']).toBe(17500);
+      expect(libroGuardado['isbn']).toBe('9780000000001');
+      expect(libroGuardado['titulo']).toBe('Cien años de soledad (editado)');
+      expect(libroGuardado['autor']).toBe('Gabriel García Márquez');
+      expect(libroGuardado['editorial']).toBe('Sudamericana');
+      expect(libroGuardado['portadaUrl']).toBe('https://example.com/portada.jpg');
       expect(libroGuardado['actualizadoEn']).not.toBe(libroFalso.actualizadoEn);
     });
 

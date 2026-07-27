@@ -352,8 +352,18 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
   }
 };
 
-/** Datos aceptados en el body de `PUT /api/libros/:bookId` — solo los 4 campos editables desde la pestaña "Editar" del área "Gestionar" (`TODO.md`). */
+/**
+ * Datos aceptados en el body de `PUT /api/libros/:bookId` — TODOS los campos
+ * del libro son editables desde la pestaña "Editar" del área "Gestionar"
+ * (`ajustes-2026-07-27.md` Tarea 1, antes solo permitía ubicación/cantidad/
+ * PVP/descuento editorial).
+ */
 interface DatosEditarLibro {
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  editorial: string | null;
+  portadaUrl: string | null;
   ubicacionId: string;
   cantidadTotal: number;
   pvp: number;
@@ -365,8 +375,9 @@ type ResultadoValidacionEditar =
   | { valido: false; error: string };
 
 /**
- * Valida el body de `PUT /api/libros/:bookId`: mismas reglas de rango que
- * `validarDatosNuevoLibro` para `pvp`/`porcentajeDescuentoEditorial`, salvo
+ * Valida el body de `PUT /api/libros/:bookId`: mismas reglas que
+ * `validarDatosNuevoLibro` para `titulo`/`autor`/`pvp`/
+ * `porcentajeDescuentoEditorial`/`isbn`/`editorial`/`portadaUrl`, salvo
  * `cantidadTotal`, que aquí acepta 0 (a diferencia de la catalogación
  * inicial) — el área "Gestionar" permite bajar la cantidad de un libro
  * hasta 0 sin eliminarlo (`TODO.md`). Exportada para poder probarla sin
@@ -378,6 +389,12 @@ export function validarDatosEditarLibro(cuerpo: unknown): ResultadoValidacionEdi
   }
   const datos = cuerpo as Record<string, unknown>;
 
+  if (typeof datos['titulo'] !== 'string' || datos['titulo'].trim() === '') {
+    return { valido: false, error: 'El título es requerido.' };
+  }
+  if (typeof datos['autor'] !== 'string' || datos['autor'].trim() === '') {
+    return { valido: false, error: 'El autor es requerido.' };
+  }
   if (typeof datos['ubicacionId'] !== 'string' || datos['ubicacionId'].trim() === '') {
     return { valido: false, error: 'La ubicación es requerida.' };
   }
@@ -405,9 +422,20 @@ export function validarDatosEditarLibro(cuerpo: unknown): ResultadoValidacionEdi
     return { valido: false, error: 'La cantidad total debe ser un número entero mayor o igual a 0.' };
   }
 
+  const isbn = typeof datos['isbn'] === 'string' && datos['isbn'].trim() !== '' ? datos['isbn'] : null;
+  const editorial =
+    typeof datos['editorial'] === 'string' && datos['editorial'].trim() !== '' ? datos['editorial'] : null;
+  const portadaUrl =
+    typeof datos['portadaUrl'] === 'string' && datos['portadaUrl'].trim() !== '' ? datos['portadaUrl'] : null;
+
   return {
     valido: true,
     datos: {
+      isbn,
+      titulo: datos['titulo'],
+      autor: datos['autor'],
+      editorial,
+      portadaUrl,
       ubicacionId: datos['ubicacionId'],
       cantidadTotal: datos['cantidadTotal'],
       pvp: datos['pvp'],
@@ -420,9 +448,13 @@ export function validarDatosEditarLibro(cuerpo: unknown): ResultadoValidacionEdi
  * `PUT /api/libros/:bookId` — edita un libro ya catalogado (`TODO.md`, área
  * "Gestionar", pestaña "Editar"). Exige rol `vendedor` o `administrador`
  * (CLAUDE.md A01), mismo criterio que `POST /api/libros`. Reemplaza a
- * `handlerCambiarUbicacion` (que solo cambiaba `ubicacionId`): ahora también
- * permite corregir `cantidadTotal` (incluida una baja hasta 0), `pvp` y
- * `porcentajeDescuentoEditorial`.
+ * `handlerCambiarUbicacion` (que solo cambiaba `ubicacionId`): ahora permite
+ * corregir TODOS los campos del libro (`ajustes-2026-07-27.md` Tarea 1) —
+ * `titulo`/`autor`/`isbn`/`editorial`/`portadaUrl`, `ubicacionId`,
+ * `cantidadTotal` (incluida una baja hasta 0), `pvp` y
+ * `porcentajeDescuentoEditorial`. `bookId` (uuid) sigue siendo la clave
+ * primaria real en DynamoDB — editar el `isbn` es un cambio de dato seguro,
+ * no toca ninguna clave.
  *
  * Al cambiar `cantidadTotal`, `cantidadDisponible` se ajusta por la misma
  * diferencia (delta) en vez de reemplazarse — así se preserva cuántos
@@ -478,6 +510,11 @@ export const handlerEditar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
 
     const libroActualizado: Libro = {
       ...libro,
+      isbn: datos.isbn,
+      titulo: datos.titulo,
+      autor: datos.autor,
+      editorial: datos.editorial,
+      portadaUrl: datos.portadaUrl,
       ubicacionId: datos.ubicacionId,
       cantidadTotal: datos.cantidadTotal,
       cantidadDisponible,

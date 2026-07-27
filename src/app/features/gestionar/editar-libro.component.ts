@@ -34,11 +34,14 @@ function normalizarTexto(valor: string): string {
  * barras (`@zxing/browser`, EAN-13) ya construido en `CatalogarLibroComponent`
  * para completar el campo ISBN del filtro por escaneo.
  *
- * Editar abre un formulario con la cascada Espacio → Mueble → Ubicación
- * (mismo patrón que `GestionUbicacionFisicaComponent`) más
- * cantidad/PVP/descuento editorial, contra `PUT /api/libros/:bookId`.
- * "ELIMINAR LIBRO" (`DELETE /api/libros/:bookId`) es visible solo para
- * `administrador` — misma salvaguarda visual (ADR-009) que
+ * Formulario de edición (`ajustes-2026-07-27.md` Tarea 1): TODOS los campos
+ * del libro son editables — no solo ubicación/cantidad/PVP/descuento — y se
+ * organiza en dos paneles separados, igual que `CatalogarLibroComponent`:
+ * primero **Ubicación del libro** (cascada Espacio → Mueble → Ubicación) y,
+ * debajo, **Información del libro** (ISBN con su propio lector de código de
+ * barras, título, autor, editorial, portada, cantidad, PVP, descuento
+ * editorial). "ELIMINAR LIBRO" (`DELETE /api/libros/:bookId`) es visible
+ * solo para `administrador` — misma salvaguarda visual (ADR-009) que
  * `GestionUsuariosComponent`: la autorización real siempre la revalida el
  * backend (`CLAUDE.md` A01), este componente nunca decide por sí mismo.
  */
@@ -82,11 +85,17 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
     );
   });
 
-  /** Referencia al `<video>` del escáner del filtro. */
+  /** Referencia al `<video>` del escáner del filtro (lista de libros). */
   private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
   protected readonly escaneando = signal(false);
   protected readonly errorEscaneo = signal<string | null>(null);
   private controlesEscaner: IScannerControls | null = null;
+
+  /** Referencia al `<video>` del escáner del formulario de edición (campo ISBN) — instancia independiente de la del filtro, ambos `@if` son mutuamente excluyentes pero cada uno maneja su propio estado. */
+  private readonly videoEscanerEdicion = viewChild<ElementRef<HTMLVideoElement>>('videoEscanerEdicion');
+  protected readonly escaneandoEdicion = signal(false);
+  protected readonly errorEscaneoEdicion = signal<string | null>(null);
+  private controlesEscanerEdicion: IScannerControls | null = null;
 
   /** `null` en modo lista; el `bookId` de la fila en edición. */
   protected readonly libroEditandoId = signal<string | null>(null);
@@ -104,6 +113,11 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
   );
 
   protected readonly formularioEdicion = this.fb.nonNullable.group({
+    isbn: [''],
+    titulo: ['', [Validators.required]],
+    autor: ['', [Validators.required]],
+    editorial: [''],
+    portadaUrl: [''],
     cantidadTotal: [0, [Validators.required, Validators.min(0)]],
     pvp: [0, [Validators.required, Validators.min(1), Validators.max(PVP_MAXIMO)]],
     porcentajeDescuentoEditorial: [0, [Validators.required, Validators.min(0), Validators.max(100)]],
@@ -123,6 +137,7 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.detenerEscaneo();
+    this.detenerEscaneoEdicion();
   }
 
   /** Activa la cámara y busca un EAN-13 para completar el filtro — mismo patrón que `CatalogarLibroComponent.iniciarEscaneo`. */
@@ -164,12 +179,53 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
     this.escaneando.set(false);
   }
 
+  /** Igual que `iniciarEscaneo`, pero completa el campo ISBN del formulario de edición en vez del filtro. */
+  protected async iniciarEscaneoEdicion(): Promise<void> {
+    this.errorEscaneoEdicion.set(null);
+
+    const video = this.videoEscanerEdicion()?.nativeElement;
+    if (!video) {
+      this.errorEscaneoEdicion.set('No se pudo iniciar la cámara. Ingresa el ISBN manualmente.');
+      return;
+    }
+
+    this.escaneandoEdicion.set(true);
+
+    const hints = new Map<DecodeHintType, BarcodeFormat[]>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13]);
+    const lector = new BrowserMultiFormatReader(hints);
+
+    try {
+      this.controlesEscanerEdicion = await lector.decodeFromConstraints(
+        { video: { facingMode: 'environment' } },
+        video,
+        (resultado) => {
+          if (resultado) {
+            this.formularioEdicion.controls.isbn.setValue(resultado.getText());
+            this.detenerEscaneoEdicion();
+          }
+        },
+      );
+    } catch {
+      this.escaneandoEdicion.set(false);
+      this.errorEscaneoEdicion.set(
+        'No se pudo acceder a la cámara. Verifica los permisos o ingresa el ISBN manualmente.',
+      );
+    }
+  }
+
+  protected detenerEscaneoEdicion(): void {
+    this.controlesEscanerEdicion?.stop();
+    this.controlesEscanerEdicion = null;
+    this.escaneandoEdicion.set(false);
+  }
+
   /** Nombre de la ubicación dado su id, para mostrarla en cada fila de la lista. */
   protected nombreUbicacion(ubicacionId: string): string {
     return this.ubicaciones().find((ubicacion) => ubicacion.ubicacionId === ubicacionId)?.nombre ?? 'Sin ubicación';
   }
 
-  /** Abre el formulario de edición precargado con los datos actuales del libro, incluida la cascada Espacio/Mueble resuelta desde su `ubicacionId`. */
+  /** Abre el formulario de edición precargado con TODOS los datos actuales del libro, incluida la cascada Espacio/Mueble resuelta desde su `ubicacionId`. */
   protected editar(libro: Libro): void {
     this.mensajeExito.set(null);
     this.mensajeError.set(null);
@@ -184,6 +240,11 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
     this.editUbicacionId.set(libro.ubicacionId ?? '');
 
     this.formularioEdicion.setValue({
+      isbn: libro.isbn ?? '',
+      titulo: libro.titulo,
+      autor: libro.autor,
+      editorial: libro.editorial ?? '',
+      portadaUrl: libro.portadaUrl ?? '',
       cantidadTotal: libro.cantidadTotal,
       pvp: libro.pvp,
       porcentajeDescuentoEditorial: libro.porcentajeDescuentoEditorial,
@@ -191,11 +252,21 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
   }
 
   protected cancelarEdicion(): void {
+    this.detenerEscaneoEdicion();
     this.libroEditandoId.set(null);
     this.editEspacioId.set('');
     this.editMuebleId.set('');
     this.editUbicacionId.set('');
-    this.formularioEdicion.reset({ cantidadTotal: 0, pvp: 0, porcentajeDescuentoEditorial: 0 });
+    this.formularioEdicion.reset({
+      isbn: '',
+      titulo: '',
+      autor: '',
+      editorial: '',
+      portadaUrl: '',
+      cantidadTotal: 0,
+      pvp: 0,
+      porcentajeDescuentoEditorial: 0,
+    });
   }
 
   /** Cambiar el Espacio recalcula las opciones de Mueble y limpia la selección previa (cascada) — mismo patrón que `GestionUbicacionFisicaComponent`. */
@@ -231,6 +302,11 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
     try {
       const valores = this.formularioEdicion.getRawValue();
       const resultado = await this.librosService.editarLibro(bookId, {
+        isbn: valores.isbn.trim() === '' ? null : valores.isbn.trim(),
+        titulo: valores.titulo,
+        autor: valores.autor,
+        editorial: valores.editorial.trim() === '' ? null : valores.editorial.trim(),
+        portadaUrl: valores.portadaUrl.trim() === '' ? null : valores.portadaUrl.trim(),
         ubicacionId,
         cantidadTotal: valores.cantidadTotal,
         pvp: valores.pvp,

@@ -4,8 +4,17 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { Libro, LibroConUbicacion } from '../models/libro.model';
 
-/** Datos editables de un libro ya catalogado — mismo contrato que `PUT /api/libros/{bookId}` (`TODO.md`, área "Gestionar", pestaña "Editar"). */
+/**
+ * Datos editables de un libro ya catalogado — mismo contrato que
+ * `PUT /api/libros/{bookId}` (`ajustes-2026-07-27.md` Tarea 1: TODOS los
+ * campos del libro son editables, no solo ubicación/cantidad/pvp/descuento).
+ */
 export interface DatosEditarLibro {
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  editorial: string | null;
+  portadaUrl: string | null;
   ubicacionId: string;
   cantidadTotal: number;
   pvp: number;

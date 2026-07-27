@@ -176,6 +176,11 @@ describe('LibrosService', () => {
       const servicio = configurarPrueba(null);
 
       const resultado = await servicio.editarLibro('book-1', {
+        isbn: null,
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        editorial: null,
+        portadaUrl: null,
         ubicacionId: 'ubicacion-2',
         cantidadTotal: 3,
         pvp: 50000,
@@ -189,6 +194,11 @@ describe('LibrosService', () => {
       const servicio = configurarPrueba('token-falso');
 
       const promesa = servicio.editarLibro('book-1', {
+        isbn: null,
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        editorial: null,
+        portadaUrl: null,
         ubicacionId: 'ubicacion-2',
         cantidadTotal: 3,
         pvp: 50000,
@@ -210,6 +220,11 @@ describe('LibrosService', () => {
       const servicio = configurarPrueba('token-falso');
 
       const promesa = servicio.editarLibro('book-1', {
+        isbn: null,
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        editorial: null,
+        portadaUrl: null,
         ubicacionId: 'no-existe',
         cantidadTotal: 3,
         pvp: 50000,
