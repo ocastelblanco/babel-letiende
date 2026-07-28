@@ -48,6 +48,6 @@ No ocupa los 2 slots activos del motor JIT (decisión explícita del usuario). S
    - Ver ejemplo en `/Users/ocastelblanco/Documents/LeTiende/letiende.co/fuentes/QR-ejemplo.png`.
 3. Diámetro configurable (default 8cm) — el usuario va a comprar un cortador de círculos para papel autoadhesivo y puede querer ajustar el tamaño después.
 
-**Por definir al implementar** (nada de esto se decidió todavía): librería de generación de PDF/QR/texto en arco, cuántas estampillas caben por página carta según el diámetro elegido, si se agregan guías de corte.
+**Plan técnico completo (2026-07-27):** ver `plan-herramienta-qr-muebles.md` — stack elegido (`qrcode` + SVG a mano + `@resvg/resvg-js` + `pdf-lib`), estructura de archivos, matemática de la cuadrícula por página carta, y plan de verificación. Listo para ejecutar en una sesión nueva.
 
-Detalle completo de las decisiones ya confirmadas en `ajustes-2026-07-27.md` ("Decisiones técnicas confirmadas") y `MEMORY.md` (`babel-herramienta-qr-decisiones`).
+Detalle completo de las decisiones de producto ya confirmadas en `ajustes-2026-07-27.md` ("Decisiones técnicas confirmadas") y `MEMORY.md` (`babel-herramienta-qr-decisiones`).

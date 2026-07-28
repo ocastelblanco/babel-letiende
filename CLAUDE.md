@@ -20,17 +20,17 @@ El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000
 - **Runtime backend:** Node.js 24.x
 - **Despliegue/Infraestructura:** AWS Lambda + API Gateway, gestionados con Serverless Framework (IaC)
 - **Base de datos:** AWS DynamoDB (on-demand/provisioned dentro de la capa gratuita)
-- **Autenticación:** Google Firebase Authentication (SDK v10+, Google Sign-In) — únicamente autenticación, no se usa Firestore. **Proyecto Firebase compartido con Comandante** (misma identidad de Google para ambas apps); los roles (`administrador`/`vendedor`) son independientes por app y viven en la base de datos de cada una (DynamoDB en Babel, Firestore en Comandante) — ver `tech-specs.md` §8.1
+- **Autenticación:** Google Firebase Authentication (SDK v10+, Google Sign-In) — únicamente autenticación, no se usa Firestore. **Proyecto Firebase compartido con Comandante** (misma identidad de Google para ambas apps); los roles (`administrador`/`vendedor`) son independientes por app y viven en la base de datos de cada una (DynamoDB en Babel, Firestore en Comandante) — ver `docs/tech-specs.md` §8.1
 - **Metadatos de libros:** API externa ya existente y compartida en `https://api.letiende.co` (proxy sobre Google Books API)
 - **Generación de reportes:** librería `xlsx` (mismo paquete que usa Comandante)
-- **Lectura de código de barras:** librería web basada en `getUserMedia` (p. ej. `@zxing/browser` o `html5-qrcode`) — ver decisión final en tech-specs.md
+- **Lectura de código de barras:** librería web basada en `getUserMedia` (p. ej. `@zxing/browser` o `html5-qrcode`) — ver decisión final en `docs/tech-specs.md`
 - **Objetivo de costo de infraestructura:** $0 (o lo más cercano posible dentro de la capa gratuita de AWS)
 
 ---
 
 ## 3. Comandos de Uso Común
 
-> Se completarán/ajustarán una vez exista `package.json` (Tarea 1 de `TODO.md`). Referencia esperada, análoga a Comandante:
+> Se completarán/ajustarán una vez exista `package.json` (Tarea 1 de `docs/TODO.md`). Referencia esperada, análoga a Comandante:
 
 - **Iniciar servidor de desarrollo local:** `npm run start` (o `ng serve`)
 - **Ejecutar pruebas unitarias:** `npm run test`
@@ -49,13 +49,13 @@ El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000
 - **Estructura de componentes:** Componentes Standalone obligatorios. Estilos y plantillas en línea para componentes muy pequeños (< 100 líneas); archivos separados (`.html`, `.css`) para componentes grandes.
 - **Tipado:** TypeScript estricto. Prohibido el uso de `any`.
 - **Precios:** formato colombiano `$45.000` (punto como separador de miles, sin decimales para COP).
-- **Identidad visual:** hereda la filosofía y el sistema de marca de **Comandante** (`ocastelblanco/comandante-letiende`) — paleta Le Tiende (`primary #230C00`, `secondary #E8630A`, `tertiary #00B7A3`, `neutral #FFE7B3`), tipografías Angellya (marca) + Poppins (interfaz). Ver `DESIGN.md` para el detalle de componentes reutilizables (tarjetas, botones, inputs, mensajes, patrón de formulario único crear/editar) con las clases Tailwind exactas ya usadas en el código.
+- **Identidad visual:** hereda la filosofía y el sistema de marca de **Comandante** (`ocastelblanco/comandante-letiende`) — paleta Le Tiende (`primary #230C00`, `secondary #E8630A`, `tertiary #00B7A3`, `neutral #FFE7B3`), tipografías Angellya (marca) + Poppins (interfaz). Ver `docs/DESIGN.md` para el detalle de componentes reutilizables (tarjetas, botones, inputs, mensajes, patrón de formulario único crear/editar) con las clases Tailwind exactas ya usadas en el código.
 
 ---
 
 ## 5. Seguridad (OWASP)
 
-Esta sección define las reglas de seguridad obligatorias basadas en los riesgos específicos de la arquitectura de Babel (Angular SSR + Lambda + DynamoDB + Firebase Authentication + scraping/búsqueda externa). Ver `tech-specs.md` para el detalle completo de la arquitectura.
+Esta sección define las reglas de seguridad obligatorias basadas en los riesgos específicos de la arquitectura de Babel (Angular SSR + Lambda + DynamoDB + Firebase Authentication + scraping/búsqueda externa). Ver `docs/tech-specs.md` para el detalle completo de la arquitectura.
 
 ### Riesgos identificados y reglas de código
 
@@ -65,7 +65,7 @@ Esta sección define las reglas de seguridad obligatorias basadas en los riesgos
 
 #### A02:2021 — Fallas criptográficas (fuga de secretos)
 *   **Riesgo:** exponer la cuenta de servicio de Firebase (`firebase-admin`), las credenciales de AWS o las llaves de Google Custom Search en el repositorio.
-*   **Regla:** ninguna credencial privada (`*.json` de cuenta de servicio, `.env`) se commitea. Todos los secretos de `tech-specs.md` §9 se inyectan como variables de entorno vía GitHub Actions Secrets. La configuración pública del SDK cliente de Firebase (`environments/`) no es sensible y puede vivir en el repo.
+*   **Regla:** ninguna credencial privada (`*.json` de cuenta de servicio, `.env`) se commitea. Todos los secretos de `docs/tech-specs.md` §9 se inyectan como variables de entorno vía GitHub Actions Secrets. La configuración pública del SDK cliente de Firebase (`environments/`) no es sensible y puede vivir en el repo.
 
 #### A03:2021 — Inyección (XSS)
 *   **Riesgo:** renderizar directamente títulos, autores o fragmentos de HTML obtenidos por scraping de sitios externos o de la API de metadatos, que podrían contener scripts maliciosos.
