@@ -14,7 +14,7 @@ Babel es la aplicación interna del centro cultural **Le Tiende** (Bogotá, Colo
 
 El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000 libros**, por lo que el flujo de catalogación es la ruta crítica de rendimiento de todo el sistema.
 
-[PRD](PRD.md) | [Especificaciones técnicas](tech-specs.md) | [TODO / roadmap activo](TODO.md) | [Memoria de proyecto](MEMORY.md)
+[PRD](docs/PRD.md) | [Especificaciones técnicas](docs/tech-specs.md) | [TODO / roadmap activo](docs/TODO.md) | [Memoria de proyecto](docs/MEMORY.md)
 
 ## Features
 
@@ -28,7 +28,7 @@ El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000
 
 ## Estado del proyecto
 
-Babel está en **fase de arranque**: la documentación de producto y arquitectura (`PRD.md`, `tech-specs.md`) ya existe, pero el código de la aplicación todavía no. Las tareas activas del scaffold inicial (proyecto Angular y esqueleto de infraestructura serverless) están descritas en [`TODO.md`](TODO.md).
+Babel está en **fase de arranque**: la documentación de producto y arquitectura (`docs/PRD.md`, `docs/tech-specs.md`) ya existe, pero el código de la aplicación todavía no. Las tareas activas del scaffold inicial (proyecto Angular y esqueleto de infraestructura serverless) están descritas en [`docs/TODO.md`](docs/TODO.md).
 
 ## Contents
 
@@ -53,11 +53,11 @@ Babel está en **fase de arranque**: la documentación de producto y arquitectur
 | Código de barras | Librería web basada en `getUserMedia` (`@zxing/browser` o `html5-qrcode`) |
 | Costo de infraestructura objetivo | $0 (capa gratuita de AWS) |
 
-Ver el detalle completo en [`tech-specs.md`](tech-specs.md) y [`CLAUDE.md`](CLAUDE.md).
+Ver el detalle completo en [`docs/tech-specs.md`](docs/tech-specs.md) y [`CLAUDE.md`](CLAUDE.md).
 
 ## Quick Start
 
-> Los comandos de abajo son la referencia esperada una vez exista `package.json` (Tarea 1 de [`TODO.md`](TODO.md)); todavía no aplican mientras el scaffold de Angular no se haya generado.
+> Los comandos de abajo son la referencia esperada una vez exista `package.json` (Tarea 1 de [`docs/TODO.md`](docs/TODO.md)); todavía no aplican mientras el scaffold de Angular no se haya generado.
 
 ### Requisitos
 
