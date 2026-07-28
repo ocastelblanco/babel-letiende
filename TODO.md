@@ -12,33 +12,23 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Modo offline CANCELADO (2026-07-27, decisión explícita del usuario):** antes de planear la implementación (se llegó a producir un plan completo, descartado sin código), el usuario decidió cancelarlo por completo — los cortes de wifi en la librería son muy infrecuentes (menos de 1 al mes) y ya se resuelven compartiendo datos móviles del celular con el que se cataloga; no se justifica el costo de mantener una cola de sincronización. Ver `PRD.md` §6/§9 para el detalle. En su lugar, el usuario trajo 2 ajustes nuevos a los reportes, que ocupan los 2 slots activos antes de retomar Producción.
 
+**Reportes de ventas e inventario completados (2026-07-27):** las 2 tareas de arriba se fusionaron (PR #72, PR #73) y el usuario las probó en `staging` — funcionan bien. Con esto se cierra por completo `ajustes-2026-07-27.md`, salvo la pista independiente del generador de QR (el usuario confirmó dejarla para después). Ya no queda ningún otro ajuste pendiente antes de producción.
+
+**Solo 1 tarea activa (sin item para el segundo slot):** el único ítem que le queda al roadmap principal (`PRD.md` §6) es "Primer despliegue a producción" — no hay un segundo ítem que promover (mismo caso ya documentado el 2026-07-25 al cerrar `ajustes-finales.md`). La pista del generador de QR sigue deliberadamente fuera de los slots del motor JIT por decisión del usuario.
+
 ---
 
-## Tarea 1 — Reporte de ventas: nuevas columnas y reordenamiento
+## Tarea 1 — Primer despliegue a producción
 
-`server/api/handlers/ventas.ts` (`handlerExportar`/`consultarVentasFiltradas`):
+`PRD.md` §6 — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
 
-- Agregar columnas: **Descuento editorial** (`Libro.porcentajeDescuentoEditorial` resuelto por `bookId`, mismo criterio "valor actual" ya usado para Título/Editorial — decisión confirmada del usuario), **Ejemplares vendidos** (`Venta.cantidad`), **Venta total** (`Venta.precioFinal`), **Vendedor** (`Venta.vendidoPor`, el email es suficiente).
-- Cambiar **PVP** → **PVP unitario** (mismo campo, `Venta.pvp`).
-- Cambiar **Costo** para que refleje el costo TOTAL de la transacción (`Venta.costoLibro * Venta.cantidad`), no el costo unitario actual — decisión confirmada del usuario, va entre "Venta total" y "Utilidad".
-- Orden final de columnas: Fecha de venta, ISBN, Título, Editorial, Descuento editorial, PVP unitario, Ejemplares vendidos, Descuento de venta, Venta total, Costo, Utilidad, Forma de pago, Vendedor.
-- `Utilidad` ya está correctamente calculada a nivel de transacción completa (`precioFinal - costoLibro*cantidad`) — no requiere cambios, solo reordenar.
-
-## Tarea 2 — Reporte de inventario: fecha de catalogación y catalogador
-
-`server/api/handlers/libros.ts` (`handlerExportarInventario`):
-
-- Agregar **Fecha de catalogación** (`Libro.creadoEn`) al INICIO de las columnas.
-- Agregar **Catalogado por** (`Libro.creadoPor`, el email es suficiente) al FINAL de las columnas.
-- La columna **Cantidad** ya refleja `Libro.cantidadDisponible` (no `cantidadTotal`) vía un `escanearTodo` completo (no filtra libros agotados) — confirmado leyendo el código, ya cumple lo pedido, sin cambios.
+**No iniciar sin confirmación explícita del usuario** — es la pieza más costosa de revertir de todo el roadmap (`ajustes-finales.md`/`ajustes-2026-07-27.md` ya establecieron este criterio para las últimas 2 piezas). Antes de desglosarla en pasos atómicos, preguntar si el usuario quiere arrancarla ya o prefiere otra ronda de pruebas/ajustes primero.
 
 ---
 
 ## Backlog
 
-1. **Primer despliegue a producción** (`PRD.md` §6) — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
-
-No iniciar producción sin antes cerrar las Tareas 1 y 2 de arriba y confirmar con el usuario que no hay más ajustes pendientes.
+Sin ítems — Producción es la última pieza del roadmap principal. Al cerrarla, revisar `PRD.md` completo antes de dar por terminado el roadmap (más allá de la pista independiente del generador de QR).
 
 ---
 
