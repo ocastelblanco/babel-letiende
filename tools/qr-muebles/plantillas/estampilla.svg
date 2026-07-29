@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+  <rect x="0" y="0" width="80" height="80" fill="white"/>
+  <circle cx="40" cy="40" r="39.2" fill="none" stroke="black" stroke-width="0.48"/>
+  <defs>
+    <path id="arcoSup" d="M 5.999410914624789 30.889569612391284 A 35.2 35.2 0 0 1 74.00058908537521 30.88956961239127" fill="none"/>
+    <path id="arcoInf" d="M 5.9994109146247965 49.110430387608744 A 35.2 35.2 0 0 0 74.00058908537521 49.11043038760873" fill="none"/>
+  </defs>
+  <text xml:space="preserve" font-family="Poppins" font-weight="900" font-size="3.3600000000000003" fill="black" letter-spacing="0.08">
+    <textPath href="#arcoSup" startOffset="50%" text-anchor="middle"><tspan>¿QUÉ</tspan> <tspan>TESOROS</tspan> <tspan>SE</tspan> <tspan>ESCONDEN</tspan> <tspan>AQUÍ?</tspan></textPath>
+  </text>
+  <text xml:space="preserve" font-family="Poppins" font-weight="900" font-size="3.3600000000000003" fill="black" letter-spacing="0.08">
+    <textPath href="#arcoInf" startOffset="50%" text-anchor="middle"><tspan>¡ESCANEA</tspan> <tspan>Y</tspan> <tspan>DESCÚBRELOS!</tspan></textPath>
+  </text>
+  <text id="campo:nombreEspacio" x="40" y="17.2" font-family="Poppins" font-weight="700" font-size="4.8" fill="black" text-anchor="middle">Nombre del Espacio</text>
+  <text id="campo:nombreMueble" x="40" y="65.2" font-family="Poppins" font-weight="700" font-size="4.8" fill="black" text-anchor="middle">Nombre del Mueble</text>
+  <rect id="campo:qr" x="19.2" y="19.2" width="41.6" height="41.6" fill="#e5e5e5"/>
+</svg>
