@@ -43,3 +43,6 @@ yarn-error.log*
 # Herramienta standalone qr-muebles (tools/qr-muebles/)
 /tools/qr-muebles/node_modules/
 /tools/qr-muebles/salida/
+
+# Archivos de macOS
+.DS_Store
