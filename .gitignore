@@ -39,3 +39,10 @@ yarn-error.log*
 
 # Oh My Claude plugin
 .omc
+
+# Herramienta standalone qr-muebles (tools/qr-muebles/)
+/tools/qr-muebles/node_modules/
+/tools/qr-muebles/salida/
+
+# Archivos de macOS
+.DS_Store
