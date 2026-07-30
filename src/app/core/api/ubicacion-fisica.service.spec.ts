@@ -87,6 +87,22 @@ describe('UbicacionFisicaService', () => {
       expect(servicio.espacios()).toEqual([]);
       expect(servicio.errorEspacios()).toBe(true);
     });
+
+    it('ordena los espacios alfabéticamente por nombre sin importar el orden en que responde el backend', async () => {
+      const servicio = configurarPrueba(null);
+      const desordenados: Espacio[] = [
+        { espacioId: 'espacio-3', nombre: 'Zona de lectura' },
+        { espacioId: 'espacio-1', nombre: 'Ático' },
+        { espacioId: 'espacio-2', nombre: 'biblioteca' },
+      ];
+
+      const promesa = servicio.cargarEspacios();
+      await Promise.resolve();
+      httpMock.expectOne('/api/espacios').flush(desordenados);
+      await promesa;
+
+      expect(servicio.espacios().map((espacio) => espacio.nombre)).toEqual(['Ático', 'biblioteca', 'Zona de lectura']);
+    });
   });
 
   describe('crearEspacio', () => {
@@ -228,6 +244,22 @@ describe('UbicacionFisicaService', () => {
       expect(servicio.muebles()).toEqual([]);
       expect(servicio.errorMuebles()).toBe(true);
     });
+
+    it('ordena los muebles alfabéticamente por nombre sin importar el orden en que responde el backend', async () => {
+      const servicio = configurarPrueba(null);
+      const desordenados: Mueble[] = [
+        { muebleId: 'mueble-3', espacioId: 'espacio-1', nombre: 'Vitrina 1' },
+        { muebleId: 'mueble-1', espacioId: 'espacio-1', nombre: 'Ático 1' },
+        { muebleId: 'mueble-2', espacioId: 'espacio-1', nombre: 'biblioteca 2' },
+      ];
+
+      const promesa = servicio.cargarMuebles();
+      await Promise.resolve();
+      httpMock.expectOne('/api/muebles').flush(desordenados);
+      await promesa;
+
+      expect(servicio.muebles().map((mueble) => mueble.nombre)).toEqual(['Ático 1', 'biblioteca 2', 'Vitrina 1']);
+    });
   });
 
   describe('crearMueble', () => {
@@ -353,6 +385,22 @@ describe('UbicacionFisicaService', () => {
 
       expect(servicio.ubicaciones()).toEqual([]);
       expect(servicio.errorUbicaciones()).toBe(true);
+    });
+
+    it('ordena las ubicaciones alfabéticamente por nombre sin importar el orden en que responde el backend', async () => {
+      const servicio = configurarPrueba(null);
+      const desordenadas: Ubicacion[] = [
+        { ubicacionId: 'ubicacion-3', muebleId: 'mueble-1', nombre: 'Zona 1' },
+        { ubicacionId: 'ubicacion-1', muebleId: 'mueble-1', nombre: 'Ático 1' },
+        { ubicacionId: 'ubicacion-2', muebleId: 'mueble-1', nombre: 'balda 2' },
+      ];
+
+      const promesa = servicio.cargarUbicaciones();
+      await Promise.resolve();
+      httpMock.expectOne('/api/ubicaciones').flush(desordenadas);
+      await promesa;
+
+      expect(servicio.ubicaciones().map((ubicacion) => ubicacion.nombre)).toEqual(['Ático 1', 'balda 2', 'Zona 1']);
     });
   });
 
