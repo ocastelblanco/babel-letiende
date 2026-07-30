@@ -88,7 +88,7 @@
           autoplay
           muted
           playsinline
-          class="mt-2 w-full rounded-xl"
+          class="mt-2 aspect-[3/1] w-full rounded-xl object-cover"
           [class.hidden]="!escaneando()"
         ></video>
 
@@ -100,6 +100,65 @@
         }
         @if (metadatosNoEncontrados()) {
           <p class="mt-1 text-xs text-primary/60">No se encontraron datos para este ISBN, complétalos manualmente.</p>
+        }
+
+        @if (libroDuplicadoSeleccionado(); as duplicado) {
+          <div class="mt-2 rounded-xl border border-secondary/30 bg-secondary/10 px-3 py-2 text-sm text-primary">
+            <p>
+              Este libro ya está catalogado: {{ descripcionUbicacion(duplicado.ubicacion) }},
+              {{ duplicado.cantidadDisponible }} disponibles.
+            </p>
+            <button
+              type="button"
+              (click)="descartarDuplicado()"
+              class="mt-1 text-xs font-semibold text-primary underline hover:opacity-90"
+            >
+              Ignorar y catalogar como nuevo
+            </button>
+          </div>
+        }
+
+        @if (coincidenciasIsbn().length > 0) {
+          <div class="mt-2">
+            <p class="text-xs text-primary/70">Este ISBN tiene varios libros catalogados, elige cuál:</p>
+            <ul class="mt-2 flex flex-col gap-2">
+              @for (coincidencia of coincidenciasIsbn(); track coincidencia.bookId) {
+                <li>
+                  <button
+                    type="button"
+                    (click)="seleccionarDuplicado(coincidencia)"
+                    class="flex w-full items-center gap-3 rounded-xl border border-primary/10 px-3 py-2 text-left transition-opacity hover:opacity-90"
+                  >
+                    @if (coincidencia.portadaUrl) {
+                      <img
+                        [src]="coincidencia.portadaUrl"
+                        [alt]="coincidencia.titulo"
+                        class="h-14 w-10 shrink-0 rounded object-cover"
+                      />
+                    } @else {
+                      <div
+                        class="flex h-14 w-10 shrink-0 items-center justify-center rounded bg-neutral text-[10px] text-primary/60"
+                      >
+                        Sin portada
+                      </div>
+                    }
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-semibold text-primary">{{ coincidencia.titulo }}</p>
+                      <p class="truncate text-xs text-primary/70">{{ descripcionUbicacion(coincidencia.ubicacion) }}</p>
+                      <p class="truncate text-xs text-primary/60">{{ coincidencia.cantidadDisponible }} disponibles</p>
+                    </div>
+                  </button>
+                </li>
+              }
+            </ul>
+            <button
+              type="button"
+              (click)="descartarDuplicado()"
+              class="mt-2 text-xs font-semibold text-primary underline hover:opacity-90"
+            >
+              Ignorar y catalogar como nuevo
+            </button>
+          </div>
         }
       </div>
 
@@ -208,6 +267,13 @@
           formControlName="portadaUrl"
           class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
         />
+        @if (formulario.controls.portadaUrl.value) {
+          <img
+            [src]="formulario.controls.portadaUrl.value"
+            [alt]="formulario.controls.titulo.value"
+            class="mt-2 h-32 w-24 rounded-lg object-cover"
+          />
+        }
       </div>
 
       <div class="grid grid-cols-2 gap-4">
@@ -260,7 +326,7 @@
       <button
         type="submit"
         class="mt-2 flex h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        [disabled]="guardando()"
+        [disabled]="guardando() || buscandoMetadatos() || buscandoDuplicados()"
       >
         {{ guardando() ? 'Guardando…' : 'Catalogar libro' }}
       </button>

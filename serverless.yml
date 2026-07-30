@@ -384,6 +384,68 @@ functions:
           path: /api/libros/{bookId}
           method: put
 
+  fusionarDuplicadoLibro:
+    handler: dist-server/api/handlers/libros.handlerFusionarDuplicado
+    role: !GetAtt FusionarDuplicadoLibroLambdaRole.Arn
+    description: >-
+      POST /api/libros/:bookId/fusionar-duplicado — fusiona un duplicado
+      detectado por ISBN sobre un libro ya catalogado, sumando
+      ejemplaresNuevos a cantidadTotal/cantidadDisponible con un UpdateItem
+      atómico (ADD) — a diferencia de PUT, seguro ante dos fusiones
+      concurrentes sobre el mismo libro (CLAUDE.md A01, ADR-008, TODO.md
+      Tarea 2.3).
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/
+        # exportar/por-isbn — mismo cuidado documentado arriba (MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/libros/{bookId}/fusionar-duplicado
+          method: post
+
   eliminarLibro:
     handler: dist-server/api/handlers/libros.handlerEliminar
     role: !GetAtt EliminarLibroLambdaRole.Arn
@@ -564,6 +626,69 @@ functions:
     events:
       - httpApi:
           path: /api/libros/exportar
+          method: get
+
+  librosPorIsbn:
+    handler: dist-server/api/handlers/libros.handlerBuscarPorIsbn
+    role: !GetAtt LibrosPorIsbnLambdaRole.Arn
+    description: >-
+      GET /api/libros/por-isbn/:isbn — busca libros ya catalogados con este
+      ISBN exacto (GSI isbn-index de babel-libros) para detectar duplicados
+      antes de catalogar, exige rol vendedor o administrador (CLAUDE.md A01,
+      TODO.md Tarea 2.3). Ruta estática, sin conflicto con
+      /api/libros/{bookId}.
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/
+        # exportar — mismo cuidado documentado arriba (MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/libros/por-isbn/{isbn}
           method: get
 
   espacios:
@@ -1581,6 +1706,45 @@ resources:
                     - !GetAtt TablaUbicaciones.Arn
                     - !GetAtt TablaUsuarios.Arn
 
+    FusionarDuplicadoLibroLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-fusionar-duplicado-libro-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo UpdateItem (nunca GetItem/PutItem) sobre babel-libros — la
+          # fusión atómica del duplicado (SET + ADD, fusionarLibroDuplicado
+          # en dynamodb.ts) nunca lee el ítem antes de escribir, y devuelve el
+          # resultado con ReturnValues: ALL_NEW en la misma llamada (sin
+          # necesidad de GetItem adicional). Solo lee (GetItem)
+          # babel-ubicaciones para validar que el ubicacionId destino exista,
+          # y babel-usuarios para resolver el rol del token — mismo criterio
+          # de mínimo privilegio que EditarLibroLambdaRole (CLAUDE.md A05,
+          # ADR-008).
+          - PolicyName: babel-fusionar-duplicado-libro-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUbicaciones.Arn
+                    - !GetAtt TablaUsuarios.Arn
+
     EliminarLibroLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -1682,6 +1846,44 @@ resources:
                     - dynamodb:GetItem
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
+
+    LibrosPorIsbnLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-libros-por-isbn-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Query sobre el GSI isbn-index de babel-libros (no GetItem: se
+          # busca por isbn, no por bookId), solo lee (GetItem) babel-usuarios
+          # para resolver el rol del token y, para resolverUbicacion,
+          # babel-ubicaciones/babel-muebles/babel-espacios — mismo criterio
+          # de mínimo privilegio que LibrosDetalleLambdaRole (CLAUDE.md A05,
+          # ADR-008). Sin ningún permiso de escritura.
+          - PolicyName: babel-libros-por-isbn-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                  Resource:
+                    - !Sub '${TablaLibros.Arn}/index/isbn-index'
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+                    - !GetAtt TablaUbicaciones.Arn
+                    - !GetAtt TablaMuebles.Arn
+                    - !GetAtt TablaEspacios.Arn
 
     EspaciosLambdaRole:
       Type: AWS::IAM::Role
