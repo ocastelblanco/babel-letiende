@@ -77,11 +77,11 @@ Flujo crítico del sistema — debe ser lo más rápido posible dado el volumen 
 
 ```
 Vendedor → Panel "Ubicación del libro" (se completa UNA VEZ, no por cada libro):
-   → Selecciona el Espacio de una lista
-   → Selecciona el Mueble de una lista (filtrado por el Espacio elegido)
-   → Selecciona la Ubicación de una lista (filtrada por el Mueble elegido)
+   → Selecciona el Espacio de una lista (orden alfabético)
+   → Selecciona el Mueble de una lista (filtrado por el Espacio elegido, orden alfabético)
+   → Selecciona la Ubicación de una lista (filtrada por el Mueble elegido, orden alfabético)
 
-→ Vendedor → Escanea código de barras con la cámara
+→ Vendedor → Escanea código de barras con la cámara (recuadro de captura horizontal, ~3:1, acorde a la forma de un código EAN-13)
    ├─ Código detectado → obtiene ISBN
    └─ Sin código de barras → ingresa ISBN manualmente
         └─ Sin ISBN → busca por título/autor y elige el libro exacto de una lista de candidatos (portada, título, autor, editorial, ISBN de cada uno)
@@ -89,7 +89,7 @@ Vendedor → Panel "Ubicación del libro" (se completa UNA VEZ, no por cada libr
 → Sistema busca los datos del libro (título, autor, editorial, portada) por ISBN o por título/autor
    ├─ 1.º api.letiende.co (proxy de Google Books), con un reintento ante fallas transitorias
    ├─ 2.º si faltan datos: scraping de los sitios autorizados para «info» (lista única, por orden de prioridad)
-   ├─ Datos encontrados → se pre-cargan (siempre editables por el vendedor; al elegir un candidato de la búsqueda por título/autor, se sobrescribe cualquier dato ya escrito, porque es una elección explícita del vendedor)
+   ├─ Datos encontrados → se pre-cargan (siempre editables por el vendedor; al elegir un candidato de la búsqueda por título/autor, se sobrescribe cualquier dato ya escrito, porque es una elección explícita del vendedor) — la portada se muestra además como thumbnail junto al campo de URL, para que el vendedor confirme visualmente que es el libro que tiene en la mano
    └─ Datos no encontrados → el vendedor los completa manualmente
 
 → Sistema busca el precio de venta al público (PVP) por ISBN o por título/autor
@@ -97,12 +97,22 @@ Vendedor → Panel "Ubicación del libro" (se completa UNA VEZ, no por cada libr
    ├─ Encontrado → se pre-carga como sugerencia editable (el backend valida que sea un número positivo dentro de un rango razonable)
    └─ No encontrado → el vendedor ingresa el valor manualmente
 
+→ Sistema verifica si ese ISBN ya está catalogado (ver "Detección de duplicados al catalogar" más abajo)
+   ├─ No existe todavía → continúa el flujo normal de catalogación (crea un registro nuevo)
+   └─ Ya existe → avisa al vendedor y precarga el formulario con el registro encontrado, para editarlo en vez de duplicarlo
+
 → Vendedor confirma/ajusta el % de descuento editorial — si el nombre de la editorial resuelta coincide con una ya configurada en §5.6, el sistema pre-carga automáticamente su porcentaje por defecto (siempre editable); si el libro es propiedad de Le Tiende y no está en consignación, el descuento editorial es 100%
-→ Vendedor indica el número de ejemplares disponibles
+→ Vendedor indica el número de ejemplares (siempre "cuántos ejemplares NUEVOS tiene en la mano ahora" — si el libro ya estaba catalogado, este número se suma a la cantidad ya existente, nunca la reemplaza)
 → Vendedor presiona "CATALOGAR LIBRO"
-→ Sistema guarda el libro con su info, PVP y la ubicación ya seleccionada
+→ Sistema guarda el libro con su info, PVP y la ubicación ya seleccionada (o actualiza el registro existente, sumando la cantidad nueva, si el ISBN ya estaba catalogado)
 → Sistema limpia el formulario de datos del libro para el siguiente — el panel "Ubicación del libro" NO se limpia, así el vendedor cataloga en serie todos los libros de un mismo estante sin repetir la selección de ubicación
 ```
+
+**Detección de duplicados al catalogar:** como `bookId` (no el ISBN) es la clave primaria real de un libro catalogado, nada impedía históricamente catalogar el mismo ISBN varias veces por accidente (registros independientes, sin relación entre sí). Al resolverse un ISBN (por escaneo, entrada manual, o selección de un candidato de búsqueda), el sistema busca coincidencias exactas por ISBN entre lo ya catalogado:
+- **Sin coincidencias:** flujo normal, se crea un registro nuevo.
+- **Una coincidencia:** se avisa al vendedor (breve alerta con la ubicación y cantidad disponible actual) y se precarga el formulario completo con esos datos — incluida la ubicación ya asignada, que el vendedor puede cambiar si corresponde (ej. movió el libro de estante). Confirmar equivale a editar ese registro (sumando la cantidad nueva), no a crear uno adicional.
+- **Varias coincidencias** (posible por catalogaciones duplicadas previas a este control, o porque legítimamente hay copias en más de una ubicación): se muestra una lista para elegir cuál de los registros existentes editar, con la opción de descartar la lista y catalogar como una entrada nueva independiente de todos modos.
+- La detección es exclusivamente por ISBN exacto — un libro sin ISBN nunca dispara este control (evita falsos positivos por coincidencia de título/autor).
 
 **Sobre el descuento editorial:** es el porcentaje que la editorial reconoce a Le Tiende sobre el PVP en los libros que deja en consignación — no es un descuento al público, sino el margen que le queda a la librería. El valor típico en el contexto colombiano es 35% (PVP $100.000 → la editorial cobra $65.000, Le Tiende retiene $35.000 de utilidad); el administrador puede configurar modelos distintos para editoriales independientes (ver §5.6). Cuando el libro es propiedad de Le Tiende (no está en consignación con ninguna editorial), el descuento editorial es 100%: no hay costo asociado y toda la venta es utilidad de la librería. Este porcentaje es independiente del descuento que el vendedor pueda aplicar al momento de la venta (ver §5.4).
 
@@ -155,7 +165,7 @@ El administrador visualiza y descarga en formato XLSX dos tipos de reporte, ambo
   - **Mueble** — una biblioteca o mueble para libros (ej. "Biblioteca 1"), pertenece a un Espacio.
   - **Ubicación** — el lugar preciso dentro de un Mueble donde se guarda o exhibe un libro (ej. "Estante 1"), pertenece a un Mueble.
   
-  Un libro se ubica siempre en una **Ubicación** puntual, que ya implica su Mueble y Espacio. Renombrar un Espacio o un Mueble no afecta la pertenencia de sus Muebles/Ubicaciones ya creados — la relación es por identificador, no por nombre.
+  Un libro se ubica siempre en una **Ubicación** puntual, que ya implica su Mueble y Espacio. Renombrar un Espacio o un Mueble no afecta la pertenencia de sus Muebles/Ubicaciones ya creados — la relación es por identificador, no por nombre. Los 3 niveles se listan siempre en **orden alfabético** por nombre, en cualquier desplegable o filtro donde aparezcan (esta pantalla, Catalogar, Editar y el catálogo público).
 - Gestión de sitios de scraping (fuentes automáticas de datos y precio): una lista única de sitios de librerías donde el sistema busca información del libro y/o su PVP por ISBN o por título/autor. Por cada sitio se define un nombre, su URL y dos permisos independientes: si está autorizado para extraer datos bibliográficos (`info`) y si está autorizado para extraer el precio (`pvp`) — un sitio puede servir para uno, ambos o ninguno. Reemplaza el antiguo modelo de dos listas separadas (autorizados vs. prohibidos). Por seguridad, aunque un sitio esté en la lista, el sistema solo hace peticiones a dominios públicos válidos (nunca a direcciones internas).
 
 ### 5.7 Catálogo público (sin autenticación)
