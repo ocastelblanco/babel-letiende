@@ -89,6 +89,11 @@ export class UbicacionFisicaService {
       : mensajePorDefecto;
   }
 
+  /** Ordena una copia del listado alfabéticamente por `nombre` (es-CO, sin distinguir mayúsculas/tildes) — DynamoDB no garantiza ningún orden de inserción. */
+  private ordenarPorNombre<T extends { nombre: string }>(items: T[]): T[] {
+    return [...items].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+  }
+
   // ---------------------------------------------------------------------
   // Espacios
   // ---------------------------------------------------------------------
@@ -99,7 +104,7 @@ export class UbicacionFisicaService {
     try {
       const idToken = await this.authService.obtenerIdToken();
       const espacios = await firstValueFrom(this.http.get<Espacio[]>('/api/espacios', this.cabeceras(idToken)));
-      this.espaciosSignal.set(espacios);
+      this.espaciosSignal.set(this.ordenarPorNombre(espacios));
     } catch {
       this.espaciosSignal.set([]);
       this.errorEspaciosSignal.set(true);
@@ -161,7 +166,7 @@ export class UbicacionFisicaService {
     try {
       const idToken = await this.authService.obtenerIdToken();
       const muebles = await firstValueFrom(this.http.get<Mueble[]>('/api/muebles', this.cabeceras(idToken)));
-      this.mueblesSignal.set(muebles);
+      this.mueblesSignal.set(this.ordenarPorNombre(muebles));
     } catch {
       this.mueblesSignal.set([]);
       this.errorMueblesSignal.set(true);
@@ -223,7 +228,7 @@ export class UbicacionFisicaService {
     try {
       const idToken = await this.authService.obtenerIdToken();
       const ubicaciones = await firstValueFrom(this.http.get<Ubicacion[]>('/api/ubicaciones', this.cabeceras(idToken)));
-      this.ubicacionesSignal.set(ubicaciones);
+      this.ubicacionesSignal.set(this.ordenarPorNombre(ubicaciones));
     } catch {
       this.ubicacionesSignal.set([]);
       this.errorUbicacionesSignal.set(true);
