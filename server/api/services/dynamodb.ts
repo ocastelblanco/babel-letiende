@@ -129,3 +129,95 @@ export async function decrementarPorCantidadSiSuficiente(
     throw error;
   }
 }
+
+/** Lanzado por `fusionarLibroDuplicado` cuando el `bookId` no existe (`ConditionExpression`) — quien llama decide el código HTTP (típicamente `404`). */
+export class ItemNoExisteError extends Error {}
+
+/**
+ * Fusiona un duplicado detectado por ISBN sobre un libro ya catalogado
+ * (`TODO.md` Tarea 2.3, corrección de condición de carrera): en una única
+ * llamada `UpdateCommand` a DynamoDB, FIJA (`SET`) los campos editables
+ * normales del libro e INCREMENTA (`ADD`) `cantidadTotal`/`cantidadDisponible`
+ * en `ejemplaresNuevos` — nunca lee el ítem antes de escribir. `ADD` es una
+ * operación atómica a nivel de ítem garantizada por DynamoDB: si dos
+ * vendedores fusionan el mismo duplicado casi al mismo tiempo, ambos
+ * incrementos se aplican sin importar el orden de llegada, a diferencia de
+ * "leer cantidadTotal actual, sumarle el delta en el cliente/handler, y
+ * sobrescribir" (que puede perder el incremento de quien llega primero si el
+ * segundo lee un valor ya obsoleto). Lanza `ItemNoExisteError` si el `bookId`
+ * no existe.
+ */
+export async function fusionarLibroDuplicado<T extends object>(
+  nombreTabla: string,
+  bookId: string,
+  campos: {
+    isbn: string | null;
+    titulo: string;
+    autor: string;
+    editorial: string | null;
+    portadaUrl: string | null;
+    ubicacionId: string;
+    pvp: number;
+    porcentajeDescuentoEditorial: number;
+    costo: number;
+    utilidadCatalogo: number;
+    actualizadoEn: string;
+  },
+  ejemplaresNuevos: number,
+): Promise<T> {
+  try {
+    const resultado = await documento.send(
+      new UpdateCommand({
+        TableName: nombreTabla,
+        Key: { bookId },
+        ConditionExpression: 'attribute_exists(#bookId)',
+        UpdateExpression:
+          'SET #isbn = :isbn, #titulo = :titulo, #autor = :autor, #editorial = :editorial, ' +
+          '#portadaUrl = :portadaUrl, #ubicacionId = :ubicacionId, #pvp = :pvp, ' +
+          '#porcentajeDescuentoEditorial = :porcentajeDescuentoEditorial, #costo = :costo, ' +
+          '#utilidadCatalogo = :utilidadCatalogo, #actualizadoEn = :actualizadoEn ' +
+          'ADD #cantidadTotal :ejemplaresNuevos, #cantidadDisponible :ejemplaresNuevos',
+        ExpressionAttributeNames: {
+          '#bookId': 'bookId',
+          '#isbn': 'isbn',
+          '#titulo': 'titulo',
+          '#autor': 'autor',
+          '#editorial': 'editorial',
+          '#portadaUrl': 'portadaUrl',
+          '#ubicacionId': 'ubicacionId',
+          '#pvp': 'pvp',
+          '#porcentajeDescuentoEditorial': 'porcentajeDescuentoEditorial',
+          '#costo': 'costo',
+          '#utilidadCatalogo': 'utilidadCatalogo',
+          '#actualizadoEn': 'actualizadoEn',
+          '#cantidadTotal': 'cantidadTotal',
+          '#cantidadDisponible': 'cantidadDisponible',
+        },
+        ExpressionAttributeValues: {
+          ':isbn': campos.isbn,
+          ':titulo': campos.titulo,
+          ':autor': campos.autor,
+          ':editorial': campos.editorial,
+          ':portadaUrl': campos.portadaUrl,
+          ':ubicacionId': campos.ubicacionId,
+          ':pvp': campos.pvp,
+          ':porcentajeDescuentoEditorial': campos.porcentajeDescuentoEditorial,
+          ':costo': campos.costo,
+          ':utilidadCatalogo': campos.utilidadCatalogo,
+          ':actualizadoEn': campos.actualizadoEn,
+          ':ejemplaresNuevos': ejemplaresNuevos,
+        },
+        // `ALL_NEW` devuelve el ítem completo ya actualizado en la misma
+        // llamada — evita un `GetItem` adicional (y el permiso IAM que
+        // exigiría) solo para reportar el resultado al llamador.
+        ReturnValues: 'ALL_NEW',
+      }),
+    );
+    return resultado.Attributes as T;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new ItemNoExisteError('El libro no existe.');
+    }
+    throw error;
+  }
+}

@@ -10,6 +10,8 @@ const {
   eliminarMock,
   escanearMayorQueMock,
   escanearTodoMock,
+  consultarPorIndiceMock,
+  fusionarLibroDuplicadoMock,
 } = vi.hoisted(() => ({
   verificarTokenDesdeHeaderMock: vi.fn(),
   obtenerPorClaveMock: vi.fn(),
@@ -17,6 +19,8 @@ const {
   eliminarMock: vi.fn(),
   escanearMayorQueMock: vi.fn(),
   escanearTodoMock: vi.fn(),
+  consultarPorIndiceMock: vi.fn(),
+  fusionarLibroDuplicadoMock: vi.fn(),
 }));
 
 vi.mock('../lib/verificar-token', async () => {
@@ -27,13 +31,22 @@ vi.mock('../lib/verificar-token', async () => {
   };
 });
 
-vi.mock('../services/dynamodb', () => ({
-  obtenerPorClave: obtenerPorClaveMock,
-  guardar: guardarMock,
-  eliminar: eliminarMock,
-  escanearMayorQue: escanearMayorQueMock,
-  escanearTodo: escanearTodoMock,
-}));
+// `importActual` conserva la clase real `ItemNoExisteError` — el handler
+// hace `error instanceof ItemNoExisteError`, así que necesita la clase real,
+// no un mock, para que esa comprobación siga funcionando en las pruebas.
+vi.mock('../services/dynamodb', async () => {
+  const real = await vi.importActual<typeof import('../services/dynamodb')>('../services/dynamodb');
+  return {
+    ...real,
+    obtenerPorClave: obtenerPorClaveMock,
+    guardar: guardarMock,
+    eliminar: eliminarMock,
+    escanearMayorQue: escanearMayorQueMock,
+    escanearTodo: escanearTodoMock,
+    consultarPorIndice: consultarPorIndiceMock,
+    fusionarLibroDuplicado: fusionarLibroDuplicadoMock,
+  };
+});
 
 const {
   handlerCrear,
@@ -42,9 +55,13 @@ const {
   handlerInventario,
   handlerExportarInventario,
   handlerDetalle,
+  handlerBuscarPorIsbn,
+  handlerFusionarDuplicado,
   validarDatosNuevoLibro,
   validarDatosEditarLibro,
+  validarDatosFusionarDuplicado,
 } = await import('./libros');
+const { ItemNoExisteError } = await import('../services/dynamodb');
 
 const datosValidos = {
   isbn: '9780000000000',
@@ -410,6 +427,214 @@ describe('handlerEditar (PUT /api/libros/:bookId)', () => {
   });
 });
 
+const datosFusionarValidos = {
+  isbn: '9780000000001',
+  titulo: 'Cien años de soledad (editado)',
+  autor: 'Gabriel García Márquez',
+  editorial: 'Sudamericana',
+  portadaUrl: 'https://example.com/portada.jpg',
+  ubicacionId: 'ubicacion-2',
+  pvp: 50000,
+  porcentajeDescuentoEditorial: 35,
+  ejemplaresNuevos: 2,
+};
+
+describe('validarDatosFusionarDuplicado', () => {
+  it('acepta un body válido', () => {
+    const resultado = validarDatosFusionarDuplicado(datosFusionarValidos);
+    expect(resultado.valido).toBe(true);
+  });
+
+  it('rechaza sin título', () => {
+    const resultado = validarDatosFusionarDuplicado({ ...datosFusionarValidos, titulo: '' });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza sin ubicacionId', () => {
+    const resultado = validarDatosFusionarDuplicado({ ...datosFusionarValidos, ubicacionId: '' });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza un PVP fuera de rango', () => {
+    const resultado = validarDatosFusionarDuplicado({ ...datosFusionarValidos, pvp: -1 });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza ejemplaresNuevos en 0 (a diferencia de cantidadTotal en PUT, aquí nunca puede ser 0: fusionar siempre suma)', () => {
+    const resultado = validarDatosFusionarDuplicado({ ...datosFusionarValidos, ejemplaresNuevos: 0 });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza ejemplaresNuevos negativo', () => {
+    const resultado = validarDatosFusionarDuplicado({ ...datosFusionarValidos, ejemplaresNuevos: -1 });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('rechaza ejemplaresNuevos no entero', () => {
+    const resultado = validarDatosFusionarDuplicado({ ...datosFusionarValidos, ejemplaresNuevos: 1.5 });
+    expect(resultado.valido).toBe(false);
+  });
+
+  it('acepta isbn/editorial/portadaUrl ausentes como null', () => {
+    const { isbn: _isbn, editorial: _editorial, portadaUrl: _portadaUrl, ...sinOpcionales } = datosFusionarValidos;
+    const resultado = validarDatosFusionarDuplicado(sinOpcionales);
+    expect(resultado.valido).toBe(true);
+    if (resultado.valido) {
+      expect(resultado.datos.isbn).toBeNull();
+      expect(resultado.datos.editorial).toBeNull();
+      expect(resultado.datos.portadaUrl).toBeNull();
+    }
+  });
+});
+
+describe('handlerFusionarDuplicado (POST /api/libros/:bookId/fusionar-duplicado)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerFusionarDuplicado(
+      eventoConBookId({ bookId: 'libro-1', body: datosFusionarValidos }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(fusionarLibroDuplicadoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el correo no tiene fila en babel-usuarios (rol insuficiente)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue(undefined);
+
+    const respuesta = await handlerFusionarDuplicado(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosFusionarValidos }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(fusionarLibroDuplicadoMock).not.toHaveBeenCalled();
+  });
+
+  describe('con un vendedor autenticado', () => {
+    beforeEach(() => {
+      verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+      obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    });
+
+    it('responde 400 con un body inválido', async () => {
+      const respuesta = await handlerFusionarDuplicado(
+        eventoConBookId({
+          authorization: 'Bearer token',
+          bookId: 'libro-1',
+          body: { ...datosFusionarValidos, ejemplaresNuevos: 0 },
+        }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 400 });
+      expect(fusionarLibroDuplicadoMock).not.toHaveBeenCalled();
+    });
+
+    it('responde 400 cuando el ubicacionId no existe', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+      const respuesta = await handlerFusionarDuplicado(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosFusionarValidos }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 400 });
+      expect(fusionarLibroDuplicadoMock).not.toHaveBeenCalled();
+    });
+
+    it('responde 404 cuando el bookId no existe (ConditionExpression de fusionarLibroDuplicado, sin GetItem previo)', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+      fusionarLibroDuplicadoMock.mockRejectedValueOnce(new ItemNoExisteError('El libro no existe.'));
+
+      const respuesta = await handlerFusionarDuplicado(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'no-existe', body: datosFusionarValidos }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 404 });
+    });
+
+    it(
+      'responde 200, NUNCA lee el libro antes de escribir, y llama fusionarLibroDuplicado con el DELTA ' +
+        '(ejemplaresNuevos) — nunca un total absoluto calculado en el handler (garantía central del fix de ' +
+        'condición de carrera)',
+      async () => {
+        obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+        const libroFusionado = { ...libroFalso, cantidadTotal: 5, cantidadDisponible: 5 };
+        fusionarLibroDuplicadoMock.mockResolvedValueOnce(libroFusionado);
+
+        const respuesta = await handlerFusionarDuplicado(
+          eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosFusionarValidos }),
+          {} as never,
+          {} as never,
+        );
+
+        expect(respuesta).toMatchObject({ statusCode: 200 });
+        const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+        // La respuesta es EXACTAMENTE lo que devolvió fusionarLibroDuplicado
+        // (ReturnValues: ALL_NEW) — el handler no recalcula ni re-lee nada.
+        expect(cuerpo).toEqual(libroFusionado);
+
+        // Solo 2 lecturas puntuales: verificar el rol (babel-usuarios) y
+        // validar el ubicacionId (babel-ubicaciones) — CERO lecturas de
+        // babel-libros. Leer el libro antes de escribir es exactamente la
+        // condición de carrera que este endpoint existe para evitar.
+        expect(obtenerPorClaveMock).toHaveBeenCalledTimes(2);
+        expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(1, 'babel-usuarios-test', {
+          email: 'vendedor@letiende.co',
+        });
+        expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(2, 'babel-ubicaciones-test', {
+          ubicacionId: 'ubicacion-2',
+        });
+
+        expect(fusionarLibroDuplicadoMock).toHaveBeenCalledTimes(1);
+        const [nombreTabla, bookId, campos, ejemplaresNuevos] = fusionarLibroDuplicadoMock.mock.calls[0] as [
+          string,
+          string,
+          Record<string, unknown>,
+          number,
+        ];
+        expect(nombreTabla).toBe('babel-libros-test');
+        expect(bookId).toBe('libro-1');
+        // El DELTA tal cual llegó en el body (2) — nunca un total absoluto
+        // "existente + nuevo" calculado aquí (eso es lo que causaba la
+        // pérdida de ejemplares en escrituras concurrentes).
+        expect(ejemplaresNuevos).toBe(2);
+        expect(campos['isbn']).toBe('9780000000001');
+        expect(campos['titulo']).toBe('Cien años de soledad (editado)');
+        expect(campos['autor']).toBe('Gabriel García Márquez');
+        expect(campos['editorial']).toBe('Sudamericana');
+        expect(campos['portadaUrl']).toBe('https://example.com/portada.jpg');
+        expect(campos['ubicacionId']).toBe('ubicacion-2');
+        expect(campos['pvp']).toBe(50000);
+        expect(campos['porcentajeDescuentoEditorial']).toBe(35);
+        expect(campos['costo']).toBe(32500);
+        expect(campos['utilidadCatalogo']).toBe(17500);
+        // `cantidadTotal`/`cantidadDisponible` NUNCA se calculan en el
+        // handler — el incremento atómico (ADD) vive exclusivamente dentro
+        // de `fusionarLibroDuplicado`.
+        expect(campos).not.toHaveProperty('cantidadTotal');
+        expect(campos).not.toHaveProperty('cantidadDisponible');
+      },
+    );
+  });
+});
+
 describe('handlerEliminar (DELETE /api/libros/:bookId)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -735,5 +960,135 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
     const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 200 });
+  });
+});
+
+function eventoPorIsbn(opciones: { isbn?: string; authorization?: string } = {}): APIGatewayProxyEventV2 {
+  return {
+    headers: opciones.authorization ? { authorization: opciones.authorization } : {},
+    pathParameters: opciones.isbn ? { isbn: opciones.isbn } : undefined,
+  } as unknown as APIGatewayProxyEventV2;
+}
+
+describe('handlerBuscarPorIsbn (GET /api/libros/por-isbn/:isbn)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    process.env['TABLA_MUEBLES'] = 'babel-muebles-test';
+    process.env['TABLA_ESPACIOS'] = 'babel-espacios-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerBuscarPorIsbn(eventoPorIsbn({ isbn: '9780000000000' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el correo no tiene fila en babel-usuarios', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue(undefined);
+
+    const respuesta = await handlerBuscarPorIsbn(
+      eventoPorIsbn({ authorization: 'Bearer token', isbn: '9780000000000' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+  });
+
+  describe('con un vendedor autenticado', () => {
+    beforeEach(() => {
+      verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+      obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    });
+
+    it('responde 200 con [] cuando el isbn no tiene coincidencias', async () => {
+      consultarPorIndiceMock.mockResolvedValue([]);
+
+      const respuesta = await handlerBuscarPorIsbn(
+        eventoPorIsbn({ authorization: 'Bearer token', isbn: '9780000000000' }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const cuerpo = JSON.parse(respuesta.body as string) as unknown[];
+      expect(cuerpo).toEqual([]);
+      expect(consultarPorIndiceMock).toHaveBeenCalledWith(
+        'babel-libros-test',
+        'isbn-index',
+        'isbn',
+        '9780000000000',
+      );
+    });
+
+    it('responde 200 con 1 LibroConUbicacion cuando hay una sola coincidencia', async () => {
+      consultarPorIndiceMock.mockResolvedValue([libroFalso]);
+      obtenerPorClaveMock
+        .mockResolvedValueOnce(ubicacionFalsa)
+        .mockResolvedValueOnce(muebleFalso)
+        .mockResolvedValueOnce(espacioFalso);
+
+      const respuesta = await handlerBuscarPorIsbn(
+        eventoPorIsbn({ authorization: 'Bearer token', isbn: libroFalso.isbn as string }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>[];
+      expect(cuerpo).toHaveLength(1);
+      expect(cuerpo[0]?.['bookId']).toBe(libroFalso.bookId);
+      expect(cuerpo[0]?.['ubicacion']).toEqual({
+        espacio: espacioFalso.nombre,
+        mueble: muebleFalso.nombre,
+        ubicacion: ubicacionFalsa.nombre,
+      });
+    });
+
+    it('responde 200 con el arreglo completo cuando hay varias coincidencias', async () => {
+      const segundoLibro = { ...libroFalso, bookId: 'libro-2', ubicacionId: ubicacionFalsa.ubicacionId };
+      consultarPorIndiceMock.mockResolvedValue([libroFalso, segundoLibro]);
+      obtenerPorClaveMock
+        .mockResolvedValueOnce(ubicacionFalsa)
+        .mockResolvedValueOnce(muebleFalso)
+        .mockResolvedValueOnce(espacioFalso)
+        .mockResolvedValueOnce(ubicacionFalsa)
+        .mockResolvedValueOnce(muebleFalso)
+        .mockResolvedValueOnce(espacioFalso);
+
+      const respuesta = await handlerBuscarPorIsbn(
+        eventoPorIsbn({ authorization: 'Bearer token', isbn: libroFalso.isbn as string }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>[];
+      expect(cuerpo).toHaveLength(2);
+      expect(cuerpo.map((libro) => libro['bookId'])).toEqual(['libro-1', 'libro-2']);
+    });
+
+    it('devuelve ubicacion: null (sin romper la respuesta) cuando un eslabón de ubicación ya no existe', async () => {
+      consultarPorIndiceMock.mockResolvedValue([libroFalso]);
+      obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+      const respuesta = await handlerBuscarPorIsbn(
+        eventoPorIsbn({ authorization: 'Bearer token', isbn: libroFalso.isbn as string }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>[];
+      expect(cuerpo[0]?.['ubicacion']).toBeNull();
+    });
   });
 });

@@ -5,7 +5,16 @@ import type {
 } from 'aws-lambda';
 import * as XLSX from 'xlsx';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
-import { eliminar, escanearMayorQue, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
+import {
+  consultarPorIndice,
+  eliminar,
+  escanearMayorQue,
+  escanearTodo,
+  fusionarLibroDuplicado,
+  guardar,
+  ItemNoExisteError,
+  obtenerPorClave,
+} from '../services/dynamodb';
 
 /**
  * Copia local de `src/app/core/models/libro.model.ts` (misma forma exacta).
@@ -200,6 +209,49 @@ export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<A
 
     return respuestaJson(200, libroConUbicacion);
   } catch {
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `GET /api/libros/por-isbn/:isbn` — busca TODOS los libros ya catalogados
+ * con este ISBN exacto (`TODO.md` Tarea 2.3, detección de duplicados antes
+ * de catalogar) usando el GSI `isbn-index` de `babel-libros`
+ * (`consultarPorIndice`). Exige rol `vendedor` o `administrador` (CLAUDE.md
+ * A01), mismo criterio que `handlerCrear`/`handlerEditar` — a diferencia de
+ * `handlerDetalle`, este endpoint sí requiere sesión porque solo lo consume
+ * el flujo de catalogación, no el catálogo público. `isbn` no es único hoy en
+ * `babel-libros` (sin validación de unicidad), así que la respuesta puede
+ * traer 0, 1 o varios resultados — nunca es un error, el llamador decide qué
+ * hacer con cada caso. Cada resultado trae su ubicación física ya resuelta
+ * (`resolverUbicacion`, mismo patrón que `handlerDetalle`). Ruta estática con
+ * segmento literal `por-isbn`, sin conflicto con `/api/libros/:bookId`
+ * (mismo criterio que `librosInventario`/`exportarInventario`).
+ */
+export const handlerBuscarPorIsbn: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para buscar libros en Babel.' });
+    }
+
+    const isbn = event.pathParameters?.['isbn'];
+    if (!isbn) {
+      return respuestaJson(400, { error: 'Falta el isbn en la ruta.' });
+    }
+
+    const libros = await consultarPorIndice<Libro>(nombreTablaLibros(), 'isbn-index', 'isbn', isbn);
+    const librosConUbicacion: LibroConUbicacion[] = await Promise.all(
+      libros.map(async (libro) => ({ ...libro, ubicacion: await resolverUbicacion(libro.ubicacionId) })),
+    );
+
+    return respuestaJson(200, librosConUbicacion);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }
 };
@@ -528,6 +580,187 @@ export const handlerEditar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
     await guardar(nombreTablaLibros(), libroActualizado);
 
     return respuestaJson(200, libroActualizado);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * Datos aceptados en el body de
+ * `POST /api/libros/:bookId/fusionar-duplicado` — mismos campos editables
+ * que `PUT /api/libros/:bookId` (`DatosEditarLibro`) MENOS `cantidadTotal`
+ * (que aquí NUNCA es un valor absoluto) MÁS `ejemplaresNuevos`: el DELTA de
+ * ejemplares que se suman al total existente (`TODO.md` Tarea 2.3,
+ * corrección de condición de carrera — ver `fusionarLibroDuplicado` en
+ * `dynamodb.ts`).
+ */
+interface DatosFusionarDuplicado {
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  editorial: string | null;
+  portadaUrl: string | null;
+  ubicacionId: string;
+  pvp: number;
+  porcentajeDescuentoEditorial: number;
+  ejemplaresNuevos: number;
+}
+
+type ResultadoValidacionFusionar =
+  | { valido: true; datos: DatosFusionarDuplicado }
+  | { valido: false; error: string };
+
+/**
+ * Valida el body de `POST /api/libros/:bookId/fusionar-duplicado`: mismas
+ * reglas que `validarDatosEditarLibro` para
+ * `titulo`/`autor`/`ubicacionId`/`pvp`/`porcentajeDescuentoEditorial`/
+ * `isbn`/`editorial`/`portadaUrl`, más `ejemplaresNuevos` (entero positivo —
+ * a diferencia de `cantidadTotal` en `PUT`, aquí nunca es 0 ni un valor
+ * absoluto: fusionar un duplicado siempre SUMA ejemplares nuevos al total
+ * existente). Exportada para poder probarla sin invocar el handler completo.
+ */
+export function validarDatosFusionarDuplicado(cuerpo: unknown): ResultadoValidacionFusionar {
+  if (typeof cuerpo !== 'object' || cuerpo === null) {
+    return { valido: false, error: 'El cuerpo de la petición debe ser un objeto JSON.' };
+  }
+  const datos = cuerpo as Record<string, unknown>;
+
+  if (typeof datos['titulo'] !== 'string' || datos['titulo'].trim() === '') {
+    return { valido: false, error: 'El título es requerido.' };
+  }
+  if (typeof datos['autor'] !== 'string' || datos['autor'].trim() === '') {
+    return { valido: false, error: 'El autor es requerido.' };
+  }
+  if (typeof datos['ubicacionId'] !== 'string' || datos['ubicacionId'].trim() === '') {
+    return { valido: false, error: 'La ubicación es requerida.' };
+  }
+  if (
+    typeof datos['pvp'] !== 'number' ||
+    !Number.isFinite(datos['pvp']) ||
+    datos['pvp'] <= 0 ||
+    datos['pvp'] > PVP_MAXIMO
+  ) {
+    return { valido: false, error: `El PVP debe ser un número mayor a 0 y menor o igual a ${PVP_MAXIMO}.` };
+  }
+  if (
+    typeof datos['porcentajeDescuentoEditorial'] !== 'number' ||
+    !Number.isFinite(datos['porcentajeDescuentoEditorial']) ||
+    datos['porcentajeDescuentoEditorial'] < 0 ||
+    datos['porcentajeDescuentoEditorial'] > 100
+  ) {
+    return { valido: false, error: 'El porcentaje de descuento editorial debe estar entre 0 y 100.' };
+  }
+  if (
+    typeof datos['ejemplaresNuevos'] !== 'number' ||
+    !Number.isInteger(datos['ejemplaresNuevos']) ||
+    datos['ejemplaresNuevos'] <= 0
+  ) {
+    return { valido: false, error: 'Los ejemplares nuevos deben ser un número entero mayor a 0.' };
+  }
+
+  const isbn = typeof datos['isbn'] === 'string' && datos['isbn'].trim() !== '' ? datos['isbn'] : null;
+  const editorial =
+    typeof datos['editorial'] === 'string' && datos['editorial'].trim() !== '' ? datos['editorial'] : null;
+  const portadaUrl =
+    typeof datos['portadaUrl'] === 'string' && datos['portadaUrl'].trim() !== '' ? datos['portadaUrl'] : null;
+
+  return {
+    valido: true,
+    datos: {
+      isbn,
+      titulo: datos['titulo'],
+      autor: datos['autor'],
+      editorial,
+      portadaUrl,
+      ubicacionId: datos['ubicacionId'],
+      pvp: datos['pvp'],
+      porcentajeDescuentoEditorial: datos['porcentajeDescuentoEditorial'],
+      ejemplaresNuevos: datos['ejemplaresNuevos'],
+    },
+  };
+}
+
+/**
+ * `POST /api/libros/:bookId/fusionar-duplicado` — fusiona un duplicado
+ * detectado por ISBN (`TODO.md` Tarea 2.3) sobre un libro ya catalogado,
+ * SUMANDO `ejemplaresNuevos` a `cantidadTotal`/`cantidadDisponible` con una
+ * única operación atómica en DynamoDB (`fusionarLibroDuplicado`, `ADD`) — a
+ * diferencia de `PUT /api/libros/:bookId` (que sobrescribe `cantidadTotal`
+ * con un valor absoluto calculado por leer-calcular-sobrescribir), este
+ * endpoint es seguro ante dos fusiones concurrentes sobre el MISMO libro
+ * (ej. dos vendedores catalogando el mismo ISBN casi al mismo tiempo, común
+ * catalogando 3.000+ libros con varios catalogadores): ninguna sobrescribe
+ * el incremento de la otra, sin importar el orden de llegada de las
+ * peticiones. Exige rol `vendedor` o `administrador` (CLAUDE.md A01), mismo
+ * criterio que `handlerCrear`/`handlerEditar`. Valida que el `ubicacionId`
+ * recibido exista antes de escribir (mismo criterio que `handlerEditar`) —
+ * esta única lectura puntual (`GetItem` sobre `babel-ubicaciones`) no
+ * compite con la concurrencia del libro en sí, solo confirma que la
+ * ubicación destino es válida. `costo`/`utilidadCatalogo` se recalculan
+ * siempre a partir de `pvp`/`porcentajeDescuentoEditorial`, nunca se reciben
+ * del cliente (CLAUDE.md A08).
+ */
+export const handlerFusionarDuplicado: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para editar libros en Babel.' });
+    }
+
+    const bookId = event.pathParameters?.['bookId'];
+    if (!bookId) {
+      return respuestaJson(400, { error: 'Falta el bookId en la ruta.' });
+    }
+
+    let cuerpo: unknown;
+    try {
+      cuerpo = event.body ? JSON.parse(event.body) : undefined;
+    } catch {
+      return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
+    }
+
+    const validacion = validarDatosFusionarDuplicado(cuerpo);
+    if (!validacion.valido) {
+      return respuestaJson(400, { error: validacion.error });
+    }
+    const { datos } = validacion;
+
+    const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId: datos.ubicacionId });
+    if (!ubicacion) {
+      return respuestaJson(400, { error: 'La ubicación indicada no existe.' });
+    }
+
+    try {
+      const libroActualizado = await fusionarLibroDuplicado<Libro>(
+        nombreTablaLibros(),
+        bookId,
+        {
+          isbn: datos.isbn,
+          titulo: datos.titulo,
+          autor: datos.autor,
+          editorial: datos.editorial,
+          portadaUrl: datos.portadaUrl,
+          ubicacionId: datos.ubicacionId,
+          pvp: datos.pvp,
+          porcentajeDescuentoEditorial: datos.porcentajeDescuentoEditorial,
+          costo: Math.round(datos.pvp * (1 - datos.porcentajeDescuentoEditorial / 100)),
+          utilidadCatalogo: Math.round(datos.pvp * (datos.porcentajeDescuentoEditorial / 100)),
+          actualizadoEn: new Date().toISOString(),
+        },
+        datos.ejemplaresNuevos,
+      );
+      return respuestaJson(200, libroActualizado);
+    } catch (error) {
+      if (error instanceof ItemNoExisteError) {
+        return respuestaJson(404, { error: 'El libro no existe.' });
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });
