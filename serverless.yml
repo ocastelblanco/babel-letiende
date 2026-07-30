@@ -388,12 +388,9 @@ functions:
     handler: dist-server/api/handlers/libros.handlerFusionarDuplicado
     role: !GetAtt FusionarDuplicadoLibroLambdaRole.Arn
     description: >-
-      POST /api/libros/:bookId/fusionar-duplicado — fusiona un duplicado
-      detectado por ISBN sobre un libro ya catalogado, sumando
-      ejemplaresNuevos a cantidadTotal/cantidadDisponible con un UpdateItem
-      atómico (ADD) — a diferencia de PUT, seguro ante dos fusiones
-      concurrentes sobre el mismo libro (CLAUDE.md A01, ADR-008, TODO.md
-      Tarea 2.3).
+      POST /api/libros/:bookId/fusionar-duplicado — suma ejemplaresNuevos con
+      un UpdateItem atómico (ADD), seguro ante fusiones concurrentes del
+      mismo libro (TODO.md Tarea 2.3).
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
@@ -633,10 +630,8 @@ functions:
     role: !GetAtt LibrosPorIsbnLambdaRole.Arn
     description: >-
       GET /api/libros/por-isbn/:isbn — busca libros ya catalogados con este
-      ISBN exacto (GSI isbn-index de babel-libros) para detectar duplicados
-      antes de catalogar, exige rol vendedor o administrador (CLAUDE.md A01,
-      TODO.md Tarea 2.3). Ruta estática, sin conflicto con
-      /api/libros/{bookId}.
+      ISBN para detectar duplicados al catalogar (GSI isbn-index), exige rol
+      vendedor/administrador (TODO.md Tarea 2.3).
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
