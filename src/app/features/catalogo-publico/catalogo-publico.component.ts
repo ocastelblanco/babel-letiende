@@ -89,11 +89,19 @@ export class CatalogoPublicoComponent implements OnInit {
   protected readonly espacioSeleccionado = signal('');
   protected readonly muebleSeleccionado = signal('');
 
-  /** Muebles del `<select>` dependiente: todos si no hay Espacio elegido, filtrados por `espacioId` si sí. */
+  /**
+   * Muebles del `<select>` dependiente: vacío si no hay Espacio elegido —
+   * los nombres de Mueble no son únicos entre espacios distintos (ej.
+   * "Biblioteca 1" puede existir en dos salas), así que sin un Espacio
+   * elegido la lista sería ambigua. El `<select>` de Mueble se deshabilita
+   * en la plantilla mientras esto esté vacío.
+   */
   protected readonly mueblesFiltrados = computed(() => {
     const espacioId = this.espacioSeleccionado();
-    const muebles = this.ubicacionFisicaService.muebles();
-    return espacioId === '' ? muebles : muebles.filter((mueble) => mueble.espacioId === espacioId);
+    if (espacioId === '') {
+      return [];
+    }
+    return this.ubicacionFisicaService.muebles().filter((mueble) => mueble.espacioId === espacioId);
   });
 
   protected readonly librosFiltrados = computed(() => {

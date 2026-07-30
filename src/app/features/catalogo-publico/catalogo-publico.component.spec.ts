@@ -289,13 +289,15 @@ describe('CatalogoPublicoComponent', () => {
       expect(texto).not.toContain('Cien años de soledad');
     });
 
-    it('filtra por Mueble', () => {
+    it('filtra por Mueble (requiere elegir primero el Espacio que lo contiene, para habilitar el select)', () => {
       const { fixture } = configurarPrueba({
         libros: [libroFalso, libroEnOtraUbicacion],
         cargando: false,
         error: false,
       });
 
+      elegir(selectEspacio(fixture), 'espacio-2');
+      fixture.detectChanges();
       elegir(selectMueble(fixture), 'mueble-2');
       fixture.detectChanges();
 
@@ -337,6 +339,33 @@ describe('CatalogoPublicoComponent', () => {
       expect(selectMueble(fixture).value).toBe('');
       opciones = selectMueble(fixture).querySelectorAll('option');
       expect(Array.from(opciones).map((o) => o.textContent?.trim())).toEqual(['Todos los muebles', 'Biblioteca 2']);
+    });
+
+    it('sin Espacio elegido, el select de Mueble no muestra ningún mueble (nombres no son únicos entre espacios) y queda deshabilitado', () => {
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      const opciones = selectMueble(fixture).querySelectorAll('option');
+      expect(Array.from(opciones).map((o) => o.textContent?.trim())).toEqual(['Todos los muebles']);
+      expect(selectMueble(fixture).disabled).toBe(true);
+    });
+
+    it('al elegir un Espacio, el select de Mueble se habilita y muestra solo los muebles de ese Espacio', () => {
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, libroEnOtraUbicacion],
+        cargando: false,
+        error: false,
+      });
+
+      elegir(selectEspacio(fixture), 'espacio-1');
+      fixture.detectChanges();
+
+      expect(selectMueble(fixture).disabled).toBe(false);
+      const opciones = selectMueble(fixture).querySelectorAll('option');
+      expect(Array.from(opciones).map((o) => o.textContent?.trim())).toEqual(['Todos los muebles', 'Biblioteca 1']);
     });
 
     it('preselecciona los selects desde los query params ?espacio=&mueble= al entrar', () => {

@@ -30,7 +30,8 @@
 
           <select
             (change)="seleccionarMueble($any($event.target).value)"
-            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary sm:w-1/2"
+            [disabled]="espacioSeleccionado() === ''"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50 sm:w-1/2"
           >
             <option value="" [selected]="muebleSeleccionado() === ''">Todos los muebles</option>
             @for (mueble of mueblesFiltrados(); track mueble.muebleId) {
