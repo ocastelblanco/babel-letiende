@@ -1506,6 +1506,9 @@ functions:
           method: '*'
 
 resources:
+  Conditions:
+    EsProduccion: !Equals ['${sls:stage}', 'production']
+
   Resources:
     # --- Roles IAM de mínimo privilegio (uno por función) ---
     ApiLambdaRole:
@@ -2468,3 +2471,49 @@ resources:
         KeySchema:
           - AttributeName: email
             KeyType: HASH
+
+    # --- Dominio personalizado babel.letiende.co (solo stage production, PRD.md §6) ---
+    # Condicionado a EsProduccion porque staging sigue usando la URL cruda de API Gateway
+    # (no tiene sentido pagar/gestionar un dominio propio para un ambiente de pruebas).
+    # El certificado se valida automáticamente por DNS: al declarar HostedZoneId dentro
+    # de DomainValidationOptions, CloudFormation crea el registro de validación en Route53
+    # por su cuenta y espera a que ACM lo emita, sin intervención manual.
+    CertificadoBabelDominio:
+      Type: AWS::CertificateManager::Certificate
+      Condition: EsProduccion
+      Properties:
+        DomainName: babel.letiende.co
+        ValidationMethod: DNS
+        DomainValidationOptions:
+          - DomainName: babel.letiende.co
+            HostedZoneId: Z010633738KAGFIPOZVEW
+
+    DominioPersonalizadoBabel:
+      Type: AWS::ApiGatewayV2::DomainName
+      Condition: EsProduccion
+      Properties:
+        DomainName: babel.letiende.co
+        DomainNameConfigurations:
+          - CertificateArn: !Ref CertificadoBabelDominio
+            EndpointType: REGIONAL
+            SecurityPolicy: TLS_1_2
+
+    MapeoApiDominioBabel:
+      Type: AWS::ApiGatewayV2::ApiMapping
+      Condition: EsProduccion
+      Properties:
+        ApiId: !Ref HttpApi
+        DomainName: !Ref DominioPersonalizadoBabel
+        Stage: $default
+
+    RegistroDnsBabel:
+      Type: AWS::Route53::RecordSet
+      Condition: EsProduccion
+      Properties:
+        HostedZoneId: Z010633738KAGFIPOZVEW
+        Name: babel.letiende.co
+        Type: A
+        AliasTarget:
+          DNSName: !GetAtt DominioPersonalizadoBabel.RegionalDomainName
+          HostedZoneId: !GetAtt DominioPersonalizadoBabel.RegionalHostedZoneId
+          EvaluateTargetHealth: false
