@@ -1487,10 +1487,14 @@ functions:
     memorySize: 512
     environment:
       # Protección SSRF de Angular (`AngularNodeAppEngine`) exige una lista
-      # explícita de hosts permitidos; sin dominio personalizado todavía
-      # (fuera de alcance de esta tarea), se autoriza el host real generado
-      # por API Gateway para que el SSR pueda responder en este esqueleto.
-      NG_ALLOWED_HOSTS: !Sub '${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+      # explícita de hosts permitidos. En producción el tráfico llega tanto
+      # por el dominio personalizado (`babel.letiende.co`) como por el
+      # hostname crudo de API Gateway (respaldo), así que se autorizan
+      # ambos. En staging/dev, sin dominio personalizado, solo el crudo.
+      NG_ALLOWED_HOSTS: !If
+        - EsProduccion
+        - !Sub '${HttpApi}.execute-api.${AWS::Region}.amazonaws.com,babel.letiende.co'
+        - !Sub '${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
     package:
       patterns:
         - '!**'
