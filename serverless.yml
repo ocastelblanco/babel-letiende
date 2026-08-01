@@ -11,6 +11,11 @@ provider:
   timeout: 10
   httpApi:
     cors: true
+  deploymentBucket:
+    # Sin este tope, cada despliegue deja su artefacto en S3 para siempre:
+    # a agosto de 2026 había 256 objetos / 6.6 GB acumulados de Babel. Se
+    # conservan 5 para poder revertir; el resto se borra en cada deploy.
+    maxPreviousDeploymentArtifacts: 5
   # Cada función define su propio rol de mínimo privilegio más abajo
   # (ver `resources.Resources.ApiLambdaRole` / `SsrLambdaRole`) — ver
   # CLAUDE.md §5 (A05: configuración de seguridad incorrecta).
@@ -2333,16 +2338,23 @@ resources:
         # Sin políticas adicionales: el SSR solo renderiza, no accede a DynamoDB.
 
     # --- Tablas DynamoDB (tech-specs.md §5.1) ---
-    # Capacidad aprovisionada 25/25 en todas (capa siempre gratuita de AWS,
-    # ver tech-specs.md §7.3 — objetivo de costo $0, nunca on-demand).
+    # PAY_PER_REQUEST (on-demand) OBLIGATORIO en todas. No cambiar a PROVISIONED.
+    #
+    # Antes estaban en PROVISIONED 25/25 bajo la premisa (falsa) de que esa
+    # capacidad era "capa siempre gratuita". Costó US$90 en julio de 2026:
+    # el límite gratuito de 25 RCU + 25 WCU es POR CUENTA, no por tabla, y
+    # aquí había 8 tablas × 2 stages + 2 GSIs = 18 unidades de 25/25
+    # (450 RCU + 450 WCU, 18× el límite) a US$0.468/día cada una = US$8.42/día
+    # = ~US$256/mes, cobrados 24/7 aunque nadie usara la app. Además, AWS
+    # retiró ese "always free" de DynamoDB en 2025 para cuentas nuevas.
+    #
+    # Con on-demand se paga por operación: el inventario completo de ~3.000
+    # libros cuesta centavos al mes. Ver docs/advertencia-urgente-costos-aws.md.
     TablaLibros:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.libros}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: bookId
             AttributeType: S
@@ -2358,18 +2370,14 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
-            ProvisionedThroughput:
-              ReadCapacityUnits: 25
-              WriteCapacityUnits: 25
+            # Sin ProvisionedThroughput: en PAY_PER_REQUEST el GSI hereda el
+            # modo de la tabla, y declararlo aquí hace fallar el despliegue.
 
     TablaVentas:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.ventas}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: ventaId
             AttributeType: S
@@ -2390,10 +2398,7 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.espacios}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: espacioId
             AttributeType: S
@@ -2405,10 +2410,7 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.muebles}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: muebleId
             AttributeType: S
@@ -2420,10 +2422,7 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.ubicaciones}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: ubicacionId
             AttributeType: S
@@ -2435,10 +2434,7 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.editorialesDescuentos}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: editorial
             AttributeType: S
@@ -2450,10 +2446,7 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.sitiosScraping}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: dominio
             AttributeType: S
@@ -2465,10 +2458,7 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.nombresTablas.usuarios}
-        BillingMode: PROVISIONED
-        ProvisionedThroughput:
-          ReadCapacityUnits: 25
-          WriteCapacityUnits: 25
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: email
             AttributeType: S
