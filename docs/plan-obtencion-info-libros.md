@@ -123,7 +123,7 @@ Plantilla backend: `editoriales-descuentos` (clave natural, `409` en duplicado).
   `functions.sitiosScraping` (rutas `GET/POST /api/sitios-scraping`,
   `PUT/DELETE /api/sitios-scraping/{dominio}`, con el bloque de exclusiones `node_modules/**`
   literal), `SitiosScrapingLambdaRole` (GetItem/PutItem/DeleteItem/Scan sobre la tabla nueva +
-  GetItem sobre `babel-usuarios`), `TablaSitiosScraping` (PK `dominio`, PROVISIONED 25/25).
+  GetItem sobre `babel-usuarios`), `TablaSitiosScraping` (PK `dominio`, `PAY_PER_REQUEST`).
 - **Frontend:** `src/app/core/api/sitios-scraping.service.ts` (+ `.spec.ts`),
   `src/app/features/admin/gestion-sitios-scraping.component.{ts,html,spec.ts}` (lista + formulario
   único crear/editar con checkboxes `info`/`pvp` + eliminar con `confirm`), ruta `admin/sitios` en
