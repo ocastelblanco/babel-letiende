@@ -58,7 +58,7 @@ añadir/quitar fuentes sin un deploy, y algunos sitios sirven para info pero no 
 ### ADR-011 — Guardia SSRF fija e independiente de la lista administrable
 Como la lista pasa a ser editable por **datos** (no código), la garantía anti-SSRF **no** puede
 depender de ella. Toda URL saliente de scraping pasa SIEMPRE, en tiempo de `fetch`, por
-`validarHostSeguro()`: exige `https:`, resuelve el hostname y **rechaza** IPs privadas / loopback /
+`esUrlSegura()`: exige `https:`, resuelve el hostname y **rechaza** IPs privadas / loopback /
 link-local y `169.254.169.254` (metadata service de AWS), y no sigue redirecciones a hosts no
 validados. La tabla expresa *intención* (qué sitios y para qué); la guardia estática impone
 *seguridad*. Mantiene intacta la regla `CLAUDE.md` A10 aunque el allowlist sea data-driven.
@@ -133,7 +133,7 @@ Plantilla backend: `editoriales-descuentos` (clave natural, `409` en duplicado).
 ### Task B — Motor de scraping + guardia SSRF (`server/api/services/scraping.ts`)
 - Instalar `cheerio` (dependency de producción); **no** excluirlo del empaquetado (es runtime de
   backend); verificar tamaño del paquete < 250 MB tras añadirlo.
-- `validarHostSeguro(url)`: https obligatorio; resolver hostname; rechazar IP literal o resuelta en
+- `esUrlSegura(url)`: https obligatorio; resolver hostname; rechazar IP literal o resuelta en
   rangos privados/loopback/link-local + `169.254.169.254`; `fetch` con `redirect: 'manual'`
   revalidando cada salto. Nunca lanza hacia afuera → los fallos degradan a "no encontrado".
 - Adaptadores por `dominio` (Lerner, Tornamesa, Librería Nacional, Busca Libre): plantilla de URL de
@@ -168,5 +168,5 @@ grande y especulativa; se aborda como iniciativa separada.
 - **Staging (por PR):** CRUD de sitios con la cuenta `administrador` real; un `vendedor` no accede a
   `/admin/sitios`; para Task C, catalogar un ISBN real y confirmar que info y PVP se pre-cargan y
   siguen editables, y que un ISBN inexistente deja el formulario editable sin errores.
-- **Seguridad:** tests que prueban que `validarHostSeguro` rechaza `http://169.254.169.254`, IPs
+- **Seguridad:** tests que prueban que `esUrlSegura` rechaza `http://169.254.169.254`, IPs
   privadas/link-local y esquemas no-https; confirmar que ningún adaptador devuelve HTML crudo.
