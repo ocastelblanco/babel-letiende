@@ -45,7 +45,7 @@ npm run generar -- [--stage staging] [--diametro 80] [--salida salida/estampilla
 
 | Flag | Default | Descripción |
 |---|---|---|
-| `--stage` | `staging` | Stage de las tablas DynamoDB (`babel-espacios-{stage}`, `babel-muebles-{stage}`). Producción todavía no existe. |
+| `--stage` | `staging` | Stage de las tablas DynamoDB (`babel-espacios-{stage}`, `babel-muebles-{stage}`). Usa `--stage production` para generar las estampillas reales con los espacios/muebles ya catalogados en producción. |
 | `--diametro` | `80` | Diámetro de cada estampilla circular, en milímetros. |
 | `--salida` | `salida/estampillas-qr.pdf` (relativo al cwd — al correrlo con `npm run generar` desde `tools/qr-muebles/`, termina en `tools/qr-muebles/salida/estampillas-qr.pdf`) | Ruta del PDF generado. Se crea el directorio si no existe. |
 | `--plantilla` | `plantillas/estampilla.svg` (relativo al cwd, igual que `--salida`) | Ruta a la plantilla SVG editable (ver sección siguiente). |
