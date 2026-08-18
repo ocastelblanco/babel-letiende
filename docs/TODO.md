@@ -35,7 +35,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 Implementación del nuevo componente `BarraNavegacionComponent` en `src/app/shared/navegacion/` siguiendo el patrón de Ágora — PR #88, validado por el usuario en `staging`:
 
 - [x] Logo + nombre "Babel" como link a home (`<a routerLink="/"> <img src="/logo_negro_sin_fondo.svg"> <span>Babel</span> </a>`), reemplaza el link "Catálogo" del header actual.
-- [x] Elimina el link "Volver al catálogo" de la card de login.
+- [x] Elimina el link "Volver al catálogo" de la card de login y de la ficha de libro (`/libro/:bookId`, agregado en un ajuste posterior dentro del mismo PR).
 - [x] Nuevo componente `BarraNavegacionComponent` (`src/app/shared/navegacion/`) con soporte responsive completo (menú hamburguesa/drawer mobile).
 - [x] Botón de ícono reemplaza al link de texto "Ingresar" (`h-10 w-10 rounded-xl bg-primary text-neutral`, `aria-label="Ingresar"`).
 - [x] Avatar de Google + botón "Cerrar sesión" reemplazan al link de texto "Cerrar sesión" (`<img referrerpolicy="no-referrer" class="h-8 w-8 rounded-full object-cover">`, botón `h-10 rounded-xl border border-primary/20 px-3 text-sm font-semibold text-primary`), alineados a la derecha.

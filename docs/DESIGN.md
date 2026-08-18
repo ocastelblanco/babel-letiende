@@ -152,7 +152,7 @@ Placeholder de portada faltante (estado vacío de un dato individual, no de una 
 
 Componente `BarraNavegacionComponent` (`src/app/shared/navegacion/barra-navegacion.component.html`) — header `sticky top-0` siempre visible (con o sin sesión, incluida `/login`), mismo patrón que `BarraNavegacionComponent` del proyecto hermano Ágora. Contenedor: `mx-auto flex h-16 max-w-5xl items-center justify-between px-4` dentro de `<header class="sticky top-0 z-10 bg-white shadow-[0_4px_16px_rgba(35,12,0,0.08)]">`.
 
-**Logo + nombre como link a home** (siempre visible, reemplaza al link "Catálogo" del header anterior y a "Volver al catálogo" del login — `barra-navegacion.component.html:3-10`):
+**Logo + nombre como link a home** (siempre visible, reemplaza al link "Catálogo" del header anterior y a los links "Volver al catálogo" del login y de la ficha de libro (`/libro/:bookId`) — `barra-navegacion.component.html:3-10`):
 ```html
 <a routerLink="/" class="flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary">
   <img src="/logo_negro_sin_fondo.svg" alt="Le Tiende" class="h-8 w-auto" />
