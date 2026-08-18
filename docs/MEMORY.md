@@ -8,12 +8,12 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 
 | Campo | Valor |
 |---|---|
-| Versión | Sin release en producción — infraestructura backend ya desplegada y verificada en `staging` |
-| URL producción | https://babel.letiende.co (aún no desplegada) |
+| Versión | En producción desde 03/08/2026 |
+| URL producción | https://babel.letiende.co (en producción desde 03/08/2026, dominio personalizado PR #81) |
 | URL staging (real) | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (API Gateway HTTP API, stage `staging`) |
 | Rama principal | `main` |
-| Rama de trabajo actual | Ninguna — `main` al día tras fusionar PR #79 (mejoras a Catalogar: cámara, thumbnail, duplicados) |
-| Última sesión | 2026-07-31 — Sincronización y cierre de documentación tras fusionar PR #78/#79 (orden alfabético + mejoras a Catalogar, ver §2). Sin tareas activas en `TODO.md`: "Primer despliegue a producción" queda como único ítem, **pendiente de confirmación explícita del usuario para iniciar** (pidió dejar todo listo pero no arrancar todavía). Ver `TODO.md` |
+| Rama de trabajo actual | `feature/reforma-header-superior` (PR #88) |
+| Última sesión | 2026-08-18 — Reforma del header superior (`BarraNavegacionComponent`, mismo patrón que Ágora; PR #88, validado en `staging`); cierre retroactivo de "Primer despliegue a producción" en `TODO.md`/`PRD.md` §6 (roadmap principal completo). Ver `TODO.md` |
 
 ---
 
