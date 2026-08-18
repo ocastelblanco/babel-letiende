@@ -13,9 +13,9 @@ import { RolUsuario } from '../models/usuario.model';
  * asume autorización mientras la respuesta de `/api/usuarios/me` no haya
  * llegado.
  *
- * Redirige a `/` (catálogo público) en vez de `/gestionar` cuando el rol no
+ * Redirige a `/` (catálogo público) en vez de `/catalogar` cuando el rol no
  * coincide — evita un bucle si el rol insuficiente es justo el que exige
- * `/gestionar` (`TODO.md`, área "Gestionar", reemplaza a `/libros`, ya
+ * `/catalogar` (`TODO.md`, área "Gestionar", reemplaza a `/libros`, ya
  * eliminada).
  */
 export function RoleGuard(rolesPermitidos: RolUsuario | RolUsuario[]): CanActivateFn {

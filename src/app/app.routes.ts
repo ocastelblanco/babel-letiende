@@ -26,11 +26,12 @@ export const routes: Routes = [
     canActivate: [NoAuthGuard],
   },
   {
-    // Área "Gestionar" (`TODO.md`) — reemplaza a `/libros` y `/catalogar`, ya
-    // eliminadas: 2 pestañas (Catalogar/Editar) en un único componente
-    // (`GestionarComponent`). POST/PUT /api/libros aceptan vendedor o
-    // administrador, mismo criterio que antes.
-    path: 'gestionar',
+    // Área "Gestionar" (`TODO.md`) — reemplaza a `/libros`, ya eliminada: 2
+    // pestañas (Catalogar/Editar) en un único componente
+    // (`GestionarComponent`). La ruta de esta área es `/catalogar`.
+    // POST/PUT /api/libros aceptan vendedor o administrador, mismo criterio
+    // que antes.
+    path: 'catalogar',
     component: GestionarComponent,
     canActivate: [RoleGuard(['vendedor', 'administrador'])],
   },

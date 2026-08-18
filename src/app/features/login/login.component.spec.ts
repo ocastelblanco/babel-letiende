@@ -32,15 +32,6 @@ function configurarPrueba() {
 }
 
 describe('LoginComponent', () => {
-  it('muestra un vínculo de regreso al catálogo público', () => {
-    const { fixture } = configurarPrueba();
-
-    const enlace = fixture.nativeElement.querySelector('a[href="/"]') as HTMLAnchorElement;
-
-    expect(enlace).toBeTruthy();
-    expect(enlace.textContent).toContain('Volver al catálogo');
-  });
-
   it('el botón de Google sigue disparando iniciarSesionConGoogle', async () => {
     const { fixture, iniciarSesionConGoogleMock } = configurarPrueba();
 

@@ -22,7 +22,7 @@ function normalizarTexto(valor: string): string {
 }
 
 /**
- * Pestaña "Editar" del área "Gestionar" (`/gestionar`, `TODO.md`) — lista
+ * Pestaña "Editar" del área "Gestionar" (`/catalogar`, `TODO.md`) — lista
  * TODOS los libros catalogados, incluidos los agotados
  * (`LibrosService.cargarInventario`, `GET /api/libros/inventario`): a
  * diferencia del catálogo público (`GET /api/libros`), esta es la pantalla

@@ -5,7 +5,7 @@ import { EditarLibroComponent } from './editar-libro.component';
 type Pestaña = 'catalogar' | 'editar';
 
 /**
- * Ruta protegida `/gestionar` (`RoleGuard(['vendedor','administrador'])`,
+ * Ruta protegida `/catalogar` (`RoleGuard(['vendedor','administrador'])`,
  * `TODO.md`, área "Gestionar") — reemplaza a `/catalogar` y `/libros`. Dos
  * pestañas independientes (`pestanaActiva`, mismo patrón de tabs que
  * `GestionUbicacionFisicaComponent`): "Catalogar" (`CatalogarLibroComponent`,
