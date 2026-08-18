@@ -24,13 +24,30 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Prioridad de selección aplicada (2026-07-31):** con las 4 tareas de este lote cerradas y sin más ajustes pendientes, el único ítem que le queda al roadmap principal (`PRD.md` §6) es "Primer despliegue a producción" — se promueve al único slot activo (sin segundo ítem que promover, mismo caso ya documentado el 2026-07-25 y el 2026-07-29). **El usuario pidió explícitamente dejar todo listo (repo sincronizado, documentación al día) pero NO iniciar la implementación/despliegue hasta que él lo indique** — respeta la regla ya vigente de no arrancar esta pieza sin confirmación explícita.
 
+**Reforma del header superior — TAREA NUEVA (2026-08-18):** el usuario trajo un ajuste ad-hoc nuevo no documentado previamente en `PRD.md`. Se trata de reemplazar el header actual (texto plano, sin logo) por un nuevo componente `BarraNavegacionComponent` (mismo patrón que usa el proyecto hermano Ágora): logo + nombre "Babel" como link a home, menú reposicionado, botón de ícono para "Ingresar", avatar de Google + botón "Cerrar sesión" alineados a la derecha, responsive con drawer mobile, y renombre de la ruta/link "Gestionar" a "Catalogar" (solo texto/ruta, sin renombrar el componente). Este ajuste toma el único slot activo del motor JIT por delante de "Primer despliegue a producción" (aplicando el mismo criterio de priorización de ajustes ad-hoc ya documentado en 2026-07-27, 2026-07-29 y 2026-07-31). La tarea se entrega en una sola rama/PR (`feature/reforma-header-superior`) para desplegar a producción la misma noche tras validar en staging.
+
 ---
 
-## Tarea 1 — Primer despliegue a producción
+## Tarea 1 — Reforma del header (menú superior)
+
+Implementación del nuevo componente `BarraNavegacionComponent` en `src/app/shared/navegacion/` siguiendo el patrón de Ágora:
+
+- [ ] Logo + nombre "Babel" como link a home (`<a routerLink="/"> <img src="/logo_negro_sin_fondo.svg"> <span>Babel</span> </a>`), reemplaza el link "Catálogo" del header actual.
+- [ ] Elimina el link "Volver al catálogo" de la card de login.
+- [ ] Nuevo componente `BarraNavegacionComponent` (`src/app/shared/navegacion/`) con soporte responsive completo (menú hamburguesa/drawer mobile).
+- [ ] Botón de ícono reemplaza al link de texto "Ingresar" (`h-10 w-10 rounded-xl bg-primary text-neutral`, `aria-label="Ingresar"`).
+- [ ] Avatar de Google + botón "Cerrar sesión" reemplazan al link de texto "Cerrar sesión" (`<img referrerpolicy="no-referrer" class="h-8 w-8 rounded-full object-cover">`, botón `h-10 rounded-xl border border-primary/20 px-3 text-sm font-semibold text-primary`), alineados a la derecha.
+- [ ] Renombra el link/ruta "Gestionar" (`/gestionar`) a "Catalogar" (`/catalogar`) — solo texto/ruta, sin renombrar `GestionarComponent`.
+
+**Estado:** en curso. Se entrega en rama `feature/reforma-header-superior` (ya creada). Al cerrar esta tarea, registrar número de PR y fecha de fusión en esta sección. Pausada "Primer despliegue a producción" sin cambios — se retoma al cerrar esta reforma.
+
+---
+
+### Pausada — Primer despliegue a producción
 
 `PRD.md` §6 — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
 
-**NO INICIAR sin que el usuario lo indique explícitamente** — es la pieza más costosa de revertir de todo el roadmap (`ajustes-finales.md`/`ajustes-2026-07-27.md` ya establecieron este criterio) y el usuario lo reconfirmó el 2026-07-31 ("cuando te lo indique"). Cuando dé la señal de arrancar, desglosarla en pasos atómicos antes de tocar código — no asumir el alcance exacto de antemano.
+**NO INICIAR sin que el usuario lo indique explícitamente** — es la pieza más costosa de revertir de todo el roadmap (`ajustes-finales.md`/`ajustes-2026-07-27.md` ya establecieron este criterio) y el usuario lo reconfirmó el 2026-07-31 ("cuando te lo indique"). Cuando dé la señal de arrancar, desglosarla en pasos atómicos antes de tocar código — no asumir el alcance exacto de antemano. Pausada sin cambios hasta cerrar la "Reforma del header (menú superior)".
 
 ---
 

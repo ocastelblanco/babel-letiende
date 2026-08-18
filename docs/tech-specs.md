@@ -156,7 +156,7 @@ Configurados en `tsconfig.json`:
 | `/` | `CatalogoPublicoComponent` | — (pública) | SSR / Eager | Búsqueda y listado del catálogo completo. |
 | `/libro/:isbn` | `FichaLibroComponent` | — (pública) | SSR / Lazy | Detalle de un libro: PVP, ubicación, disponibilidad. |
 | `/login` | `LoginComponent` | `NoAuthGuard` | Eager | Ingreso con Google. |
-| `/catalogar` | `CatalogarLibroComponent` | `AuthGuard` | Lazy | Flujo de catalogación (vendedor/admin). |
+| `/catalogar` | `GestionarComponent` | `RoleGuard(['vendedor', 'administrador'])` | Lazy | Área de gestión: pestaña Catalogar (flujo de catalogación de un libro) y pestaña Editar (edición de libros ya catalogados). |
 | `/venta` | `RegistrarVentaComponent` | `AuthGuard` | Lazy | Registro de venta (vendedor/admin). |
 | `/libros` | `ListaLibrosCatalogadosComponent` | `AuthGuard` | Lazy | Lista interna para buscar un libro y cambiar su estante. |
 | `/libros/:bookId/estante` | `CambiarEstanteComponent` | `AuthGuard` | Lazy | Edición de ubicación física. |
