@@ -1,7 +1,5 @@
 <div class="min-h-screen bg-surface px-4 py-8">
   <div class="mx-auto max-w-xl">
-    <a routerLink="/" class="mb-6 inline-block text-sm text-secondary underline">← Volver al catálogo</a>
-
     @if (cargando()) {
       <p class="text-center text-primary/70">Cargando…</p>
     } @else if (noEncontrado()) {

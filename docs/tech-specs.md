@@ -147,24 +147,25 @@ Configurados en `tsconfig.json`:
 - **Estado reactivo con Angular Signals:** todo el estado de UI (libro en proceso de catalogación, carrito de venta en curso, filtros del catálogo) usa `Signal`/`WritableSignal`.
 - **Servicios unidireccionales de datos:** los componentes no llaman `fetch` directamente; usan servicios en `@core/api/` que exponen Signals de solo lectura sobre el estado sincronizado con la API.
 - **Componentes contenedores (Smart) y de presentación (Dumb):** las vistas de `features/` manejan lógica y estado; los subcomponentes en `shared/` (tarjeta de libro, chip de estante, badge de estado) solo renderizan.
-- **SSR selectivo:** las rutas del catálogo público (`/`, `/libro/:isbn`) se renderizan en servidor para SEO; las rutas autenticadas pueden hidratarse como aplicación cliente estándar tras el primer render.
+- **SSR selectivo:** `/`, `/libro/:bookId` y `/login` se renderizan en servidor (`RenderMode.Server`); las rutas autenticadas (`/catalogar`, `/admin*`) son `RenderMode.Client` — el CSR completo es necesario porque la sesión de Firebase solo vive en el navegador (ver `app.routes.server.ts`, `MEMORY.md` §7).
 
 ### 4.2 Rutas y navegación
 
 | Ruta | Componente | Guard (seguridad) | Modo de carga | Notas |
 |---|---|---|---|---|
 | `/` | `CatalogoPublicoComponent` | — (pública) | SSR / Eager | Búsqueda y listado del catálogo completo. |
-| `/libro/:isbn` | `FichaLibroComponent` | — (pública) | SSR / Lazy | Detalle de un libro: PVP, ubicación, disponibilidad. |
-| `/login` | `LoginComponent` | `NoAuthGuard` | Eager | Ingreso con Google. |
-| `/catalogar` | `CatalogarLibroComponent` | `AuthGuard` | Lazy | Flujo de catalogación (vendedor/admin). |
-| `/venta` | `RegistrarVentaComponent` | `AuthGuard` | Lazy | Registro de venta (vendedor/admin). |
-| `/libros` | `ListaLibrosCatalogadosComponent` | `AuthGuard` | Lazy | Lista interna para buscar un libro y cambiar su estante. |
-| `/libros/:bookId/estante` | `CambiarEstanteComponent` | `AuthGuard` | Lazy | Edición de ubicación física. |
-| `/admin/reportes` | `ReportesVentasComponent` | `AuthGuard` + `RoleGuard(admin)` | Lazy | Filtros y exportación XLSX. |
-| `/admin/usuarios` | `GestionUsuariosComponent` | `AuthGuard` + `RoleGuard(admin)` | Lazy | CRUD de vendedores/administradores. |
-| `/admin/editoriales` | `DescuentosEditorialesComponent` | `AuthGuard` + `RoleGuard(admin)` | Lazy | CRUD de porcentajes de descuento por editorial. |
-| `/admin/estantes` | `GestionEstantesComponent` | `AuthGuard` + `RoleGuard(admin)` | Lazy | CRUD de estantes. |
-| `**` | Redirección a `/` | — | — | Fallback global. |
+| `/libro/:bookId` | `LibroDetalleComponent` | — (pública) | SSR / Eager | Detalle de un libro: PVP, ubicación, disponibilidad, venta desde la ficha. |
+| `/login` | `LoginComponent` | `NoAuthGuard` | SSR / Eager | Ingreso con Google. |
+| `/catalogar` | `GestionarComponent` | `RoleGuard(['vendedor', 'administrador'])` | Client / Eager | Área de gestión: pestaña Catalogar (flujo de catalogación de un libro) y pestaña Editar (edición de libros ya catalogados). |
+| `/admin` | `AdminInicioComponent` | `RoleGuard('administrador')` | Client / Eager | Punto de entrada a la sección de administración. |
+| `/admin/ubicaciones` | `GestionUbicacionFisicaComponent` | `RoleGuard('administrador')` | Client / Eager | CRUD jerárquico Espacio → Mueble → Ubicación. |
+| `/admin/sitios` | `GestionSitiosScrapingComponent` | `RoleGuard('administrador')` | Client / Eager | CRUD de la lista de sitios de scraping (permisos `info`/`pvp`). |
+| `/admin/usuarios` | `GestionUsuariosComponent` | `RoleGuard('administrador')` | Client / Eager | CRUD de vendedores/administradores. |
+| `/admin/editoriales` | `GestionDescuentosEditorialesComponent` | `RoleGuard('administrador')` | Client / Eager | CRUD de porcentajes de descuento por editorial. |
+| `/admin/reportes` | `ReportesVentasComponent` | `RoleGuard('administrador')` | Client / Eager | Filtros y exportación XLSX de ventas e inventario. |
+| `**` | Redirección a `/` | — | Server | Fallback global. |
+
+Nota: todas las rutas usan `component:` (no `loadComponent:`) — no hay code-splitting por ruta todavía, de ahí el warning de presupuesto de bundle inicial en `npm run build`.
 
 ### 4.3 Modelos de datos principales (interfaces TypeScript)
 

@@ -23,14 +23,6 @@ vi.mock('firebase/auth', () => ({
 
 const usuarioFirebaseFalso = { uid: 'uid-1' } as unknown as import('firebase/auth').User;
 
-const administradorFalso: Usuario = {
-  email: 'admin@letiende.co',
-  nombre: 'Admin de prueba',
-  fotoUrl: null,
-  rol: 'administrador',
-  creadoEn: '2026-07-20T00:00:00.000Z',
-};
-
 function configurarPrueba(opciones: { usuario?: import('firebase/auth').User | null; usuarioActual?: Usuario | null } = {}) {
   const obtenerUsuarioActualMock = vi.fn().mockResolvedValue(opciones.usuarioActual ?? null);
 
@@ -74,47 +66,6 @@ describe('App', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('router-outlet')).not.toBeNull();
-  });
-
-  it('no muestra el enlace de Administración sin sesión', () => {
-    configurarPrueba();
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).not.toContain('Administración');
-  });
-
-  it('no muestra el enlace de Administración para un vendedor', () => {
-    configurarPrueba({
-      usuario: usuarioFirebaseFalso,
-      usuarioActual: { ...administradorFalso, rol: 'vendedor' },
-    });
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).not.toContain('Administración');
-  });
-
-  it('muestra el enlace de Administración para un administrador con sesión', () => {
-    configurarPrueba({ usuario: usuarioFirebaseFalso, usuarioActual: administradorFalso });
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Administración');
-  });
-
-  it('no muestra el enlace al Catálogo sin sesión', () => {
-    configurarPrueba();
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('a[href="/"]')).toBeNull();
-  });
-
-  it('muestra el enlace al Catálogo para cualquier usuario con sesión', () => {
-    configurarPrueba({
-      usuario: usuarioFirebaseFalso,
-      usuarioActual: { ...administradorFalso, rol: 'vendedor' },
-    });
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('a[href="/"]')).not.toBeNull();
   });
 
   it('resuelve el usuario actual al iniciar sesión', () => {

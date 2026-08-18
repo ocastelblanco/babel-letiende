@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Meta, Title } from '@angular/platform-browser';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { UsuariosService } from '../../core/api/usuarios.service';
 import { LibrosService } from '../../core/api/libros.service';
@@ -30,15 +30,16 @@ const FORMAS_DE_PAGO: readonly FormaDePago[] = ['efectivo', 'tarjeta', 'transfer
  * Primera UI real de `POST /api/ventas` (`TODO.md` Tarea 2): el botón
  * "Vender" y su diálogo son visibles solo con sesión activa y rol
  * `vendedor`/`administrador` — mismo criterio de guard visual que
- * `App.esAdministrador` (se apoya primero en `authService.usuario()` para
- * que desaparezca de inmediato al cerrar sesión, sin depender del último
- * valor cacheado de `UsuariosService`). La autorización real siempre la
- * vuelve a verificar el backend (`CLAUDE.md` A01) — este componente nunca
- * decide por sí mismo si el usuario puede vender.
+ * `BarraNavegacionComponent.esAdministrador` (se apoya primero en
+ * `authService.usuario()` para que desaparezca de inmediato al cerrar
+ * sesión, sin depender del último valor cacheado de `UsuariosService`). La
+ * autorización real siempre la vuelve a verificar el backend (`CLAUDE.md`
+ * A01) — este componente nunca decide por sí mismo si el usuario puede
+ * vender.
  */
 @Component({
   selector: 'app-libro-detalle',
-  imports: [PvpPipe, RouterLink, ReactiveFormsModule],
+  imports: [PvpPipe, ReactiveFormsModule],
   templateUrl: './libro-detalle.component.html',
 })
 export class LibroDetalleComponent implements OnInit {

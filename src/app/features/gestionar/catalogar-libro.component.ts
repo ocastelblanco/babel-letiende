@@ -23,7 +23,7 @@ function normalizarTexto(valor: string): string {
 }
 
 /**
- * Pestaña "Catalogar" del área "Gestionar" (`/gestionar`, `TODO.md`) —
+ * Pestaña "Catalogar" del área "Gestionar" (`/catalogar`, `TODO.md`) —
  * captura los campos del libro contra `POST /api/libros`, ya verificado en
  * vivo. El ISBN puede llegar por escaneo con cámara (`@zxing/browser`) o
  * entrada manual; en ambos casos dispara la búsqueda de metadatos

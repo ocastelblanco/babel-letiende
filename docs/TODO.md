@@ -24,16 +24,42 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Prioridad de selección aplicada (2026-07-31):** con las 4 tareas de este lote cerradas y sin más ajustes pendientes, el único ítem que le queda al roadmap principal (`PRD.md` §6) es "Primer despliegue a producción" — se promueve al único slot activo (sin segundo ítem que promover, mismo caso ya documentado el 2026-07-25 y el 2026-07-29). **El usuario pidió explícitamente dejar todo listo (repo sincronizado, documentación al día) pero NO iniciar la implementación/despliegue hasta que él lo indique** — respeta la regla ya vigente de no arrancar esta pieza sin confirmación explícita.
 
+**Reforma del header superior — TAREA NUEVA (2026-08-18):** el usuario trajo un ajuste ad-hoc nuevo no documentado previamente en `PRD.md`. Se trata de reemplazar el header actual (texto plano, sin logo) por un nuevo componente `BarraNavegacionComponent` (mismo patrón que usa el proyecto hermano Ágora): logo + nombre "Babel" como link a home, menú reposicionado, botón de ícono para "Ingresar", avatar de Google + botón "Cerrar sesión" alineados a la derecha, responsive con drawer mobile, y renombre de la ruta/link "Gestionar" a "Catalogar" (solo texto/ruta, sin renombrar el componente). Este ajuste toma el único slot activo del motor JIT por delante de "Primer despliegue a producción" (aplicando el mismo criterio de priorización de ajustes ad-hoc ya documentado en 2026-07-27, 2026-07-29 y 2026-07-31). La tarea se entrega en una sola rama/PR (`feature/reforma-header-superior`) para desplegar a producción la misma noche tras validar en staging.
+
+**Reforma del header — validada en `staging` (2026-08-18):** el usuario confirmó que todo funciona bien (PR #88). Se cierra la tarea abajo. En la misma revisión, el usuario recordó que **"Primer despliegue a producción" ya se había realizado** — este documento nunca lo registró porque el proyecto se congeló (pausa por catalogación de 3.000+ libros, ver `MEMORY.md`) justo después de completarlo. Se cierra también retroactivamente esa pieza y se revisó `PRD.md` §6 completo: con ambas cerradas (y "Modo offline" ya cancelado antes), **el roadmap principal queda completo** — no hay siguiente ítem que promover a ninguno de los 2 slots.
+
 ---
 
-## Tarea 1 — Primer despliegue a producción
+## Tarea 1 — Reforma del header (menú superior) — COMPLETA (2026-08-18)
 
-`PRD.md` §6 — sin desglosar todavía en pasos atómicos; incluye al menos decidir dominio personalizado, revisar el objetivo de costo $0 con tráfico real, y una checklist de lo ya verificado en `staging` vs. lo que falta confirmar en producción.
+Implementación del nuevo componente `BarraNavegacionComponent` en `src/app/shared/navegacion/` siguiendo el patrón de Ágora — PR #88, validado por el usuario en `staging`:
 
-**NO INICIAR sin que el usuario lo indique explícitamente** — es la pieza más costosa de revertir de todo el roadmap (`ajustes-finales.md`/`ajustes-2026-07-27.md` ya establecieron este criterio) y el usuario lo reconfirmó el 2026-07-31 ("cuando te lo indique"). Cuando dé la señal de arrancar, desglosarla en pasos atómicos antes de tocar código — no asumir el alcance exacto de antemano.
+- [x] Logo + nombre "Babel" como link a home (`<a routerLink="/"> <img src="/logo_negro_sin_fondo.svg"> <span>Babel</span> </a>`), reemplaza el link "Catálogo" del header actual.
+- [x] Elimina el link "Volver al catálogo" de la card de login y de la ficha de libro (`/libro/:bookId`, agregado en un ajuste posterior dentro del mismo PR).
+- [x] Nuevo componente `BarraNavegacionComponent` (`src/app/shared/navegacion/`) con soporte responsive completo (menú hamburguesa/drawer mobile).
+- [x] Botón de ícono reemplaza al link de texto "Ingresar" (`h-10 w-10 rounded-xl bg-primary text-neutral`, `aria-label="Ingresar"`).
+- [x] Avatar de Google + botón "Cerrar sesión" reemplazan al link de texto "Cerrar sesión" (`<img referrerpolicy="no-referrer" class="h-8 w-8 rounded-full object-cover">`, botón `h-10 rounded-xl border border-primary/20 px-3 text-sm font-semibold text-primary`), alineados a la derecha.
+- [x] Renombra el link/ruta "Gestionar" (`/gestionar`) a "Catalogar" (`/catalogar`) — solo texto/ruta, sin renombrar `GestionarComponent`.
+
+---
+
+## Tarea 2 — Primer despliegue a producción — COMPLETA (cierre retroactivo, 2026-08-18)
+
+Se ejecutó realmente entre el 31/07/2026 y el 03/08/2026, sin haber sido marcada como cerrada en este documento en su momento (el proyecto pasó directo a la pausa de catalogación tras terminarla):
+
+- Dominio personalizado `babel.letiende.co` (PR #81, 2026-07-31).
+- Fix de `NG_ALLOWED_HOSTS` en el Lambda `ssr` para aceptar el dominio personalizado (PR #82, 2026-07-31).
+- Datos reales de ubicación física (espacios/muebles/ubicaciones) poblados directamente en DynamoDB de producción (2026-08-01).
+- Lanzamiento público confirmado en `README.es.md` (producción: 03/08/2026).
+
+---
+
+## Roadmap principal completo
+
+Con las 2 tareas de arriba cerradas, y "Modo offline" ya cancelado (2026-07-27, ver bitácora arriba), **`PRD.md` §6 no tiene más ítems pendientes** — todo lo "Alta"/"Media" está implementado, y de las "Baja" solo queda "Empaquetado nativo (Capacitor)", deliberadamente fuera de alcance (`CLAUDE.md` §2). El motor JIT queda sin tareas activas por primera vez desde el inicio del proyecto. Los próximos cambios serán ajustes ad-hoc que traiga el usuario, no ítems de este roadmap.
 
 ---
 
 ## Backlog
 
-Sin ítems — "Primer despliegue a producción" es la última pieza del roadmap principal. Al cerrarla, revisar `PRD.md` completo antes de dar por terminado el roadmap.
+Sin ítems — roadmap principal completo (ver nota arriba).

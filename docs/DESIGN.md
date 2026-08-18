@@ -148,6 +148,44 @@ Estado de carga y estado vacío en el catálogo público (única página públic
 
 Placeholder de portada faltante (estado vacío de un dato individual, no de una lista): `flex aspect-[2/3] w-full items-center justify-center rounded-xl bg-neutral text-xs text-primary/60`, ejemplo `catalogo-publico.component.html:27-31`.
 
+### 3.6 Header / Navegación
+
+Componente `BarraNavegacionComponent` (`src/app/shared/navegacion/barra-navegacion.component.html`) — header `sticky top-0` siempre visible (con o sin sesión, incluida `/login`), mismo patrón que `BarraNavegacionComponent` del proyecto hermano Ágora. Contenedor: `mx-auto flex h-16 max-w-5xl items-center justify-between px-4` dentro de `<header class="sticky top-0 z-10 bg-white shadow-[0_4px_16px_rgba(35,12,0,0.08)]">`.
+
+**Logo + nombre como link a home** (siempre visible, reemplaza al link "Catálogo" del header anterior y a los links "Volver al catálogo" del login y de la ficha de libro (`/libro/:bookId`) — `barra-navegacion.component.html:3-10`):
+```html
+<a routerLink="/" class="flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary">
+  <img src="/logo_negro_sin_fondo.svg" alt="Le Tiende" class="h-8 w-auto" />
+  <span class="text-lg font-bold text-primary">Babel</span>
+</a>
+```
+
+**Botón de ícono "Ingresar"** (solo sin sesión y fuera de `/login` — `barra-navegacion.component.html:33-47`):
+```html
+<a routerLink="/login" aria-label="Ingresar" class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-neutral transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary">
+  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><!-- ícono de login, ver componente --></svg>
+</a>
+```
+Se oculta en `/login` (`enLogin` computed) para no duplicar el botón "Ingresar con Google" de esa página.
+
+**Avatar de Google + botón "Cerrar sesión"** (solo con sesión, alineados a la derecha, `hidden md:flex` — `barra-navegacion.component.html:48-72`):
+```html
+<img [src]="usuario()?.photoURL" [alt]="usuario()?.displayName ?? 'Avatar'" referrerpolicy="no-referrer" class="h-8 w-8 rounded-full object-cover" />
+<!-- @else si no hay photoURL: círculo con inicial (computed `inicial`) -->
+<span class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-neutral" aria-hidden="true">{{ inicial() }}</span>
+
+<button type="button" (click)="cerrarSesion()" class="h-10 rounded-xl border border-primary/20 px-3 text-sm font-semibold text-primary transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary">
+  Cerrar sesión
+</button>
+```
+El avatar usa `photoURL` de `firebase/auth` directamente (vía `AuthService.usuario`), no el campo `fotoUrl` del modelo `Usuario` del backend propio.
+
+**Menú hamburguesa** (`md:hidden`, solo con sesión — `barra-navegacion.component.html:74-90`): botón `h-10 w-10 rounded-xl text-primary`, alterna entre SVG "X" y SVG de 3 líneas según `menuAbierto()`.
+
+**Drawer mobile** (`barra-navegacion.component.html:94-145`): `@if (usuario() && menuAbierto())`, bloque `border-t border-primary/10 px-4 py-3 md:hidden` debajo del header (no es un overlay ni un panel lateral) — repite los links en columna, y una fila final con avatar/inicial + nombre + botón "Cerrar sesión". Cada link cierra el drawer al hacer clic (`(click)="cerrarMenu()"`).
+
+Este patrón replica el de `BarraNavegacionComponent` de Ágora (`src/app/shared/navegacion/barra-navegacion.component.html` en ese repo) para mantener consistencia visual entre ambas aplicaciones de Le Tiende.
+
 ---
 
 ## 4. Patrón de formulario único crear/editar

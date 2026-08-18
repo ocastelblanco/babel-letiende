@@ -1,27 +1,18 @@
-import { Component, computed, effect, inject } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { Component, effect, inject } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
 import { UsuariosService } from './core/api/usuarios.service';
+import { BarraNavegacionComponent } from './shared/navegacion/barra-navegacion.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink],
+  imports: [RouterOutlet, BarraNavegacionComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
 export class App {
-  protected readonly authService = inject(AuthService);
+  private readonly authService = inject(AuthService);
   private readonly usuariosService = inject(UsuariosService);
-  private readonly router = inject(Router);
-
-  /**
-   * Se apoya en `authService.usuario()` (no solo en el último valor cacheado
-   * de `UsuariosService`) para que el enlace desaparezca de inmediato al
-   * cerrar sesión, sin depender de limpiar el Signal de `UsuariosService`.
-   */
-  protected readonly esAdministrador = computed(
-    () => this.authService.usuario() !== null && this.usuariosService.usuarioActual()?.rol === 'administrador',
-  );
 
   constructor() {
     effect(() => {
@@ -29,10 +20,5 @@ export class App {
         void this.usuariosService.obtenerUsuarioActual();
       }
     });
-  }
-
-  protected async cerrarSesion(): Promise<void> {
-    await this.authService.cerrarSesion();
-    await this.router.navigateByUrl('/');
   }
 }
