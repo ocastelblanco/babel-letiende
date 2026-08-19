@@ -1,0 +1,117 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="mb-2 text-2xl font-bold text-primary">Validar libros</h1>
+    <p class="mb-6 text-sm text-primary/70">
+      Revalida el PVP y la portada de todo el inventario catalogado contra los sitios de scraping configurados. El
+      PVP se reemplaza solo si el más alto encontrado difiere del actual; una portada inválida se reemplaza si se
+      encuentra una válida, o queda señalada para revisión manual — nunca se borra la portada existente.
+    </p>
+
+    @if (error()) {
+      <p class="mb-4 text-sm text-danger">{{ error() }}</p>
+    }
+
+    <div class="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      @if (enProgreso()) {
+        <h2 class="mb-3 text-sm font-semibold text-primary">Validación en curso</h2>
+
+        <div class="mb-1 h-3 w-full overflow-hidden rounded-full bg-primary/10">
+          <div class="h-full rounded-full bg-tertiary transition-[width]" [style.width.%]="porcentaje()"></div>
+        </div>
+        <p class="mb-4 text-xs text-primary/60">
+          {{ resumen()?.librosRevisados }} de {{ resumen()?.totalLibros }} libros revisados ({{ porcentaje() }}%)
+        </p>
+
+        @if (resumen()?.muebleActualNombre) {
+          <p class="mb-4 text-sm text-primary">Validando: {{ resumen()?.muebleActualNombre }}</p>
+        }
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="rounded-xl border border-primary/10 px-3 py-2">
+            <p class="text-xs text-primary/60">PVP actualizados</p>
+            <p class="text-lg font-semibold text-primary">{{ resumen()?.pvpActualizados }}</p>
+          </div>
+          <div class="rounded-xl border border-primary/10 px-3 py-2">
+            <p class="text-xs text-primary/60">Portadas corregidas</p>
+            <p class="text-lg font-semibold text-primary">{{ resumen()?.portadasCorregidas }}</p>
+          </div>
+        </div>
+      } @else if (terminada()) {
+        <h2 class="mb-3 text-sm font-semibold text-primary">
+          {{ resumen()?.estado === 'error' ? 'La validación terminó con un error' : 'Validación completada' }}
+        </h2>
+
+        <div class="mb-4 grid grid-cols-3 gap-4">
+          <div class="rounded-xl border border-primary/10 px-3 py-2">
+            <p class="text-xs text-primary/60">Revisados</p>
+            <p class="text-lg font-semibold text-primary">{{ resumen()?.librosRevisados }}</p>
+          </div>
+          <div class="rounded-xl border border-primary/10 px-3 py-2">
+            <p class="text-xs text-primary/60">PVP actualizados</p>
+            <p class="text-lg font-semibold text-primary">{{ resumen()?.pvpActualizados }}</p>
+          </div>
+          <div class="rounded-xl border border-primary/10 px-3 py-2">
+            <p class="text-xs text-primary/60">Portadas corregidas</p>
+            <p class="text-lg font-semibold text-primary">{{ resumen()?.portadasCorregidas }}</p>
+          </div>
+        </div>
+
+        @if ((resumen()?.portadasPendientes?.length ?? 0) > 0) {
+          <div class="mb-4">
+            <h3 class="mb-2 text-sm font-semibold text-primary">
+              Portadas pendientes de revisión manual ({{ resumen()?.portadasPendientes?.length }})
+            </h3>
+            <p class="mb-2 text-xs text-primary/60">
+              No se encontró una portada de reemplazo válida — la portada actual se conservó sin cambios. Búscalos
+              por título desde Catalogar → Editar.
+            </p>
+            <ul class="flex flex-col gap-2">
+              @for (pendiente of resumen()?.portadasPendientes; track pendiente.bookId) {
+                <li class="rounded-xl border border-primary/10 px-3 py-2">
+                  <p class="text-sm text-primary">{{ pendiente.titulo }}</p>
+                  <a
+                    [href]="pendiente.portadaUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="truncate text-xs text-tertiary underline"
+                  >
+                    Ver portada actual
+                  </a>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if ((resumen()?.erroresLibro?.length ?? 0) > 0) {
+          <div class="mb-4">
+            <h3 class="mb-2 text-sm font-semibold text-danger">
+              Libros con error puntual ({{ resumen()?.erroresLibro?.length }})
+            </h3>
+            <ul class="flex flex-col gap-1">
+              @for (errorLibro of resumen()?.erroresLibro; track errorLibro.bookId) {
+                <li class="text-xs text-primary/70">{{ errorLibro.bookId }} — {{ errorLibro.mensaje }}</li>
+              }
+            </ul>
+          </div>
+        }
+      } @else {
+        <p class="text-sm text-primary/70">
+          No hay ninguna validación en curso. Al iniciar, se revisa el inventario completo mueble por mueble — puede
+          tardar varios minutos con un catálogo grande.
+        </p>
+      }
+    </div>
+
+    <div class="flex justify-center">
+      <button
+        type="button"
+        (click)="iniciar()"
+        [disabled]="iniciando() || enProgreso()"
+        class="rounded-2xl bg-primary px-6 py-3 text-sm font-semibold tracking-wider text-neutral uppercase shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {{ iniciando() ? 'Iniciando…' : enProgreso() ? 'Validando…' : 'Iniciar validación' }}
+      </button>
+    </div>
+  </div>
+</div>
