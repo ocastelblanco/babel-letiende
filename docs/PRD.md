@@ -167,6 +167,7 @@ El administrador visualiza y descarga en formato XLSX dos tipos de reporte, ambo
   
   Un libro se ubica siempre en una **Ubicación** puntual, que ya implica su Mueble y Espacio. Renombrar un Espacio o un Mueble no afecta la pertenencia de sus Muebles/Ubicaciones ya creados — la relación es por identificador, no por nombre. Los 3 niveles se listan siempre en **orden alfabético** por nombre, en cualquier desplegable o filtro donde aparezcan (esta pantalla, Catalogar, Editar y el catálogo público).
 - Gestión de sitios de scraping (fuentes automáticas de datos y precio): una lista única de sitios de librerías donde el sistema busca información del libro y/o su PVP por ISBN o por título/autor. Por cada sitio se define un nombre, su URL y dos permisos independientes: si está autorizado para extraer datos bibliográficos (`info`) y si está autorizado para extraer el precio (`pvp`) — un sitio puede servir para uno, ambos o ninguno. Reemplaza el antiguo modelo de dos listas separadas (autorizados vs. prohibidos). Por seguridad, aunque un sitio esté en la lista, el sistema solo hace peticiones a dominios públicos válidos (nunca a direcciones internas).
+- **Validar libros (revisión en bloque de PVP y portada):** el administrador dispara, con un solo botón, una revalidación asíncrona de todo el inventario catalogado contra los sitios de scraping configurados. Para el PVP, toma el precio más alto entre los que logra encontrar como referencia y solo reemplaza el de Babel si difiere; los libros sin ISBN se saltan esta parte (no se puede buscar precio por ISBN sin ISBN). Para la portada, detecta placeholders inválidos ya aceptados en el pasado (mismo criterio que al catalogar, §5.2) e intenta reemplazarlos automáticamente; si no encuentra un reemplazo válido, lo deja señalado en una lista para que el administrador lo revise a mano — nunca borra la portada existente. El proceso avanza mueble por mueble y su progreso se ve en pantalla mientras corre. Ver `docs/plan-validar-libros-async.md` para el detalle técnico.
 
 ### 5.7 Catálogo público (sin autenticación)
 
@@ -192,6 +193,7 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | Configuración de descuentos de editorial (CRUD, con autocompletado en catalogación) | Media |
 | Gestión de usuarios (CRUD) | Media |
 | Reportes de ventas + inventario, exportación XLSX | Media |
+| Validar libros — revisión asíncrona en bloque de PVP y portada del inventario catalogado | Media — en diseño, ver `docs/plan-validar-libros-async.md` |
 | ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | **Completado** (dominio personalizado 31/07/2026, lanzamiento público 03/08/2026) — ver `TODO.md` |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
