@@ -14,6 +14,7 @@ import {
   guardar,
   ItemNoExisteError,
   obtenerPorClave,
+  omitirCamposNulos,
 } from '../services/dynamodb';
 
 /**
@@ -393,7 +394,13 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
       actualizadoEn: ahora,
     };
 
-    await guardar(nombreTablaLibros(), libro);
+    // El GSI `isbn-index` de `babel-libros` tipa `isbn` estrictamente `S`:
+    // para que un libro sin ISBN quede FUERA de ese índice disperso, el
+    // atributo debe estar AUSENTE al persistir — no vale con `isbn: null`
+    // (DynamoDB responde `ValidationException`). `omitirCamposNulos` solo
+    // afecta al objeto que se guarda; la respuesta HTTP sigue devolviendo
+    // `isbn: null` explícito, tal como lo espera el frontend.
+    await guardar(nombreTablaLibros(), omitirCamposNulos(libro, ['isbn']));
 
     return respuestaJson(201, libro);
   } catch (error) {
@@ -577,7 +584,10 @@ export const handlerEditar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
       actualizadoEn: new Date().toISOString(),
     };
 
-    await guardar(nombreTablaLibros(), libroActualizado);
+    // Mismo criterio que `handlerCrear`: se persiste sin el `isbn` cuando es
+    // `null` (GSI `isbn-index` tipado `S`), pero la respuesta HTTP sigue
+    // devolviendo `libroActualizado` completo, con `isbn: null` explícito.
+    await guardar(nombreTablaLibros(), omitirCamposNulos(libroActualizado, ['isbn']));
 
     return respuestaJson(200, libroActualizado);
   } catch (error) {
