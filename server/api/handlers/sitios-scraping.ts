@@ -13,6 +13,7 @@ interface SitioScraping {
   info: boolean;
   pvp: boolean;
   prioridad: number;
+  palabrasClaveInvalidas: string[];
 }
 
 /** Copia local de `src/app/core/models/usuario.model.ts` — mismo motivo que en otros handlers. */
@@ -84,6 +85,15 @@ function prioridadValida(valor: unknown): valor is number {
   return typeof valor === 'number' && Number.isFinite(valor);
 }
 
+/**
+ * `palabrasClaveInvalidas` es opcional en el body (default `[]`, Tarea 2 —
+ * sitios creados antes de esta tarea no lo mandan): si viene, debe ser un
+ * arreglo de strings (vacíos se descartan más abajo, no aquí).
+ */
+function palabrasClaveInvalidasValidas(valor: unknown): valor is string[] {
+  return Array.isArray(valor) && valor.every((elemento) => typeof elemento === 'string');
+}
+
 /** Datos aceptados en el body de `PUT /api/sitios-scraping/{dominio}` — sin `dominio` (clave primaria, va en el path). */
 interface DatosSitioScraping {
   nombre: string;
@@ -91,6 +101,7 @@ interface DatosSitioScraping {
   info: boolean;
   pvp: boolean;
   prioridad: number;
+  palabrasClaveInvalidas: string[];
 }
 
 type ResultadoValidacion =
@@ -123,6 +134,13 @@ export function validarDatosSitioScraping(cuerpo: unknown): ResultadoValidacion 
   if (!prioridadValida(datos['prioridad'])) {
     return { valido: false, error: 'La prioridad debe ser un número.' };
   }
+  const palabrasClaveInvalidasCrudas = datos['palabrasClaveInvalidas'];
+  if (palabrasClaveInvalidasCrudas !== undefined && !palabrasClaveInvalidasValidas(palabrasClaveInvalidasCrudas)) {
+    return { valido: false, error: 'palabrasClaveInvalidas debe ser un arreglo de texto.' };
+  }
+  const palabrasClaveInvalidas = (palabrasClaveInvalidasCrudas ?? [])
+    .map((palabra) => palabra.trim())
+    .filter((palabra) => palabra !== '');
 
   return {
     valido: true,
@@ -132,6 +150,7 @@ export function validarDatosSitioScraping(cuerpo: unknown): ResultadoValidacion 
       info: datos['info'],
       pvp: datos['pvp'],
       prioridad: datos['prioridad'] as number,
+      palabrasClaveInvalidas,
     },
   };
 }
@@ -194,7 +213,18 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
 
     if (metodo === 'GET') {
       const sitios = await escanearTodo<SitioScraping>(nombreTablaSitiosScraping());
-      return respuestaJson(200, sitios);
+      // `palabrasClaveInvalidas` (Tarea 2) es un campo nuevo: las filas ya
+      // guardadas en DynamoDB antes de esta tarea no lo tienen (Scan
+      // devuelve el ítem tal cual quedó guardado, sin defaults). Se
+      // normaliza aquí, al leer, para que el contrato de `SitioScraping`
+      // (arreglo siempre presente) se cumpla también para datos viejos —
+      // sin esto, `GestionSitiosScrapingComponent` lanza al leer
+      // `.length`/`.join` sobre `undefined`.
+      const sitiosNormalizados = sitios.map((sitio) => ({
+        ...sitio,
+        palabrasClaveInvalidas: sitio.palabrasClaveInvalidas ?? [],
+      }));
+      return respuestaJson(200, sitiosNormalizados);
     }
 
     if (metodo === 'POST') {

@@ -11,6 +11,7 @@ export interface DatosSitioScraping {
   info: boolean;
   pvp: boolean;
   prioridad: number;
+  palabrasClaveInvalidas: string[];
 }
 
 /**

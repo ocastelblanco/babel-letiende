@@ -35,6 +35,11 @@
                 <p class="text-xs text-primary/60">
                   {{ sitio.info ? '✓ info' : '✗ info' }} · {{ sitio.pvp ? '✓ pvp' : '✗ pvp' }}
                 </p>
+                @if (sitio.palabrasClaveInvalidas && sitio.palabrasClaveInvalidas.length > 0) {
+                  <p class="truncate text-xs text-primary/60">
+                    Portada inválida si contiene: {{ sitio.palabrasClaveInvalidas.join(', ') }}
+                  </p>
+                }
               </div>
               <div class="flex shrink-0 flex-col gap-2">
                 <button
@@ -133,6 +138,23 @@
             <input type="checkbox" formControlName="pvp" class="h-4 w-4 rounded border-primary/20" />
             Fuente de PVP
           </label>
+        </div>
+
+        <div>
+          <label for="palabrasClaveInvalidas" class="mb-1 block text-sm font-semibold text-primary">
+            Palabras clave que invalidan una portada
+          </label>
+          <input
+            id="palabrasClaveInvalidas"
+            type="text"
+            formControlName="palabrasClaveInvalidas"
+            placeholder="no-disponible, sin-imagen"
+            class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
+          />
+          <p class="mt-1 text-xs text-primary/60">
+            Separadas por coma. Si la URL de la portada extraída contiene alguna, se descarta como placeholder y se
+            prueba el siguiente sitio.
+          </p>
         </div>
 
         <div class="flex gap-2">

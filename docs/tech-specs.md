@@ -270,7 +270,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | `babel-estantes` | `estanteId` (PK) | — |
 | `babel-editoriales-descuentos` | `editorial` (PK) | — |
 | `babel-usuarios` | `email` (PK) | Fuente de verdad del rol (`administrador`/`vendedor`). |
-| `babel-sitios-scraping` | `dominio` (PK) | Lista única administrable de sitios de scraping; cada fila con `nombre`, `url`, banderas `info`/`pvp` y `prioridad` (ADR-010). Sustituye el par lista blanca/lista negra. |
+| `babel-sitios-scraping` | `dominio` (PK) | Lista única administrable de sitios de scraping; cada fila con `nombre`, `url`, banderas `info`/`pvp`, `prioridad` (ADR-010) y `palabrasClaveInvalidas: string[]` — palabras (sin distinguir mayúsculas) que, si aparecen en una portada extraída de ese sitio, la marcan como placeholder inválido (`portadaEsInvalida`, `server/api/services/scraping.ts`, `TODO.md`). Sustituye el par lista blanca/lista negra. |
 
 **Decisión de diseño:** se usa una tabla `babel-ventas` separada (en vez de sobrescribir el estado del libro) porque los reportes requieren historial por transacción (fecha, forma de pago, utilidad) y un libro catalogado puede tener múltiples ejemplares vendidos en momentos distintos. `babel-libros.cantidadDisponible` se decrementa en cada venta; cuando llega a 0 el libro deja de aparecer como disponible en el catálogo público.
 

@@ -28,4 +28,14 @@ export interface SitioScraping {
   pvp: boolean;
   /** Orden en la cola de fallback (menor = primero). */
   prioridad: number;
+  /**
+   * Palabras clave (sin distinguir mayúsculas/minúsculas) que, si aparecen en
+   * la URL de una portada extraída de este sitio, la marcan como placeholder
+   * inválido (ej. "no-disponible", "sin-imagen") — el sitio la devuelve como
+   * si fuera una portada real, pero no lo es. `[]` por defecto: ningún sitio
+   * queda excluido salvo que el administrador configure palabras concretas
+   * tras observar el placeholder real del sitio (`GestionSitiosScrapingComponent`).
+   * Ver `portadaEsInvalida` en `server/api/services/scraping.ts`.
+   */
+  palabrasClaveInvalidas: string[];
 }

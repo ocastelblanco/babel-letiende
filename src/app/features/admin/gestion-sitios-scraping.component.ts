@@ -4,6 +4,14 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DatosSitioScraping, SitiosScrapingService } from '../../core/api/sitios-scraping.service';
 import { SitioScraping } from '../../core/models/sitio-scraping.model';
 
+/** Convierte el texto del control "Palabras clave inválidas" (separado por comas) en el `string[]` que espera el backend — descarta entradas vacías (comas de sobra, espacios). */
+function parsearPalabrasClaveInvalidas(valor: string): string[] {
+  return valor
+    .split(',')
+    .map((palabra) => palabra.trim())
+    .filter((palabra) => palabra !== '');
+}
+
 /**
  * Ruta protegida `/admin/sitios` (`RoleGuard('administrador')`,
  * `plan-obtencion-info-libros.md` §6 Task A, ADR-010) — CRUD de la lista
@@ -28,6 +36,15 @@ import { SitioScraping } from '../../core/models/sitio-scraping.model';
  * orden cambió). El backend sigue exigiendo `prioridad` en el contrato
  * (`server/api/handlers/sitios-scraping.ts`), así que nunca se quita del
  * modelo/`DatosSitioScraping` — solo deja de tener un control visible.
+ *
+ * `palabrasClaveInvalidas` (Tarea 2, `TODO.md`): control de texto único
+ * separado por comas (ej. "no-disponible, sin-imagen") — el formulario
+ * nunca maneja el arreglo directamente, se convierte con
+ * `parsearPalabrasClaveInvalidas` recién al guardar, y se reconstruye con
+ * `.join(', ')` al precargar el formulario en modo edición. Usado por el
+ * backend (`portadaEsInvalida`, `server/api/services/scraping.ts`) para
+ * descartar portadas placeholder que este sitio devuelve como si fueran
+ * válidas.
  */
 @Component({
   selector: 'app-gestion-sitios-scraping',
@@ -63,7 +80,18 @@ export class GestionSitiosScrapingComponent implements OnInit {
     url: ['', Validators.required],
     info: [false],
     pvp: [false],
+    /** Texto separado por comas — se convierte a `string[]` recién al guardar (`parsearPalabrasClaveInvalidas`). */
+    palabrasClaveInvalidas: [''],
   });
+
+  private readonly valoresVacios = {
+    dominio: '',
+    nombre: '',
+    url: '',
+    info: false,
+    pvp: false,
+    palabrasClaveInvalidas: '',
+  };
 
   ngOnInit(): void {
     void this.sitiosScrapingService.cargarSitios();
@@ -74,7 +102,7 @@ export class GestionSitiosScrapingComponent implements OnInit {
     this.mensajeExito.set(null);
     this.mensajeError.set(null);
     this.sitioEditandoDominio.set(null);
-    this.formulario.reset({ dominio: '', nombre: '', url: '', info: false, pvp: false });
+    this.formulario.reset(this.valoresVacios);
     this.formulario.controls.dominio.enable();
     this.formularioVisible.set(true);
   }
@@ -90,6 +118,11 @@ export class GestionSitiosScrapingComponent implements OnInit {
       url: sitio.url,
       info: sitio.info,
       pvp: sitio.pvp,
+      // `?? []` defiende contra una fila de babel-sitios-scraping guardada
+      // antes de que existiera este campo (Scan la devuelve sin el
+      // atributo) — el backend ya la normaliza, pero este componente no
+      // debe depender silenciosamente de eso.
+      palabrasClaveInvalidas: (sitio.palabrasClaveInvalidas ?? []).join(', '),
     });
     this.formulario.controls.dominio.disable();
     this.formularioVisible.set(true);
@@ -98,7 +131,7 @@ export class GestionSitiosScrapingComponent implements OnInit {
   /** Sale del modo edición, limpia el formulario, vuelve a habilitar `dominio` y oculta el formulario, sin guardar cambios. */
   protected cancelarEdicion(): void {
     this.sitioEditandoDominio.set(null);
-    this.formulario.reset({ dominio: '', nombre: '', url: '', info: false, pvp: false });
+    this.formulario.reset(this.valoresVacios);
     this.formulario.controls.dominio.enable();
     this.formularioVisible.set(false);
   }
@@ -113,6 +146,7 @@ export class GestionSitiosScrapingComponent implements OnInit {
     }
 
     const valores = this.formulario.getRawValue();
+    const palabrasClaveInvalidas = parsearPalabrasClaveInvalidas(valores.palabrasClaveInvalidas);
     const dominioEditando = this.sitioEditandoDominio();
     const sitiosActuales = this.sitiosScrapingService.sitios();
 
@@ -126,11 +160,13 @@ export class GestionSitiosScrapingComponent implements OnInit {
             pvp: valores.pvp,
             // La prioridad no se edita a mano: se reenvía sin cambios, solo el arrastre la modifica.
             prioridad: sitiosActuales.find((sitio) => sitio.dominio === dominioEditando)?.prioridad ?? 0,
+            palabrasClaveInvalidas,
           } satisfies DatosSitioScraping)
         : await this.sitiosScrapingService.crearSitio({
             ...valores,
             // Nueva fila: va al final de la cola de fallback.
             prioridad: sitiosActuales.reduce((maxima, sitio) => Math.max(maxima, sitio.prioridad), 0) + 1,
+            palabrasClaveInvalidas,
           });
 
       if (resultado.exito) {
@@ -138,7 +174,7 @@ export class GestionSitiosScrapingComponent implements OnInit {
           dominioEditando ? 'Sitio de scraping actualizado correctamente.' : 'Sitio de scraping creado correctamente.',
         );
         this.sitioEditandoDominio.set(null);
-        this.formulario.reset({ dominio: '', nombre: '', url: '', info: false, pvp: false });
+        this.formulario.reset(this.valoresVacios);
         this.formulario.controls.dominio.enable();
         this.formularioVisible.set(false);
       } else {
@@ -187,6 +223,7 @@ export class GestionSitiosScrapingComponent implements OnInit {
             info: sitio.info,
             pvp: sitio.pvp,
             prioridad,
+            palabrasClaveInvalidas: sitio.palabrasClaveInvalidas ?? [],
           } satisfies DatosSitioScraping),
         ),
       );

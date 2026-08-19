@@ -39,6 +39,7 @@ export interface SitioScraping {
   info: boolean;
   pvp: boolean;
   prioridad: number;
+  palabrasClaveInvalidas: string[];
 }
 
 /** Lo que un adaptador logra extraer de un sitio — todos los campos son opcionales porque cualquier extracción puede fallar de forma parcial sin que eso sea un error. */
@@ -617,6 +618,29 @@ const ADAPTADORES_POR_DOMINIO: Record<string, (isbn: string) => Promise<Resultad
   'www.tornamesa.co': scrapearTornamesa,
   'www.buscalibre.com.co': scrapearBuscaLibre,
 };
+
+/**
+ * True si `portadaUrl` contiene, sin distinguir mayúsculas/minúsculas,
+ * alguna de las `palabrasClaveInvalidas` del sitio de origen (Tarea 2,
+ * `TODO.md`) — usado por `resolverMetadatosCompletos` (`metadatos.ts`) para
+ * descartar portadas placeholder ("no-disponible", "sin-imagen", etc.) que
+ * un sitio devuelve como si fueran válidas, y pasar al siguiente sitio de la
+ * cola de fallback. Comparación por substring simple: suficiente porque las
+ * palabras clave se configuran a mano observando la URL real del
+ * placeholder del sitio (`GestionSitiosScrapingComponent`). No decide nada
+ * sobre `sitio.info`/`sitio.pvp` — eso sigue siendo responsabilidad del
+ * llamador, igual que el resto de este archivo.
+ */
+export function portadaEsInvalida(portadaUrl: string | undefined, palabrasClaveInvalidas: string[]): boolean {
+  if (!portadaUrl || palabrasClaveInvalidas.length === 0) {
+    return false;
+  }
+  const urlNormalizada = portadaUrl.toLowerCase();
+  return palabrasClaveInvalidas.some((palabra) => {
+    const palabraNormalizada = palabra.trim().toLowerCase();
+    return palabraNormalizada !== '' && urlNormalizada.includes(palabraNormalizada);
+  });
+}
 
 /**
  * Extrae lo que se pueda de `sitio` (según `sitio.dominio`) para `isbn`.
