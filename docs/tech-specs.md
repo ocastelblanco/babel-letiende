@@ -260,6 +260,8 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | GET / POST / PUT / DELETE | `/api/editoriales-descuentos` | Admin | CRUD de descuentos por editorial (porcentaje por defecto y alternativas para libros en consignación). | `DescuentoEditorial` |
 | GET / POST / PUT / DELETE | `/api/usuarios` | Admin | CRUD de usuarios (vendedores/administradores). | `Usuario` |
 | GET / POST / PUT / DELETE | `/api/sitios-scraping` | Admin | CRUD de la lista única de sitios de scraping (banderas `info`/`pvp`, `prioridad` — ADR-010). PUT/DELETE por `{dominio}`. | `SitioScraping` |
+| POST | `/api/validaciones-libros` | Admin | Inicia una corrida asíncrona de validación de PVP/portada sobre todo el inventario (ADR-012, `plan-validar-libros-async.md`). Responde `202` de inmediato; el trabajo real lo hace la Lambda interna `validarLibrosWorker`, auto-invocada por lotes de 20 libros. `409` si ya hay una corrida `en_progreso` reciente. | — |
+| GET | `/api/validaciones-libros/:validacionId` | Admin | Polling del progreso de una corrida (`ValidacionLibros`: contadores, mueble actual, portadas pendientes de revisión manual, errores puntuales). | — |
 
 ### 5.1 Tablas DynamoDB
 
@@ -271,6 +273,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | `babel-editoriales-descuentos` | `editorial` (PK) | — |
 | `babel-usuarios` | `email` (PK) | Fuente de verdad del rol (`administrador`/`vendedor`). |
 | `babel-sitios-scraping` | `dominio` (PK) | Lista única administrable de sitios de scraping; cada fila con `nombre`, `url`, banderas `info`/`pvp`, `prioridad` (ADR-010) y `palabrasClaveInvalidas: string[]` — palabras (sin distinguir mayúsculas) que, si aparecen en una portada extraída de ese sitio, la marcan como placeholder inválido (`portadaEsInvalida`, `server/api/services/scraping.ts`, `TODO.md`). Sustituye el par lista blanca/lista negra. |
+| `babel-validaciones-libros` | `validacionId` (PK) | Un ítem por corrida completa del proceso asíncrono "Validar libros" (ADR-012): cola ordenada de `bookId` agrupada por mueble, cursor de progreso, contadores de PVP/portada y listas de pendientes/errores. Ver `plan-validar-libros-async.md` para el modelo completo y el contrato de las 3 Lambdas involucradas (`POST /api/validaciones-libros`, `validarLibrosWorker` interna, `GET /api/validaciones-libros/:id`). |
 
 **Decisión de diseño:** se usa una tabla `babel-ventas` separada (en vez de sobrescribir el estado del libro) porque los reportes requieren historial por transacción (fecha, forma de pago, utilidad) y un libro catalogado puede tener múltiples ejemplares vendidos en momentos distintos. `babel-libros.cantidadDisponible` se decrementa en cada venta; cuando llega a 0 el libro deja de aparecer como disponible en el catálogo público.
 
@@ -371,3 +374,4 @@ Ver `CLAUDE.md` §4 (convenciones de código) y §6 (Git Flow para Agentes IA) �
 | Configuración (estantes, editoriales, usuarios) | `src/app/features/admin/*`, `server/api/handlers/estantes.ts`, `editoriales.ts`, `usuarios.ts` | Autenticación con rol admin |
 | Reportes de ventas + XLSX | `src/app/features/admin/reportes/*`, `server/api/handlers/ventas.ts` (GET/exportar) | Registro de venta |
 | `DESIGN.md` propio de Babel | `DESIGN.md` | Definición de componentes del dominio de catalogación |
+| Proceso asíncrono "Validar libros" (PVP + portada, por mueble) | `server/api/handlers/validaciones-libros.ts` (3 funciones), tabla `babel-validaciones-libros`, `src/app/features/admin/validar-libros/*` | Tabla `babel-sitios-scraping` con `palabrasClaveInvalidas` (Tarea 2, `TODO.md`), ADR-012 — ver `plan-validar-libros-async.md` |
