@@ -35,7 +35,7 @@
                 <p class="text-xs text-primary/60">
                   {{ sitio.info ? '✓ info' : '✗ info' }} · {{ sitio.pvp ? '✓ pvp' : '✗ pvp' }}
                 </p>
-                @if (sitio.palabrasClaveInvalidas.length > 0) {
+                @if (sitio.palabrasClaveInvalidas && sitio.palabrasClaveInvalidas.length > 0) {
                   <p class="truncate text-xs text-primary/60">
                     Portada inválida si contiene: {{ sitio.palabrasClaveInvalidas.join(', ') }}
                   </p>

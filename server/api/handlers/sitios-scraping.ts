@@ -213,7 +213,18 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
 
     if (metodo === 'GET') {
       const sitios = await escanearTodo<SitioScraping>(nombreTablaSitiosScraping());
-      return respuestaJson(200, sitios);
+      // `palabrasClaveInvalidas` (Tarea 2) es un campo nuevo: las filas ya
+      // guardadas en DynamoDB antes de esta tarea no lo tienen (Scan
+      // devuelve el ítem tal cual quedó guardado, sin defaults). Se
+      // normaliza aquí, al leer, para que el contrato de `SitioScraping`
+      // (arreglo siempre presente) se cumpla también para datos viejos —
+      // sin esto, `GestionSitiosScrapingComponent` lanza al leer
+      // `.length`/`.join` sobre `undefined`.
+      const sitiosNormalizados = sitios.map((sitio) => ({
+        ...sitio,
+        palabrasClaveInvalidas: sitio.palabrasClaveInvalidas ?? [],
+      }));
+      return respuestaJson(200, sitiosNormalizados);
     }
 
     if (metodo === 'POST') {

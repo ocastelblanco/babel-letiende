@@ -111,7 +111,17 @@ async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosComple
 
   let sitios: SitioScraping[];
   try {
-    sitios = await escanearTodo<SitioScraping>(nombreTablaSitiosScraping());
+    // `palabrasClaveInvalidas` (Tarea 2) puede no existir en filas de
+    // `babel-sitios-scraping` guardadas antes de esta tarea (Scan devuelve
+    // el ítem tal cual, sin defaults) — se normaliza aquí, al leer, para que
+    // `portadaEsInvalida` (abajo) nunca reciba `undefined` en vez de un
+    // arreglo. Sin esto, un sitio viejo con `pvp`/`info` en true rompía con
+    // 500 la ruta crítica de catalogación (`GET /api/metadatos/:isbn`) en
+    // cuanto ese sitio lograba scrapear una portada.
+    sitios = (await escanearTodo<SitioScraping>(nombreTablaSitiosScraping())).map((sitio) => ({
+      ...sitio,
+      palabrasClaveInvalidas: sitio.palabrasClaveInvalidas ?? [],
+    }));
   } catch (error) {
     console.error(
       `resolverMetadatosCompletos: falló el Scan de babel-sitios-scraping para isbn=${isbn}, se degrada a solo api.letiende.co`,

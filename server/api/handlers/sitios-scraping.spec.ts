@@ -193,6 +193,26 @@ describe('handler (/api/sitios-scraping)', () => {
       expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify(listaFalsa) });
     });
 
+    it(
+      'GET normaliza palabrasClaveInvalidas a [] para filas guardadas antes de la Tarea 2 (sin ese ' +
+        'atributo en DynamoDB) — regresión: rompía /admin/sitios y catalogar',
+      async () => {
+        const { palabrasClaveInvalidas: _omitida, ...sitioViejoSinCampo } = datosNuevoValidos;
+        escanearTodoMock.mockResolvedValue([sitioViejoSinCampo]);
+
+        const respuesta = await handler(
+          eventoFalso('GET', { authorization: 'Bearer token' }),
+          {} as never,
+          {} as never,
+        );
+
+        expect(respuesta).toMatchObject({
+          statusCode: 200,
+          body: JSON.stringify([{ ...sitioViejoSinCampo, palabrasClaveInvalidas: [] }]),
+        });
+      },
+    );
+
     it('POST con body inválido responde 400', async () => {
       const respuesta = await handler(
         eventoFalso('POST', { authorization: 'Bearer token', body: { ...datosNuevoValidos, url: 'ftp://no-https' } }),

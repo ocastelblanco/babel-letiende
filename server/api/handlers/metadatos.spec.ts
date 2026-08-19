@@ -320,6 +320,37 @@ describe('handler (/api/metadatos/:isbn)', () => {
     expect(cuerpo.portadaUrl).toBeNull();
   });
 
+  it(
+    'un sitio de babel-sitios-scraping sin palabrasClaveInvalidas (guardado antes de la Tarea 2) no rompe ' +
+      'la resolución de portada — regresión: escanearTodo devuelve el ítem tal cual, sin ese atributo',
+    async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
+      // Sin usar el helper `sitio()` a propósito: simula el Scan real de un
+      // ítem de DynamoDB guardado antes de que existiera este campo, así
+      // que NO tiene la clave `palabrasClaveInvalidas` en absoluto.
+      const sitioViejo = {
+        dominio: 'sitio-viejo.com',
+        nombre: 'sitio-viejo.com',
+        url: 'https://sitio-viejo.com',
+        info: true,
+        pvp: false,
+        prioridad: 1,
+      } as unknown as SitioScraping;
+      escanearTodoMock.mockResolvedValue([sitioViejo]);
+      scrapearSitioMock.mockResolvedValue({ portadaUrl: 'https://sitio-viejo.com/portada.jpg' });
+
+      const respuesta = await handler(
+        eventoFalso({ authorization: 'Bearer token', isbn: '9780000000009' }),
+        {} as never,
+        {} as never,
+      );
+
+      const cuerpo = JSON.parse(respuesta.body as string) as { portadaUrl: string | null };
+      expect(respuesta.statusCode).toBe(200);
+      expect(cuerpo.portadaUrl).toBe('https://sitio-viejo.com/portada.jpg');
+    },
+  );
+
   it('los sitios aplicables se consultan en paralelo, sin esperar a que uno termine antes de invocar el siguiente', async () => {
     obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
     const sitioA = sitio({ dominio: 'a.com', info: true, pvp: false, prioridad: 1 });

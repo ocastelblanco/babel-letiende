@@ -127,6 +127,23 @@ describe('GestionSitiosScrapingComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Portada inválida si contiene: no-disponible, sin-imagen');
   });
 
+  it(
+    'no rompe el listado cuando un sitio viene sin palabrasClaveInvalidas (regresión: el backend ya lo ' +
+      'normaliza, pero el componente no debe depender de eso) — se ven todas las filas y sus botones',
+    () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { palabrasClaveInvalidas: _omitida, ...sitioSinCampo } = sitioTornamesa as any;
+      const { fixture } = configurarPrueba({ sitios: [sitioSinCampo, sitioLerner] });
+
+      const botonesEliminar = Array.from(fixture.nativeElement.querySelectorAll('button')).filter(
+        (boton) => (boton as HTMLElement).textContent?.trim() === 'Eliminar',
+      );
+      expect(botonesEliminar).toHaveLength(2);
+      expect(fixture.nativeElement.textContent).toContain('Tornamesa');
+      expect(fixture.nativeElement.textContent).toContain('Librería Lerner');
+    },
+  );
+
   it('no muestra la línea de palabras clave inválidas cuando el sitio no tiene ninguna configurada', () => {
     const { fixture } = configurarPrueba({ sitios: [sitioLerner] });
 

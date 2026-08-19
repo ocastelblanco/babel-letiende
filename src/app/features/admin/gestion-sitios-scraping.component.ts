@@ -118,7 +118,11 @@ export class GestionSitiosScrapingComponent implements OnInit {
       url: sitio.url,
       info: sitio.info,
       pvp: sitio.pvp,
-      palabrasClaveInvalidas: sitio.palabrasClaveInvalidas.join(', '),
+      // `?? []` defiende contra una fila de babel-sitios-scraping guardada
+      // antes de que existiera este campo (Scan la devuelve sin el
+      // atributo) — el backend ya la normaliza, pero este componente no
+      // debe depender silenciosamente de eso.
+      palabrasClaveInvalidas: (sitio.palabrasClaveInvalidas ?? []).join(', '),
     });
     this.formulario.controls.dominio.disable();
     this.formularioVisible.set(true);
@@ -219,7 +223,7 @@ export class GestionSitiosScrapingComponent implements OnInit {
             info: sitio.info,
             pvp: sitio.pvp,
             prioridad,
-            palabrasClaveInvalidas: sitio.palabrasClaveInvalidas,
+            palabrasClaveInvalidas: sitio.palabrasClaveInvalidas ?? [],
           } satisfies DatosSitioScraping),
         ),
       );
