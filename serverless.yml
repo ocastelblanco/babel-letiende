@@ -2437,6 +2437,20 @@ resources:
                     - !GetAtt TablaLibros.Arn
                     - !GetAtt TablaUbicaciones.Arn
                     - !GetAtt TablaMuebles.Arn
+                # babel-usuarios se consulta con GetItem (obtenerPorClave,
+                # resuelve el rol del token), nunca con Scan — bug real
+                # encontrado en staging (2026-08-19): esta tabla estaba
+                # listada arriba con solo permiso de Scan, así que la
+                # primera llamada real del handler (resolver el rol del
+                # administrador) fallaba con AccessDeniedException, atrapado
+                # por el catch genérico como 500 "Error interno del
+                # servidor." Los tests unitarios no lo detectaron porque
+                # mockean `obtenerPorClave` por completo — nunca ejercitan el
+                # permiso IAM real.
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
                     - !GetAtt TablaUsuarios.Arn
                 - Effect: Allow
                   Action:
