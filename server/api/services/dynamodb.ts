@@ -116,6 +116,30 @@ export async function escanearTodo<T extends object>(nombreTabla: string): Promi
 }
 
 /**
+ * Escanea toda la tabla trayendo solo los atributos indicados
+ * (`ProjectionExpression`) — usado por `babel-validaciones-libros`
+ * (`plan-validar-libros-async.md` §4.1): a diferencia de `escanearTodo`, cada
+ * ítem de esa tabla puede pesar ~100 KB (`colaBookIds` con miles de
+ * `bookId`), y el único propósito de escanearla en `POST
+ * /api/validaciones-libros` es detectar si ya hay una corrida `en_progreso`
+ * — no hace falta traer la cola completa de cada corrida histórica solo para
+ * ese chequeo.
+ */
+export async function escanearProyeccion<T extends object>(
+  nombreTabla: string,
+  atributos: (keyof T & string)[],
+): Promise<T[]> {
+  const resultado = await documento.send(
+    new ScanCommand({
+      TableName: nombreTabla,
+      ProjectionExpression: atributos.map((_, indice) => `#atributo${indice}`).join(', '),
+      ExpressionAttributeNames: Object.fromEntries(atributos.map((atributo, indice) => [`#atributo${indice}`, atributo])),
+    }),
+  );
+  return (resultado.Items ?? []) as T[];
+}
+
+/**
  * Decrementa un atributo numérico en `cantidad` solo si su valor actual es
  * mayor o igual a `cantidad` — operación atómica (`ConditionExpression`) para
  * evitar sobrevender si dos ventas del mismo libro llegan casi al mismo

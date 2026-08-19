@@ -33,6 +33,14 @@ custom:
     editorialesDescuentos: babel-editoriales-descuentos-${sls:stage}
     sitiosScraping: babel-sitios-scraping-${sls:stage}
     usuarios: babel-usuarios-${sls:stage}
+    validacionesLibros: babel-validaciones-libros-${sls:stage}
+  # Nombre real de la función `validarLibrosWorker`, calculado por
+  # convención (no por !GetAtt) para poder referenciarlo tanto en la
+  # variable de entorno `NOMBRE_FUNCION_WORKER` (iniciarValidacionLibros y
+  # ella misma, para auto-invocarse) como en el ARN de su propio rol IAM
+  # sin crear una dependencia circular en CloudFormation (ADR-012,
+  # docs/plan-validar-libros-async.md §5).
+  nombreFuncionValidarLibrosWorker: ${self:service}-${sls:stage}-validarLibrosWorker
 
 functions:
   api:
@@ -1303,6 +1311,189 @@ functions:
           path: /api/sitios-scraping/{dominio}
           method: delete
 
+  iniciarValidacionLibros:
+    handler: dist-server/api/handlers/validaciones-libros.handlerIniciar
+    role: !GetAtt IniciarValidacionLambdaRole.Arn
+    description: >-
+      POST /api/validaciones-libros — inicia una corrida asíncrona de
+      validación de PVP/portada del inventario (ADR-012). Solo
+      administrador. Responde 202 y dispara validarLibrosWorker sin
+      esperar su respuesta.
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_VALIDACIONES_LIBROS: ${self:custom.nombresTablas.validacionesLibros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      NOMBRE_FUNCION_WORKER: ${self:custom.nombreFuncionValidarLibrosWorker}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/validaciones-libros.js'
+        # `validaciones-libros.js` compilado incluye los 3 handlers
+        # (handlerIniciar/handlerWorker/handlerConsultar) en un solo módulo
+        # — el import de nivel superior a verificar-token/scraping (usados
+        # solo por handlerIniciar/handlerConsultar y handlerWorker
+        # respectivamente) igual debe resolver aquí para las 3 funciones que
+        # comparten este archivo (mismo gotcha que libros.ts/ventas.ts,
+        # MEMORY.md §7).
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'dist-server/api/services/scraping.js'
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/validaciones-libros
+          method: post
+
+  validarLibrosWorker:
+    handler: dist-server/api/handlers/validaciones-libros.handlerWorker
+    role: !GetAtt ValidarLibrosWorkerLambdaRole.Arn
+    description: >-
+      Lambda interna SIN ruta HTTP (invocada por iniciarValidacionLibros y
+      por sí misma, InvocationType Event) — procesa la cola de validación
+      en lotes de 20 libros y se auto-invoca hasta terminar (ADR-012).
+    # provider.timeout (10s) no alcanza: un lote de 20 libros puede disparar
+    # hasta 20×4 peticiones de scraping en paralelo — el paralelismo acota
+    # el tiempo de pared al sitio más lento (~16s, mismo dato que
+    # MetadatosLambdaRole), pero 90s deja margen real ante sitios lentos
+    # simultáneos.
+    timeout: 90
+    memorySize: 512
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_VALIDACIONES_LIBROS: ${self:custom.nombresTablas.validacionesLibros}
+      TABLA_SITIOS_SCRAPING: ${self:custom.nombresTablas.sitiosScraping}
+      NOMBRE_FUNCION_WORKER: ${self:custom.nombreFuncionValidarLibrosWorker}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/validaciones-libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'dist-server/api/services/scraping.js'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    # Sin `events`: esta función nunca se expone vía API Gateway, solo se
+    # invoca por lambda:InvokeFunction (ADR-012).
+
+  consultarValidacionLibros:
+    handler: dist-server/api/handlers/validaciones-libros.handlerConsultar
+    role: !GetAtt ConsultarValidacionLambdaRole.Arn
+    description: >-
+      GET /api/validaciones-libros/:validacionId — polling del progreso de
+      una corrida (contadores, mueble actual, portadas pendientes,
+      errores). Exige rol administrador exclusivamente.
+    environment:
+      TABLA_VALIDACIONES_LIBROS: ${self:custom.nombresTablas.validacionesLibros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/validaciones-libros.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'dist-server/api/services/scraping.js'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/validaciones-libros/{validacionId}
+          method: get
+
   registrarVenta:
     handler: dist-server/api/handlers/ventas.handler
     role: !GetAtt RegistrarVentaLambdaRole.Arn
@@ -2214,6 +2405,144 @@ resources:
                   Resource:
                     - !GetAtt TablaUsuarios.Arn
 
+    IniciarValidacionLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-iniciar-validacion-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Scan de solo lectura sobre libros/ubicaciones/muebles (arma la
+          # cola agrupada por mueble) y sobre babel-usuarios (resuelve el
+          # rol del token). Scan + PutItem sobre babel-validaciones-libros
+          # (chequea si ya hay una corrida activa y crea el ítem inicial) —
+          # nunca escribe en babel-libros directamente, eso es
+          # responsabilidad exclusiva de validarLibrosWorker (CLAUDE.md A05,
+          # ADR-008, docs/plan-validar-libros-async.md §5).
+          - PolicyName: babel-iniciar-validacion-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                    - !GetAtt TablaUbicaciones.Arn
+                    - !GetAtt TablaMuebles.Arn
+                    - !GetAtt TablaUsuarios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaValidacionesLibros.Arn
+          # Auto-invocación de validarLibrosWorker (fan-out inicial, sin
+          # esperar su respuesta). El ARN se construye POR CONVENCIÓN
+          # (`${self:custom.nombreFuncionValidarLibrosWorker}`), no con
+          # !GetAtt, para no crear una dependencia circular entre este rol y
+          # la función que auto-invoca (ADR-012).
+          - PolicyName: babel-iniciar-validacion-invoke-worker-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource:
+                    - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.nombreFuncionValidarLibrosWorker}'
+
+    ValidarLibrosWorkerLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-validar-libros-worker-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # GetItem/PutItem sobre babel-validaciones-libros (lee y actualiza
+          # el progreso de la corrida — se sobrescribe el ítem completo en
+          # cada lote, no hace falta UpdateItem). GetItem/PutItem sobre
+          # babel-libros (relee el libro fresco antes de tocarlo, guarda el
+          # PVP/portada corregidos). Scan de solo lectura sobre
+          # babel-sitios-scraping (mismo patrón que MetadatosLambdaRole).
+          # Sin acceso a babel-ubicaciones/babel-muebles: la agrupación por
+          # mueble (`limitesMueble`) ya viene calculada en el ítem de
+          # progreso, el worker no necesita releerlas (CLAUDE.md A05,
+          # ADR-008, docs/plan-validar-libros-async.md §5).
+          - PolicyName: babel-validar-libros-worker-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaValidacionesLibros.Arn
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaSitiosScraping.Arn
+          # Auto-invocación (continúa la cola hasta agotarla) — mismo ARN
+          # por convención que IniciarValidacionLambdaRole, y por el mismo
+          # motivo: referenciar el Arn real de esta función crearía una
+          # dependencia circular (el rol necesita el ARN de la función, la
+          # función necesita el rol) — ADR-012.
+          - PolicyName: babel-validar-libros-worker-invoke-self-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource:
+                    - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.nombreFuncionValidarLibrosWorker}'
+
+    ConsultarValidacionLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-consultar-validacion-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lee (GetItem) babel-validaciones-libros y babel-usuarios
+          # (resuelve el rol del token) — endpoint de solo consulta, sin
+          # acceso de escritura a ninguna tabla (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-consultar-validacion-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaValidacionesLibros.Arn
+                    - !GetAtt TablaUsuarios.Arn
+
     RegistrarVentaLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -2464,6 +2793,23 @@ resources:
             AttributeType: S
         KeySchema:
           - AttributeName: email
+            KeyType: HASH
+
+    # Un ítem por corrida completa del proceso asíncrono "Validar libros"
+    # (ADR-012, docs/plan-validar-libros-async.md §3) — sin GSI: el único
+    # acceso es por `validacionId` (GetItem) o un Scan proyectado a pocos
+    # atributos para detectar una corrida `en_progreso`
+    # (`escanearProyeccion`, server/api/services/dynamodb.ts).
+    TablaValidacionesLibros:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.validacionesLibros}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: validacionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: validacionId
             KeyType: HASH
 
     # --- Dominio personalizado babel.letiende.co (solo stage production, PRD.md §6) ---
