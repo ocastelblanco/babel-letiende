@@ -77,9 +77,9 @@ Sin cambios de documentación de fondo (bugfix, no cambio de comportamiento visi
 
 ---
 
-## Tarea 2 — Palabras clave que invalidan una portada de scraping
+## Tarea 2 — Palabras clave que invalidan una portada de scraping — COMPLETA (2026-08-19)
 
-Nuevo campo `palabrasClaveInvalidas: string[]` en `SitioScraping` (propagar a las 3 copias del tipo), helper `portadaEsInvalida()` en `scraping.ts`, wiring en `metadatos.ts` (el llenado de `portadaUrl` por prioridad descarta candidatos inválidos y pasa al siguiente sitio), y control nuevo en `GestionSitiosScrapingComponent` (input de palabras separadas por coma). Detalle completo en el plan de la sesión que abrió esta tarea.
+Nuevo campo `palabrasClaveInvalidas: string[]` en `SitioScraping` (propagado a las 3 copias del tipo), helper `portadaEsInvalida()` en `scraping.ts`, wiring en `metadatos.ts` (el llenado de `portadaUrl` por prioridad descarta candidatos inválidos y pasa al siguiente sitio), y control nuevo en `GestionSitiosScrapingComponent` (input de palabras separadas por coma). PR #90, validado por el usuario en `staging` ("Funciona bien").
 
 - [x] Modelo + validación backend (3 copias del tipo, default `[]`).
 - [x] `portadaEsInvalida()` + wiring en `resolverMetadatosCompletos`.
@@ -87,14 +87,16 @@ Nuevo campo `palabrasClaveInvalidas: string[]` en `SitioScraping` (propagar a la
 - [x] Tests (`portadaEsInvalida`, `metadatos.spec.ts`, `sitios-scraping.spec.ts`, `gestion-sitios-scraping.component.spec.ts`).
 - [x] `docs/tech-specs.md` (modelo `SitioScraping`), `docs/PRD.md` §5.2 (mención breve).
 
-**Implementación lista (2026-08-18), PR abierto — pendiente de validación del usuario en `staging`.** No se marca "COMPLETA" ni se promueve la Tarea 3 hasta que el usuario confirme.
+**Bug real encontrado por el usuario durante la validación en `staging` (mismo PR, commit adicional):** `/admin/sitios` aparecía incompleta (sin botones "Eliminar", solo el primer sitio con info visible) — las filas de `babel-sitios-scraping` guardadas antes de esta tarea no tienen el atributo `palabrasClaveInvalidas` (el `Scan` de DynamoDB devuelve el ítem tal cual quedó guardado, sin aplicar el default `[]`, que solo se aplicaba en el path de escritura). `GestionSitiosScrapingComponent` leía `.length`/`.join()` sobre `undefined` y lanzaba al renderizar esa fila. El mismo hueco rompía, más grave, `GET /api/metadatos/:isbn` (ruta crítica de catalogación) con `500` en cuanto un sitio viejo con `info`/`pvp` en `true` lograba scrapear una portada. Corregido normalizando `palabrasClaveInvalidas ?? []` en los 2 puntos de lectura (`sitios-scraping.ts` GET, `metadatos.ts`), más guardas `?? []` en el componente (no depender solo de la normalización del backend). Tests de regresión en los 3 archivos — ver `MEMORY.md` §7 (gotcha nuevo) y §2.
+
+Con esto se cierra el lote de 3 ajustes de catalogación traído el 2026-08-18 (Tarea 1 isbn nulo, Tarea 2 palabras clave de portada) — solo queda la Tarea 3 (backlog), que se promueve abajo.
 
 ---
 
-## Backlog
+## Tarea 3 — Proceso asíncrono "Validar libros" (PVP + portada, por mueble)
 
-### Tarea 3 — Proceso asíncrono "Validar libros" (PVP + portada, por mueble)
+La más grande de las 3 del lote — primer patrón asíncrono del proyecto (Lambda `validarLibrosWorker` auto-invocada por lotes + tabla `babel-validaciones-libros` de progreso + polling desde el frontend), 3 funciones Lambda nuevas, componente admin nuevo `ValidarLibrosComponent` en `/admin/validar-libros`. Ya puede empezar: la Tarea 2 (`palabrasClaveInvalidas`/`portadaEsInvalida`) de la que dependía está cerrada y validada. Requiere ADR-012 nuevo en `docs/tech-specs.md`/`docs/MEMORY.md` §3 justificando la elección de arquitectura (sin Step Functions/SQS).
 
-La más grande de las 3 — primer patrón asíncrono del proyecto (Lambda `validarLibrosWorker` auto-invocada por lotes + tabla `babel-validaciones-libros` de progreso + polling desde el frontend), 3 funciones Lambda nuevas, componente admin nuevo `ValidarLibrosComponent` en `/admin/validar-libros`. Depende de que la Tarea 2 ya exista (usa `palabrasClaveInvalidas`/`portadaEsInvalida`). Requiere ADR-012 nuevo en `docs/tech-specs.md`/`docs/MEMORY.md` §3 justificando la elección de arquitectura (sin Step Functions/SQS). Detalle completo (modelo de datos, las 3 Lambdas, IAM, regla de consenso de PVP, frontend) en el plan de la sesión que abrió esta tarea.
+**Decisiones de diseño ya resueltas con el usuario (2026-08-18, ver bitácora arriba):** regla de consenso de PVP simplificada a "el más alto como referencia"; chequeo de portada inválida global, no por sitio de origen; arquitectura async = Lambda auto-invocada por lotes + tabla de progreso, sin Step Functions/SQS; libros sin ISBN se saltan solo la validación de PVP.
 
-**No iniciar hasta cerrar la Tarea 2** — si al implementarla resulta demasiado grande para un solo PR revisable, se parte en 2 (backend primero, frontend después), decisión a tomar en el momento.
+**Pendiente antes de escribir código:** el detalle fino (modelo exacto de `babel-validaciones-libros`, contrato de las 3 Lambdas, permisos IAM, forma del polling desde el frontend) no quedó persistido en ningún documento — solo existió en la conversación de la sesión que trajo el lote. Al arrancar esta tarea, la sesión que la tome debe redactar ese detalle desde cero (releyendo este resumen + el modelo real de `SitioScraping`/`Libro` ya en el código) antes de escribir ningún handler, en vez de asumir que existe un plan más detallado en algún otro lado. Si al implementarla resulta demasiado grande para un solo PR revisable, se parte en 2 (backend primero, frontend después), decisión a tomar en el momento.
