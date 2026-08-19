@@ -1,8 +1,15 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { CatalogarLibroComponent } from './catalogar-libro.component';
 import { EditarLibroComponent } from './editar-libro.component';
 
 type Pestaña = 'catalogar' | 'editar';
+
+/** Ambas pestañas comparten la ruta `/catalogar` (sin sub-ruta propia), así que el `title:` de la ruta solo cubre la pestaña inicial — el cambio de pestaña debe actualizar el `<title>` a mano. */
+const TITULOS_PESTANA: Record<Pestaña, string> = {
+  catalogar: 'Catalogar - Le Tiende',
+  editar: 'Editar - Le Tiende',
+};
 
 /**
  * Ruta protegida `/catalogar` (`RoleGuard(['vendedor','administrador'])`,
@@ -22,9 +29,12 @@ type Pestaña = 'catalogar' | 'editar';
   templateUrl: './gestionar.component.html',
 })
 export class GestionarComponent {
+  private readonly title = inject(Title);
+
   protected readonly pestanaActiva = signal<Pestaña>('catalogar');
 
   protected cambiarPestana(pestaña: Pestaña): void {
     this.pestanaActiva.set(pestaña);
+    this.title.setTitle(TITULOS_PESTANA[pestaña]);
   }
 }

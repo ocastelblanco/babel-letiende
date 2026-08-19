@@ -35,12 +35,16 @@ export const routes: Routes = [
     path: 'catalogar',
     component: GestionarComponent,
     canActivate: [RoleGuard(['vendedor', 'administrador'])],
+    // `title` inicial (pestaña "Catalogar") — `GestionarComponent` lo
+    // sobreescribe al cambiar de pestaña (ver `TITULOS_PESTANA` ahí).
+    title: 'Catalogar - Le Tiende',
   },
   {
     // Punto de entrada a la sección de administración (tech-specs.md §4.2) — solo administrador.
     path: 'admin',
     component: AdminInicioComponent,
     canActivate: [RoleGuard('administrador')],
+    title: 'Administración - Le Tiende',
   },
   {
     // CRUD del modelo jerárquico de ubicación física Espacio → Mueble →
@@ -49,30 +53,35 @@ export const routes: Routes = [
     path: 'admin/ubicaciones',
     component: GestionUbicacionFisicaComponent,
     canActivate: [RoleGuard('administrador')],
+    title: 'Ubicación física - Le Tiende',
   },
   {
     // CRUD de sitios de scraping (plan-obtencion-info-libros.md §6 Task A, ADR-010) — solo administrador, mismo patrón que /admin/estantes.
     path: 'admin/sitios',
     component: GestionSitiosScrapingComponent,
     canActivate: [RoleGuard('administrador')],
+    title: 'Sitios de scraping - Le Tiende',
   },
   {
     // CRUD de usuarios (PRD.md §5.6, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/estantes.
     path: 'admin/usuarios',
     component: GestionUsuariosComponent,
     canActivate: [RoleGuard('administrador')],
+    title: 'Usuarios - Le Tiende',
   },
   {
     // CRUD de descuentos por editorial (PRD.md §5.6, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/usuarios.
     path: 'admin/editoriales',
     component: GestionDescuentosEditorialesComponent,
     canActivate: [RoleGuard('administrador')],
+    title: 'Descuentos editoriales - Le Tiende',
   },
   {
     // Exportación de reportes de ventas (PRD.md §5.5, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/usuarios.
     path: 'admin/reportes',
     component: ReportesVentasComponent,
     canActivate: [RoleGuard('administrador')],
+    title: 'Reportes de ventas - Le Tiende',
   },
   {
     // Proceso asíncrono "Validar libros" (PVP + portada, por mueble) —
@@ -81,6 +90,7 @@ export const routes: Routes = [
     path: 'admin/validar-libros',
     component: ValidarLibrosComponent,
     canActivate: [RoleGuard('administrador')],
+    title: 'Validar libros - Le Tiende',
   },
   { path: '**', redirectTo: '' },
 ];
