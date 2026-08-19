@@ -64,14 +64,14 @@ Con las 2 tareas de arriba cerradas, y "Modo offline" ya cancelado (2026-07-27, 
 
 ---
 
-## Tarea 1 — Permitir catalogar libros sin ISBN
+## Tarea 1 — Permitir catalogar libros sin ISBN — COMPLETA (2026-08-18)
 
-`server/api/services/dynamodb.ts` + `server/api/handlers/libros.ts` — el atributo `isbn` debe omitirse del ítem (no guardarse como `null`) antes de `PutCommand`, porque el GSI `isbn-index` lo tipa `S` y un índice disperso exige que el atributo esté ausente, no `null`, para quedar fuera del índice:
+`server/api/services/dynamodb.ts` + `server/api/handlers/libros.ts` — el atributo `isbn` debe omitirse del ítem (no guardarse como `null`) antes de `PutCommand`/`UpdateCommand`, porque el GSI `isbn-index` lo tipa `S` y un índice disperso exige que el atributo esté ausente, no `null`, para quedar fuera del índice. PR #89, validado por el usuario en `staging` ("Funciona bien").
 
-- [ ] Nueva función `omitirCamposNulos` en `dynamodb.ts`.
-- [ ] Aplicarla en `handlerCrear`/`handlerEditar` (y verificar `handlerFusionarDuplicado`) antes de `guardar()`.
-- [ ] Test que confirme que `isbn` no viaja como `null` al mock de `guardar()`.
-- [ ] Prueba manual en `staging`: catalogar un libro sin ISBN.
+- [x] Nueva función `omitirCamposNulos` en `dynamodb.ts`.
+- [x] Aplicada en `handlerCrear`/`handlerEditar` antes de `guardar()`. `fusionarLibroDuplicado` (`UpdateCommand`, no `PutCommand`) tenía el mismo bug por una ruta distinta — corregido con `REMOVE #isbn` condicional en vez de `SET #isbn = :isbn`, hallazgo del agente durante la implementación, no anticipado en el plan original.
+- [x] Tests nuevos en `libros.spec.ts` (objeto guardado sin la clave `isbn`, respuesta HTTP con `isbn: null` intacto).
+- [x] Validado por el usuario en `staging`.
 
 Sin cambios de documentación de fondo (bugfix, no cambio de comportamiento visible) — solo esta entrada de bitácora.
 
@@ -87,7 +87,7 @@ Nuevo campo `palabrasClaveInvalidas: string[]` en `SitioScraping` (propagar a la
 - [ ] Tests (`portadaEsInvalida`, `metadatos.spec.ts`, `sitios-scraping.spec.ts`, `gestion-sitios-scraping.component.spec.ts`).
 - [ ] `docs/tech-specs.md` (modelo `SitioScraping`), `docs/PRD.md` §5.2 (mención breve).
 
-**No iniciar hasta cerrar la Tarea 1.**
+**Lista para iniciar** — la Tarea 1 ya cerró.
 
 ---
 
