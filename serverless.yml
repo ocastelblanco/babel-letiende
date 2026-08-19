@@ -2967,3 +2967,24 @@ resources:
           DNSName: !GetAtt DominioPersonalizadoBabel.RegionalDomainName
           HostedZoneId: !GetAtt DominioPersonalizadoBabel.RegionalHostedZoneId
           EvaluateTargetHealth: false
+
+  # Parchea recursos generados por Serverless Framework sin redefinirlos por
+  # completo (soportado desde Serverless v3.32+/v4).
+  extensions:
+    # validarLibrosWorker se auto-invoca por lotes de 20 libros hasta agotar
+    # la cola (ADR-012) — un patrón recursivo intencional y con condición de
+    # corte propia (`terminada` en validaciones-libros.ts). La detección de
+    # bucles recursivos de Lambda (activa por defecto en toda la cuenta,
+    # basada en el header de linaje de X-Ray, sin relación con X-Ray activo)
+    # no distingue esto de un bucle infinito accidental: corta la cadena a
+    # las ~16 invocaciones sin loggear ningún error en la función (verificado
+    # en producción, incidente 2026-08-19 — la corrida se detuvo exactamente
+    # en 320/924 libros = 16×20, con `RecursiveInvocationsDropped=1` en
+    # CloudWatch y cero errores/throttles). `RecursiveLoop: Allow` es el
+    # mecanismo que AWS documenta para este caso exacto (patrón recursivo
+    # intencional con corte propio) — sin esto, ninguna corrida de más de 320
+    # libros puede completarse jamás, sin importar cuántas veces se reintente
+    # "Iniciar validación".
+    ValidarLibrosWorkerLambdaFunction:
+      Properties:
+        RecursiveLoop: Allow
