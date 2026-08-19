@@ -1,0 +1,50 @@
+@if (visible()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-primary/40 px-4">
+    <div class="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <h2 class="mb-4 text-lg font-bold text-primary">Elegir portada</h2>
+
+      @if (cargando()) {
+        <p class="py-6 text-center text-sm text-primary/70">Buscando portadas…</p>
+      } @else if (candidatos().length === 0) {
+        <p class="py-6 text-center text-sm text-primary/70">No se encontraron portadas alternativas.</p>
+      } @else {
+        <div class="grid max-h-96 grid-cols-2 gap-3 overflow-y-auto py-1 sm:grid-cols-3">
+          @for (candidato of candidatos(); track candidato.portadaUrl) {
+            <button
+              type="button"
+              (click)="seleccionar(candidato)"
+              class="flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-center transition-opacity hover:opacity-90"
+              [class.border-secondary]="seleccionada() === candidato.portadaUrl"
+              [class.border-transparent]="seleccionada() !== candidato.portadaUrl"
+            >
+              <img
+                [src]="candidato.portadaUrl"
+                [alt]="candidato.nombre"
+                class="h-32 w-24 rounded-lg object-cover"
+              />
+              <span class="truncate text-xs text-primary/70">{{ candidato.nombre }}</span>
+            </button>
+          }
+        </div>
+      }
+
+      <div class="mt-4 flex gap-2">
+        <button
+          type="button"
+          (click)="cancelar()"
+          class="h-12 flex-1 rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          (click)="confirmar()"
+          [disabled]="!seleccionada()"
+          class="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Cambiar
+        </button>
+      </div>
+    </div>
+  </div>
+}

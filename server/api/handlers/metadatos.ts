@@ -170,6 +170,60 @@ async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosComple
   return resultado;
 }
 
+/** Portada candidata de un sitio de scraping puntual — contrato de `GET /api/metadatos/:isbn/portadas` (selector manual de portada). */
+interface PortadaCandidata {
+  dominio: string;
+  nombre: string;
+  portadaUrl: string;
+}
+
+/**
+ * Resuelve TODAS las portadas candidatas encontradas por ISBN en los sitios
+ * `info: true` — a diferencia de `resolverMetadatosCompletos` (que se queda
+ * solo con la primera portada válida por prioridad), esta función es para el
+ * selector manual: el vendedor/administrador elige a ojo entre TODAS las
+ * opciones encontradas, para el caso de placeholders genéricos sin palabra
+ * clave detectable por `portadaEsInvalida` (ej. URLs con un ID individual).
+ * Solo se excluyen las portadas que SÍ coinciden con una palabra clave ya
+ * conocida como inválida — el resto se muestra sin filtrar, el criterio
+ * final es humano. Ordenado por `prioridad` ascendente (mismo criterio de
+ * desempate que `resolverMetadatosCompletos`). Nunca lanza: un `Scan` fallido
+ * degrada a `[]`, igual que el resto de este archivo.
+ */
+async function resolverPortadasCandidatas(isbn: string): Promise<PortadaCandidata[]> {
+  let sitios: SitioScraping[];
+  try {
+    // Misma normalización que `resolverMetadatosCompletos` — filas de
+    // `babel-sitios-scraping` guardadas antes de la Tarea 2 pueden no tener
+    // `palabrasClaveInvalidas` (gotcha ya documentado, MEMORY.md §7).
+    sitios = (await escanearTodo<SitioScraping>(nombreTablaSitiosScraping())).map((sitio) => ({
+      ...sitio,
+      palabrasClaveInvalidas: sitio.palabrasClaveInvalidas ?? [],
+    }));
+  } catch (error) {
+    console.error(`resolverPortadasCandidatas: falló el Scan de babel-sitios-scraping para isbn=${isbn}`, error);
+    return [];
+  }
+
+  const sitiosInfo = sitios.filter((sitio) => sitio.info).sort((a, b) => a.prioridad - b.prioridad);
+  if (sitiosInfo.length === 0) {
+    return [];
+  }
+
+  const resultados = await Promise.all(
+    sitiosInfo.map(async (sitio) => ({ sitio, resultado: await scrapearSitio(sitio, isbn) })),
+  );
+
+  const candidatas: PortadaCandidata[] = [];
+  for (const { sitio, resultado } of resultados) {
+    if (resultado.portadaUrl && !portadaEsInvalida(resultado.portadaUrl, sitio.palabrasClaveInvalidas)) {
+      candidatas.push({ dominio: sitio.dominio, nombre: sitio.nombre, portadaUrl: resultado.portadaUrl });
+    }
+  }
+
+  return candidatas;
+}
+
 /**
  * `GET /api/metadatos/:isbn` — autocompleta título/autor/editorial/portada/pvp
  * al catalogar un libro, combinando la API externa `api.letiende.co`
@@ -314,6 +368,41 @@ export const handlerBuscarPvp: APIGatewayProxyHandlerV2 = async (event): Promise
 
     const pvp = await buscarPvpPorTexto(titulo, autor);
     return respuestaJson(200, { pvp });
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `GET /api/metadatos/:isbn/portadas` — selector manual de portada: cuando
+ * la portada cargada es un placeholder genérico sin palabra clave detectable
+ * (`palabrasClaveInvalidas`, Tarea 2 — ej. URLs con un ID individual), el
+ * vendedor/administrador puede pedir TODAS las portadas candidatas
+ * encontradas en vivo en los sitios `info: true` y elegir la correcta a
+ * ojo, desde `/catalogar` (Catalogar y Editar). Exige rol `vendedor` **o**
+ * `administrador`, mismo criterio que `handler`/`handlerBuscar`. Siempre
+ * responde `200` (`portadas: []` si no se encontró ninguna candidata válida)
+ * — "sin resultados" es un resultado válido, nunca un error (CLAUDE.md A08).
+ */
+export const handlerBuscarPortadas: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (usuario?.rol !== 'vendedor' && usuario?.rol !== 'administrador') {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para consultar metadatos en Babel.' });
+    }
+
+    const isbn = event.pathParameters?.['isbn'];
+    if (!isbn) {
+      return respuestaJson(400, { error: 'Falta el isbn en la ruta.' });
+    }
+
+    const portadas = await resolverPortadasCandidatas(isbn);
+    return respuestaJson(200, { portadas });
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

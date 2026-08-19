@@ -84,6 +84,9 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
   // Por defecto no encuentra precio — las pruebas de PVP de un candidato sin
   // ISBN sobrescriben esta resolución.
   const buscarPvpMock = vi.fn().mockResolvedValue(null);
+  // Por defecto no encuentra portadas — las pruebas del selector manual de
+  // portada sobrescriben esta resolución.
+  const buscarPortadasMock = vi.fn().mockResolvedValue([]);
 
   TestBed.configureTestingModule({
     providers: [
@@ -109,6 +112,7 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
           obtenerMetadatos: obtenerMetadatosMock,
           buscarCandidatos: buscarCandidatosMock,
           buscarPvp: buscarPvpMock,
+          buscarPortadas: buscarPortadasMock,
         },
       },
       {
@@ -136,6 +140,7 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
     obtenerMetadatosMock,
     buscarCandidatosMock,
     buscarPvpMock,
+    buscarPortadasMock,
   };
 }
 
@@ -1279,6 +1284,82 @@ describe('CatalogarLibroComponent', () => {
       campoEditorial.dispatchEvent(new Event('blur'));
 
       expect(componente.formulario.value.porcentajeDescuentoEditorial).toBe(40);
+    });
+  });
+
+  describe('selector manual de portada', () => {
+    function botonActualizarPortada(fixture: ComponentFixture<CatalogarLibroComponent>): HTMLButtonElement | null {
+      return fixture.nativeElement.querySelector('button[aria-label="Buscar otra portada"]');
+    }
+
+    /** Simula lo que hace un vendedor de verdad: escribir en el campo y disparar `input`, no mutar el FormControl a mano — mismo patrón que el resto del archivo (ej. `campoIsbn.dispatchEvent(new Event('input'))`). */
+    function escribirEnCampo(fixture: ComponentFixture<CatalogarLibroComponent>, id: string, valor: string): void {
+      const campo = fixture.nativeElement.querySelector(`#${id}`) as HTMLInputElement;
+      campo.value = valor;
+      campo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('el botón de actualizar portada no aparece sin una portada ya cargada', () => {
+      const { fixture } = configurarPrueba();
+
+      expect(botonActualizarPortada(fixture)).toBeNull();
+    });
+
+    it('el botón está deshabilitado sin ISBN, habilitado con ISBN presente', () => {
+      const { fixture } = configurarPrueba();
+
+      escribirEnCampo(fixture, 'portadaUrl', 'https://ejemplo.com/portada.jpg');
+
+      expect(botonActualizarPortada(fixture)?.disabled).toBe(true);
+
+      escribirEnCampo(fixture, 'isbn', '9780000000001');
+
+      expect(botonActualizarPortada(fixture)?.disabled).toBe(false);
+    });
+
+    it('clic en el botón abre el selector, que busca portadas con el isbn actual', async () => {
+      const { fixture, buscarPortadasMock } = configurarPrueba();
+      escribirEnCampo(fixture, 'isbn', '9780000000001');
+      escribirEnCampo(fixture, 'portadaUrl', 'https://ejemplo.com/portada.jpg');
+
+      botonActualizarPortada(fixture)?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(buscarPortadasMock).toHaveBeenCalledWith('9780000000001');
+      expect(fixture.nativeElement.textContent).toContain('Elegir portada');
+    });
+
+    it('seleccionar una portada en el diálogo actualiza portadaUrl y lo cierra', async () => {
+      const { fixture, buscarPortadasMock } = configurarPrueba();
+      buscarPortadasMock.mockResolvedValue([
+        { dominio: 'www.librerialerner.com.co', nombre: 'Librería Lerner', portadaUrl: 'https://lerner.com/nueva.jpg' },
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      escribirEnCampo(fixture, 'isbn', '9780000000001');
+      escribirEnCampo(fixture, 'portadaUrl', 'https://ejemplo.com/portada-vieja.jpg');
+
+      botonActualizarPortada(fixture)?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const tarjeta = Array.from(fixture.nativeElement.querySelectorAll('button')).find((boton) =>
+        (boton as HTMLElement).textContent?.includes('Librería Lerner'),
+      ) as HTMLButtonElement;
+      tarjeta.click();
+      fixture.detectChanges();
+
+      const botonCambiar = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+        (boton) => (boton as HTMLElement).textContent?.trim() === 'Cambiar',
+      ) as HTMLButtonElement;
+      botonCambiar.click();
+      fixture.detectChanges();
+
+      expect(componente.formulario.value.portadaUrl).toBe('https://lerner.com/nueva.jpg');
+      expect(componente.selectorPortadaVisible()).toBe(false);
     });
   });
 });

@@ -63,7 +63,7 @@ vi.mock('../services/scraping', async () => {
   };
 });
 
-const { handler, handlerBuscar, handlerBuscarPvp } = await import('./metadatos');
+const { handler, handlerBuscar, handlerBuscarPvp, handlerBuscarPortadas } = await import('./metadatos');
 
 /** Crea una promesa que solo se resuelve cuando el test invoca `resolve` explícitamente — usada para controlar el orden de llegada de red en los tests de paralelismo/prioridad. */
 function crearDiferida<T>(): { promise: Promise<T>; resolve: (valor: T) => void } {
@@ -706,5 +706,172 @@ describe('handlerBuscarPvp (/api/metadatos/buscar-pvp)', () => {
     const respuesta = await promesaHandler;
 
     expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ pvp: 85000 }) });
+  });
+});
+
+describe('handlerBuscarPortadas (/api/metadatos/:isbn/portadas)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_SITIOS_SCRAPING'] = 'babel-sitios-scraping-test';
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    escanearTodoMock.mockResolvedValue([]);
+    scrapearSitioMock.mockResolvedValue({});
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ isbn: '9780000000001' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el rol no es vendedor ni administrador', async () => {
+    obtenerPorClaveMock.mockResolvedValue({ email: 'otro@letiende.co', rol: 'invitado' });
+
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000001' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 400 cuando falta el isbn en la ruta', async () => {
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+  });
+
+  it('sin sitios info=true, responde 200 con portadas: [] sin llamar a scrapearSitio', async () => {
+    escanearTodoMock.mockResolvedValue([
+      sitio({ dominio: 'solo-pvp.com', info: false, pvp: true, prioridad: 1 }),
+    ]);
+
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000001' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(scrapearSitioMock).not.toHaveBeenCalled();
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ portadas: [] }) });
+  });
+
+  it('si el Scan de babel-sitios-scraping falla, degrada a portadas: [] sin lanzar', async () => {
+    escanearTodoMock.mockRejectedValue(new Error('DynamoDB no disponible'));
+
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000001' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(scrapearSitioMock).not.toHaveBeenCalled();
+    expect(respuesta).toMatchObject({ statusCode: 200, body: JSON.stringify({ portadas: [] }) });
+  });
+
+  it('devuelve todas las portadas candidatas, ordenadas por prioridad ascendente sin importar el orden de resolución', async () => {
+    const sitioMejorPrioridad = sitio({ dominio: 'mejor.com', info: true, prioridad: 1 });
+    const sitioPeorPrioridad = sitio({ dominio: 'peor.com', info: true, prioridad: 2 });
+    escanearTodoMock.mockResolvedValue([sitioPeorPrioridad, sitioMejorPrioridad]);
+
+    const diferidaMejor = crearDiferida<ResultadoScraping>();
+    const diferidaPeor = crearDiferida<ResultadoScraping>();
+    scrapearSitioMock.mockImplementation((s: SitioScraping): Promise<ResultadoScraping> => {
+      return s.dominio === 'mejor.com' ? diferidaMejor.promise : diferidaPeor.promise;
+    });
+
+    const promesaHandler = handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000002' }),
+      {} as never,
+      {} as never,
+    );
+
+    // Resuelve primero el de peor prioridad — el orden final del array no
+    // debe depender del orden de llegada de red, solo de `prioridad`.
+    diferidaPeor.resolve({ portadaUrl: 'https://peor.com/portada.jpg' });
+    await Promise.resolve();
+    diferidaMejor.resolve({ portadaUrl: 'https://mejor.com/portada.jpg' });
+
+    const respuesta = await promesaHandler;
+    const cuerpo = JSON.parse(respuesta.body as string) as { portadas: Array<{ dominio: string }> };
+    expect(cuerpo.portadas.map((p) => p.dominio)).toEqual(['mejor.com', 'peor.com']);
+  });
+
+  it('excluye portadas cuya URL coincide con palabrasClaveInvalidas del sitio de origen', async () => {
+    escanearTodoMock.mockResolvedValue([
+      sitio({ dominio: 'placeholder.com', info: true, prioridad: 1, palabrasClaveInvalidas: ['no-disponible'] }),
+      sitio({ dominio: 'portada-real.com', info: true, prioridad: 2 }),
+    ]);
+    scrapearSitioMock.mockImplementation(async (s: SitioScraping): Promise<ResultadoScraping> => {
+      if (s.dominio === 'placeholder.com') {
+        return { portadaUrl: 'https://placeholder.com/img/no-disponible.jpg' };
+      }
+      return { portadaUrl: 'https://portada-real.com/img/portada.jpg' };
+    });
+
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000003' }),
+      {} as never,
+      {} as never,
+    );
+
+    const cuerpo = JSON.parse(respuesta.body as string) as { portadas: Array<{ dominio: string }> };
+    expect(cuerpo.portadas.map((p) => p.dominio)).toEqual(['portada-real.com']);
+  });
+
+  it('excluye sitios con info=false aunque tengan pvp=true (a diferencia de resolverMetadatosCompletos)', async () => {
+    escanearTodoMock.mockResolvedValue([
+      sitio({ dominio: 'solo-pvp.com', info: false, pvp: true, prioridad: 1 }),
+      sitio({ dominio: 'info-y-pvp.com', info: true, pvp: true, prioridad: 2 }),
+    ]);
+    scrapearSitioMock.mockResolvedValue({ portadaUrl: 'https://cualquiera.com/portada.jpg' });
+
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000004' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(scrapearSitioMock).not.toHaveBeenCalledWith(expect.objectContaining({ dominio: 'solo-pvp.com' }), '9780000000004');
+    const cuerpo = JSON.parse(respuesta.body as string) as { portadas: Array<{ dominio: string }> };
+    expect(cuerpo.portadas.map((p) => p.dominio)).toEqual(['info-y-pvp.com']);
+  });
+
+  it('un sitio sin palabrasClaveInvalidas (guardado antes de la Tarea 2) no rompe la resolución', async () => {
+    const sitioViejo = {
+      dominio: 'sitio-viejo.com',
+      nombre: 'Sitio Viejo',
+      url: 'https://sitio-viejo.com',
+      info: true,
+      pvp: false,
+      prioridad: 1,
+    } as unknown as SitioScraping;
+    escanearTodoMock.mockResolvedValue([sitioViejo]);
+    scrapearSitioMock.mockResolvedValue({ portadaUrl: 'https://sitio-viejo.com/portada.jpg' });
+
+    const respuesta = await handlerBuscarPortadas(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000005' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta.statusCode).toBe(200);
+    const cuerpo = JSON.parse(respuesta.body as string) as { portadas: Array<{ dominio: string }> };
+    expect(cuerpo.portadas.map((p) => p.dominio)).toEqual(['sitio-viejo.com']);
   });
 });

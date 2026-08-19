@@ -40,6 +40,19 @@ export interface CandidatoLibro {
 }
 
 /**
+ * Una portada candidata encontrada en vivo en un sitio de scraping puntual
+ * (`GET /api/metadatos/:isbn/portadas` — selector manual de portada, para
+ * placeholders genéricos sin palabra clave detectable por
+ * `portadaEsInvalida`). Mismo contrato que `PortadaCandidata` en
+ * `server/api/handlers/metadatos.ts`.
+ */
+export interface PortadaCandidata {
+  dominio: string;
+  nombre: string;
+  portadaUrl: string;
+}
+
+/**
  * Cliente de `GET /api/metadatos/:isbn` (TODO.md, autocompletado de
  * metadatos al catalogar) — mismo patrón que `EstantesService`: peticiones
  * autenticadas con el ID Token actual. Lo consume `CatalogarLibroComponent`
@@ -137,6 +150,31 @@ export class MetadatosService {
       return respuesta.pvp;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Cliente de `GET /api/metadatos/:isbn/portadas` — selector manual de
+   * portada (todas las candidatas encontradas en vivo, para cuando la
+   * portada cargada es un placeholder genérico sin palabra clave detectable).
+   * Mismo criterio "nunca lanza" que el resto del servicio: ante sesión
+   * ausente, cualquier error HTTP o de red, devuelve `[]`.
+   */
+  async buscarPortadas(isbn: string): Promise<PortadaCandidata[]> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return [];
+    }
+
+    try {
+      const respuesta = await firstValueFrom(
+        this.http.get<{ portadas: PortadaCandidata[] }>(`/api/metadatos/${isbn}/portadas`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+      );
+      return respuesta.portadas;
+    } catch {
+      return [];
     }
   }
 }
