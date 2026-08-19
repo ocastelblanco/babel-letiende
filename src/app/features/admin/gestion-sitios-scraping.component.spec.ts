@@ -12,6 +12,7 @@ const sitioLerner: SitioScraping = {
   info: true,
   pvp: true,
   prioridad: 2,
+  palabrasClaveInvalidas: [],
 };
 
 const sitioTornamesa: SitioScraping = {
@@ -21,6 +22,7 @@ const sitioTornamesa: SitioScraping = {
   info: true,
   pvp: false,
   prioridad: 1,
+  palabrasClaveInvalidas: [],
 };
 
 function configurarPrueba(opciones: { sitios?: SitioScraping[]; error?: boolean } = {}) {
@@ -55,10 +57,13 @@ function configurarPrueba(opciones: { sitios?: SitioScraping[]; error?: boolean 
 
 function llenarFormulario(
   fixture: ComponentFixture<GestionSitiosScrapingComponent>,
-  valores: { dominio: string; nombre: string; url: string; info: boolean; pvp: boolean },
+  valores: { dominio: string; nombre: string; url: string; info: boolean; pvp: boolean; palabrasClaveInvalidas?: string },
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (fixture.componentInstance as any).formulario.setValue(valores);
+  (fixture.componentInstance as any).formulario.setValue({
+    palabrasClaveInvalidas: '',
+    ...valores,
+  });
 }
 
 function enviarFormulario(fixture: ComponentFixture<GestionSitiosScrapingComponent>) {
@@ -112,6 +117,22 @@ describe('GestionSitiosScrapingComponent', () => {
     expect(nombres[1]).toContain('Librería Lerner');
   });
 
+  it('muestra las palabras clave inválidas de un sitio en su fila, cuando tiene alguna configurada', () => {
+    const sitioConPalabrasClave: SitioScraping = {
+      ...sitioLerner,
+      palabrasClaveInvalidas: ['no-disponible', 'sin-imagen'],
+    };
+    const { fixture } = configurarPrueba({ sitios: [sitioConPalabrasClave] });
+
+    expect(fixture.nativeElement.textContent).toContain('Portada inválida si contiene: no-disponible, sin-imagen');
+  });
+
+  it('no muestra la línea de palabras clave inválidas cuando el sitio no tiene ninguna configurada', () => {
+    const { fixture } = configurarPrueba({ sitios: [sitioLerner] });
+
+    expect(fixture.nativeElement.textContent).not.toContain('Portada inválida si contiene');
+  });
+
   it('el formulario está oculto por defecto', () => {
     const { fixture } = configurarPrueba();
 
@@ -131,7 +152,14 @@ describe('GestionSitiosScrapingComponent', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const instancia = fixture.componentInstance as any;
-    expect(instancia.formulario.getRawValue()).toEqual({ dominio: '', nombre: '', url: '', info: false, pvp: false });
+    expect(instancia.formulario.getRawValue()).toEqual({
+      dominio: '',
+      nombre: '',
+      url: '',
+      info: false,
+      pvp: false,
+      palabrasClaveInvalidas: '',
+    });
   });
 
   it('el botón "Agregar" se deshabilita mientras el formulario está abierto', () => {
@@ -163,6 +191,7 @@ describe('GestionSitiosScrapingComponent', () => {
       url: sitioLerner.url,
       info: sitioLerner.info,
       pvp: sitioLerner.pvp,
+      palabrasClaveInvalidas: sitioLerner.palabrasClaveInvalidas.join(', '),
     });
     expect(instancia.formulario.controls.dominio.disabled).toBe(true);
   });
@@ -194,6 +223,7 @@ describe('GestionSitiosScrapingComponent', () => {
       url: 'https://www.nuevositio.co',
       info: true,
       pvp: true,
+      palabrasClaveInvalidas: ' no-disponible , sin-imagen ',
     });
     enviarFormulario(fixture);
     await Promise.resolve();
@@ -207,6 +237,7 @@ describe('GestionSitiosScrapingComponent', () => {
       info: true,
       pvp: true,
       prioridad: 3,
+      palabrasClaveInvalidas: ['no-disponible', 'sin-imagen'],
     });
     expect(fixture.nativeElement.textContent).toContain('Sitio de scraping creado correctamente.');
     expect(fixture.nativeElement.querySelector('form')).toBeNull();
@@ -265,6 +296,7 @@ describe('GestionSitiosScrapingComponent', () => {
       info: sitioLerner.info,
       pvp: sitioLerner.pvp,
       prioridad: sitioLerner.prioridad,
+      palabrasClaveInvalidas: sitioLerner.palabrasClaveInvalidas,
     });
     expect(fixture.nativeElement.textContent).toContain('Sitio de scraping actualizado correctamente.');
     expect(fixture.nativeElement.querySelector('form')).toBeNull();

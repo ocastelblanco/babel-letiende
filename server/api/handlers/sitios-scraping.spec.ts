@@ -35,6 +35,7 @@ const datosNuevoValidos = {
   info: true,
   pvp: true,
   prioridad: 1,
+  palabrasClaveInvalidas: [],
 };
 const datosActualizacionValidos = {
   nombre: 'Librería Lerner',
@@ -42,6 +43,7 @@ const datosActualizacionValidos = {
   info: true,
   pvp: false,
   prioridad: 2,
+  palabrasClaveInvalidas: [],
 };
 
 const administradorFalso = { email: 'admin@letiende.co', nombre: 'Admin', fotoUrl: null, rol: 'administrador' };
@@ -91,6 +93,32 @@ describe('validarDatosSitioScraping', () => {
 
   it('rechaza un body que no es un objeto', () => {
     expect(validarDatosSitioScraping(null).valido).toBe(false);
+  });
+
+  it('palabrasClaveInvalidas es opcional — por defecto queda en [] si no viene en el body', () => {
+    const { palabrasClaveInvalidas: _omitida, ...sinPalabrasClave } = datosActualizacionValidos;
+    const resultado = validarDatosSitioScraping(sinPalabrasClave);
+    expect(resultado).toMatchObject({ valido: true, datos: { palabrasClaveInvalidas: [] } });
+  });
+
+  it('acepta palabrasClaveInvalidas y recorta espacios/descarta entradas vacías', () => {
+    const resultado = validarDatosSitioScraping({
+      ...datosActualizacionValidos,
+      palabrasClaveInvalidas: [' no-disponible ', '', 'sin-imagen'],
+    });
+    expect(resultado).toMatchObject({ valido: true, datos: { palabrasClaveInvalidas: ['no-disponible', 'sin-imagen'] } });
+  });
+
+  it('rechaza palabrasClaveInvalidas que no es un arreglo', () => {
+    expect(
+      validarDatosSitioScraping({ ...datosActualizacionValidos, palabrasClaveInvalidas: 'no-disponible' }).valido,
+    ).toBe(false);
+  });
+
+  it('rechaza palabrasClaveInvalidas con elementos que no son texto', () => {
+    expect(
+      validarDatosSitioScraping({ ...datosActualizacionValidos, palabrasClaveInvalidas: ['ok', 123] }).valido,
+    ).toBe(false);
   });
 });
 

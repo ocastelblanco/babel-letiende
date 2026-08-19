@@ -81,13 +81,13 @@ Sin cambios de documentación de fondo (bugfix, no cambio de comportamiento visi
 
 Nuevo campo `palabrasClaveInvalidas: string[]` en `SitioScraping` (propagar a las 3 copias del tipo), helper `portadaEsInvalida()` en `scraping.ts`, wiring en `metadatos.ts` (el llenado de `portadaUrl` por prioridad descarta candidatos inválidos y pasa al siguiente sitio), y control nuevo en `GestionSitiosScrapingComponent` (input de palabras separadas por coma). Detalle completo en el plan de la sesión que abrió esta tarea.
 
-- [ ] Modelo + validación backend (3 copias del tipo, default `[]`).
-- [ ] `portadaEsInvalida()` + wiring en `resolverMetadatosCompletos`.
-- [ ] Control nuevo en el formulario de `GestionSitiosScrapingComponent`.
-- [ ] Tests (`portadaEsInvalida`, `metadatos.spec.ts`, `sitios-scraping.spec.ts`, `gestion-sitios-scraping.component.spec.ts`).
-- [ ] `docs/tech-specs.md` (modelo `SitioScraping`), `docs/PRD.md` §5.2 (mención breve).
+- [x] Modelo + validación backend (3 copias del tipo, default `[]`).
+- [x] `portadaEsInvalida()` + wiring en `resolverMetadatosCompletos`.
+- [x] Control nuevo en el formulario de `GestionSitiosScrapingComponent`.
+- [x] Tests (`portadaEsInvalida`, `metadatos.spec.ts`, `sitios-scraping.spec.ts`, `gestion-sitios-scraping.component.spec.ts`).
+- [x] `docs/tech-specs.md` (modelo `SitioScraping`), `docs/PRD.md` §5.2 (mención breve).
 
-**Lista para iniciar** — la Tarea 1 ya cerró.
+**Implementación lista (2026-08-18), PR abierto — pendiente de validación del usuario en `staging`.** No se marca "COMPLETA" ni se promueve la Tarea 3 hasta que el usuario confirme.
 
 ---
 

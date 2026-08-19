@@ -11,6 +11,7 @@ import {
   buscarPvpEnLernerPorTexto,
   buscarPvpEnNacionalPorTexto,
   buscarPvpEnTornamesaPorTexto,
+  portadaEsInvalida,
   scrapearSitio,
   type SitioScraping,
 } from '../services/scraping';
@@ -83,7 +84,14 @@ function nombreTablaSitiosScraping(): string {
  *   3. Los resultados se fusionan respetando `prioridad` ascendente como
  *      criterio de desempate — se ordenan DESPUÉS de que todas las promesas
  *      resuelven, así que el orden de llegada de red nunca decide. Un campo
- *      que `api.letiende.co` ya resolvió jamás se sobrescribe.
+ *      que `api.letiende.co` ya resolvió jamás se sobrescribe. Una portada
+ *      cuya URL coincide con alguna `palabrasClaveInvalidas` del sitio que
+ *      la extrajo (`portadaEsInvalida`, Tarea 2 — placeholders como
+ *      "no-disponible" que un sitio devuelve como si fueran portada real) se
+ *      descarta y se sigue probando con el siguiente sitio en la cola de
+ *      prioridad, en vez de aceptarla. Esto solo aplica a portadas de
+ *      scraping: la que ya trae `infoBase` de `api.letiende.co` no pasa por
+ *      esta validación (no tiene `palabrasClaveInvalidas` asociadas).
  *
  * Nunca lanza: si `babel-sitios-scraping` está vacía o el `Scan` falla,
  * degrada a lo que ya se tenía de `api.letiende.co` (mismo criterio "nunca
@@ -127,7 +135,7 @@ async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosComple
   );
   resultadosScraping.sort((a, b) => a.sitio.prioridad - b.sitio.prioridad);
 
-  for (const { resultado: resultadoSitio } of resultadosScraping) {
+  for (const { sitio, resultado: resultadoSitio } of resultadosScraping) {
     if (resultado.titulo === null && resultadoSitio.titulo) {
       resultado.titulo = resultadoSitio.titulo;
     }
@@ -137,7 +145,11 @@ async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosComple
     if (resultado.editorial === null && resultadoSitio.editorial) {
       resultado.editorial = resultadoSitio.editorial;
     }
-    if (resultado.portadaUrl === null && resultadoSitio.portadaUrl) {
+    if (
+      resultado.portadaUrl === null &&
+      resultadoSitio.portadaUrl &&
+      !portadaEsInvalida(resultadoSitio.portadaUrl, sitio.palabrasClaveInvalidas)
+    ) {
       resultado.portadaUrl = resultadoSitio.portadaUrl;
     }
     if (resultado.pvp === null && resultadoSitio.pvp !== undefined) {

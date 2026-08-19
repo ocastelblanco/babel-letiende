@@ -47,14 +47,21 @@ vi.mock('../services/api-letiende', () => ({
   buscarLibrosPorTexto: buscarLibrosPorTextoMock,
 }));
 
-vi.mock('../services/scraping', () => ({
-  scrapearSitio: scrapearSitioMock,
-  buscarLernerPorTexto: buscarLernerPorTextoMock,
-  buscarNacionalPorTexto: buscarNacionalPorTextoMock,
-  buscarPvpEnLernerPorTexto: buscarPvpEnLernerPorTextoMock,
-  buscarPvpEnNacionalPorTexto: buscarPvpEnNacionalPorTextoMock,
-  buscarPvpEnTornamesaPorTexto: buscarPvpEnTornamesaPorTextoMock,
-}));
+vi.mock('../services/scraping', async () => {
+  // `portadaEsInvalida` es lógica pura (sin red/DynamoDB) — se usa la
+  // implementación real en vez de un mock, para probar la integración real
+  // con `resolverMetadatosCompletos` sin reimplementar la comparación aquí.
+  const real = await vi.importActual<typeof import('../services/scraping')>('../services/scraping');
+  return {
+    portadaEsInvalida: real.portadaEsInvalida,
+    scrapearSitio: scrapearSitioMock,
+    buscarLernerPorTexto: buscarLernerPorTextoMock,
+    buscarNacionalPorTexto: buscarNacionalPorTextoMock,
+    buscarPvpEnLernerPorTexto: buscarPvpEnLernerPorTextoMock,
+    buscarPvpEnNacionalPorTexto: buscarPvpEnNacionalPorTextoMock,
+    buscarPvpEnTornamesaPorTexto: buscarPvpEnTornamesaPorTextoMock,
+  };
+});
 
 const { handler, handlerBuscar, handlerBuscarPvp } = await import('./metadatos');
 
@@ -81,6 +88,7 @@ function sitio(datos: Partial<SitioScraping> & { dominio: string; prioridad: num
     url: `https://${datos.dominio}`,
     info: false,
     pvp: false,
+    palabrasClaveInvalidas: [],
     ...datos,
   };
 }
@@ -259,6 +267,58 @@ describe('handler (/api/metadatos/:isbn)', () => {
       expect(cuerpo.titulo).toBe('Título de mejor prioridad');
     },
   );
+
+  it(
+    'una portada cuya URL coincide con palabrasClaveInvalidas del sitio se descarta y se usa la del ' +
+      'siguiente sitio en prioridad (Tarea 2, placeholders de portada)',
+    async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
+      const sitioMejorPrioridad = sitio({
+        dominio: 'placeholder.com',
+        info: true,
+        prioridad: 1,
+        palabrasClaveInvalidas: ['no-disponible'],
+      });
+      const sitioPeorPrioridad = sitio({ dominio: 'portada-real.com', info: true, prioridad: 2 });
+      escanearTodoMock.mockResolvedValue([sitioMejorPrioridad, sitioPeorPrioridad]);
+      scrapearSitioMock.mockImplementation(async (s: SitioScraping): Promise<ResultadoScraping> => {
+        if (s.dominio === 'placeholder.com') {
+          return { portadaUrl: 'https://placeholder.com/img/no-disponible.jpg' };
+        }
+        return { portadaUrl: 'https://portada-real.com/img/9788433981219.jpg' };
+      });
+
+      const respuesta = await handler(
+        eventoFalso({ authorization: 'Bearer token', isbn: '9780000000007' }),
+        {} as never,
+        {} as never,
+      );
+
+      const cuerpo = JSON.parse(respuesta.body as string) as { portadaUrl: string | null };
+      expect(cuerpo.portadaUrl).toBe('https://portada-real.com/img/9788433981219.jpg');
+    },
+  );
+
+  it('si TODOS los sitios devuelven una portada inválida, portadaUrl queda en null (nunca acepta un placeholder)', async () => {
+    obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
+    const unicoSitio = sitio({
+      dominio: 'solo-placeholder.com',
+      info: true,
+      prioridad: 1,
+      palabrasClaveInvalidas: ['sin-imagen'],
+    });
+    escanearTodoMock.mockResolvedValue([unicoSitio]);
+    scrapearSitioMock.mockResolvedValue({ portadaUrl: 'https://solo-placeholder.com/img/sin-imagen.jpg' });
+
+    const respuesta = await handler(
+      eventoFalso({ authorization: 'Bearer token', isbn: '9780000000008' }),
+      {} as never,
+      {} as never,
+    );
+
+    const cuerpo = JSON.parse(respuesta.body as string) as { portadaUrl: string | null };
+    expect(cuerpo.portadaUrl).toBeNull();
+  });
 
   it('los sitios aplicables se consultan en paralelo, sin esperar a que uno termine antes de invocar el siguiente', async () => {
     obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);

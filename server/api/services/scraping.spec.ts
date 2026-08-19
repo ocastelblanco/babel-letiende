@@ -21,6 +21,7 @@ import {
   buscarPvpEnNacionalPorTexto,
   buscarPvpEnTornamesaPorTexto,
   esUrlSegura,
+  portadaEsInvalida,
   scrapearSitio,
   type SitioScraping,
 } from './scraping';
@@ -32,7 +33,15 @@ function leerFixture(nombre: string): string {
 }
 
 function sitio(dominio: string): SitioScraping {
-  return { dominio, nombre: dominio, url: `https://${dominio}`, info: true, pvp: true, prioridad: 1 };
+  return {
+    dominio,
+    nombre: dominio,
+    url: `https://${dominio}`,
+    info: true,
+    pvp: true,
+    prioridad: 1,
+    palabrasClaveInvalidas: [],
+  };
 }
 
 const ISBN = '9788433981219';
@@ -325,6 +334,36 @@ describe('scrapearSitio', () => {
       const resultado = await scrapearSitio(sitio('www.librerialerner.com.co'), ISBN);
       expect(resultado).toEqual({});
     });
+  });
+});
+
+describe('portadaEsInvalida (Tarea 2, TODO.md — placeholders de portada)', () => {
+  it('devuelve false sin palabras clave configuradas', () => {
+    expect(portadaEsInvalida('https://sitio.com/portada/no-disponible.jpg', [])).toBe(false);
+  });
+
+  it('devuelve false sin portadaUrl', () => {
+    expect(portadaEsInvalida(undefined, ['no-disponible'])).toBe(false);
+  });
+
+  it('detecta una coincidencia exacta de substring', () => {
+    expect(portadaEsInvalida('https://sitio.com/img/no-disponible.jpg', ['no-disponible'])).toBe(true);
+  });
+
+  it('la comparación no distingue mayúsculas/minúsculas', () => {
+    expect(portadaEsInvalida('https://sitio.com/img/NO-DISPONIBLE.jpg', ['no-disponible'])).toBe(true);
+  });
+
+  it('ignora espacios sobrantes alrededor de cada palabra clave', () => {
+    expect(portadaEsInvalida('https://sitio.com/img/sin-imagen.jpg', ['  sin-imagen  '])).toBe(true);
+  });
+
+  it('devuelve false cuando ninguna palabra clave coincide', () => {
+    expect(portadaEsInvalida('https://sitio.com/img/portada-real.jpg', ['no-disponible', 'sin-imagen'])).toBe(false);
+  });
+
+  it('coincide con cualquiera de varias palabras clave configuradas', () => {
+    expect(portadaEsInvalida('https://sitio.com/img/default.jpg', ['no-disponible', 'default'])).toBe(true);
   });
 });
 

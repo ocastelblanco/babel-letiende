@@ -24,6 +24,7 @@ const sitioFalso: SitioScraping = {
   info: true,
   pvp: true,
   prioridad: 1,
+  palabrasClaveInvalidas: [],
 };
 
 describe('SitiosScrapingService', () => {
@@ -134,7 +135,14 @@ describe('SitiosScrapingService', () => {
   });
 
   describe('actualizarSitio', () => {
-    const datosActualizacion = { nombre: 'Librería Lerner', url: 'https://www.librerialerner.com.co', info: true, pvp: false, prioridad: 2 };
+    const datosActualizacion = {
+      nombre: 'Librería Lerner',
+      url: 'https://www.librerialerner.com.co',
+      info: true,
+      pvp: false,
+      prioridad: 2,
+      palabrasClaveInvalidas: [],
+    };
 
     it('devuelve error sin llamar a la API cuando no hay ID Token', async () => {
       const servicio = configurarPrueba(null);
