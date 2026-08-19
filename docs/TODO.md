@@ -54,12 +54,47 @@ Se ejecutó realmente entre el 31/07/2026 y el 03/08/2026, sin haber sido marcad
 
 ---
 
-## Roadmap principal completo
+## Roadmap principal completo (histórico, 2026-08-18)
 
-Con las 2 tareas de arriba cerradas, y "Modo offline" ya cancelado (2026-07-27, ver bitácora arriba), **`PRD.md` §6 no tiene más ítems pendientes** — todo lo "Alta"/"Media" está implementado, y de las "Baja" solo queda "Empaquetado nativo (Capacitor)", deliberadamente fuera de alcance (`CLAUDE.md` §2). El motor JIT queda sin tareas activas por primera vez desde el inicio del proyecto. Los próximos cambios serán ajustes ad-hoc que traiga el usuario, no ítems de este roadmap.
+Con las 2 tareas de arriba cerradas, y "Modo offline" ya cancelado (2026-07-27, ver bitácora arriba), **`PRD.md` §6 no tenía más ítems pendientes** — todo lo "Alta"/"Media" implementado, y de las "Baja" solo quedaba "Empaquetado nativo (Capacitor)", deliberadamente fuera de alcance (`CLAUDE.md` §2). El motor JIT se quedó sin tareas activas por primera vez desde el inicio del proyecto — hasta el mismo día, cuando el usuario trajo un lote nuevo de 3 ajustes (ver abajo).
+
+---
+
+**Lote nuevo (2026-08-18):** el usuario detectó 3 problemas reales en producción — (1) portadas placeholder de scraping aceptadas como válidas, (2) PVPs sospechosos en libros ya catalogados sin forma de re-verificarlos en bloque, (3) catalogar un libro sin ISBN falla (bug real: el GSI `isbn-index` de `babel-libros` rechaza el atributo `isbn` presente-con-valor-`null`, debe estar ausente). Se investigó el código real (scraping.ts, metadatos.ts, libros.ts, serverless.yml, admin UI) antes de escribir las tareas y se resolvieron 4 preguntas de diseño con el usuario (regla de consenso de PVP simplificada a "el más alto como referencia"; chequeo de portada inválida global, no por sitio de origen; arquitectura async = Lambda auto-invocada por lotes + tabla de progreso, sin Step Functions/SQS; libros sin ISBN se saltan solo la validación de PVP). Se ordenan 3 tareas atómicas, cada una en su propia rama/PR: la Tarea 3 (proceso de "Validar libros" asíncrono) depende de que la Tarea 2 exista primero (necesita el campo `palabrasClaveInvalidas` en `SitioScraping`), y la Tarea 1 (bugfix aislado, bajo riesgo) se saca primero por ser independiente.
+
+---
+
+## Tarea 1 — Permitir catalogar libros sin ISBN
+
+`server/api/services/dynamodb.ts` + `server/api/handlers/libros.ts` — el atributo `isbn` debe omitirse del ítem (no guardarse como `null`) antes de `PutCommand`, porque el GSI `isbn-index` lo tipa `S` y un índice disperso exige que el atributo esté ausente, no `null`, para quedar fuera del índice:
+
+- [ ] Nueva función `omitirCamposNulos` en `dynamodb.ts`.
+- [ ] Aplicarla en `handlerCrear`/`handlerEditar` (y verificar `handlerFusionarDuplicado`) antes de `guardar()`.
+- [ ] Test que confirme que `isbn` no viaja como `null` al mock de `guardar()`.
+- [ ] Prueba manual en `staging`: catalogar un libro sin ISBN.
+
+Sin cambios de documentación de fondo (bugfix, no cambio de comportamiento visible) — solo esta entrada de bitácora.
+
+---
+
+## Tarea 2 — Palabras clave que invalidan una portada de scraping
+
+Nuevo campo `palabrasClaveInvalidas: string[]` en `SitioScraping` (propagar a las 3 copias del tipo), helper `portadaEsInvalida()` en `scraping.ts`, wiring en `metadatos.ts` (el llenado de `portadaUrl` por prioridad descarta candidatos inválidos y pasa al siguiente sitio), y control nuevo en `GestionSitiosScrapingComponent` (input de palabras separadas por coma). Detalle completo en el plan de la sesión que abrió esta tarea.
+
+- [ ] Modelo + validación backend (3 copias del tipo, default `[]`).
+- [ ] `portadaEsInvalida()` + wiring en `resolverMetadatosCompletos`.
+- [ ] Control nuevo en el formulario de `GestionSitiosScrapingComponent`.
+- [ ] Tests (`portadaEsInvalida`, `metadatos.spec.ts`, `sitios-scraping.spec.ts`, `gestion-sitios-scraping.component.spec.ts`).
+- [ ] `docs/tech-specs.md` (modelo `SitioScraping`), `docs/PRD.md` §5.2 (mención breve).
+
+**No iniciar hasta cerrar la Tarea 1.**
 
 ---
 
 ## Backlog
 
-Sin ítems — roadmap principal completo (ver nota arriba).
+### Tarea 3 — Proceso asíncrono "Validar libros" (PVP + portada, por mueble)
+
+La más grande de las 3 — primer patrón asíncrono del proyecto (Lambda `validarLibrosWorker` auto-invocada por lotes + tabla `babel-validaciones-libros` de progreso + polling desde el frontend), 3 funciones Lambda nuevas, componente admin nuevo `ValidarLibrosComponent` en `/admin/validar-libros`. Depende de que la Tarea 2 ya exista (usa `palabrasClaveInvalidas`/`portadaEsInvalida`). Requiere ADR-012 nuevo en `docs/tech-specs.md`/`docs/MEMORY.md` §3 justificando la elección de arquitectura (sin Step Functions/SQS). Detalle completo (modelo de datos, las 3 Lambdas, IAM, regla de consenso de PVP, frontend) en el plan de la sesión que abrió esta tarea.
+
+**No iniciar hasta cerrar la Tarea 2** — si al implementarla resulta demasiado grande para un solo PR revisable, se parte en 2 (backend primero, frontend después), decisión a tomar en el momento.
