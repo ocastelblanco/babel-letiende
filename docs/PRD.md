@@ -193,7 +193,7 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | Configuración de descuentos de editorial (CRUD, con autocompletado en catalogación) | Media |
 | Gestión de usuarios (CRUD) | Media |
 | Reportes de ventas + inventario, exportación XLSX | Media |
-| Validar libros — revisión asíncrona en bloque de PVP y portada del inventario catalogado | Media — en diseño, ver `docs/plan-validar-libros-async.md` |
+| Validar libros — revisión asíncrona en bloque de PVP y portada del inventario catalogado | **Completado** (2026-08-19, `docs/plan-validar-libros-async.md`) — ver `TODO.md` |
 | ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | **Completado** (dominio personalizado 31/07/2026, lanzamiento público 03/08/2026) — ver `TODO.md` |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
