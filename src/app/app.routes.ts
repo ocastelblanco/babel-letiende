@@ -7,6 +7,7 @@ import { GestionSitiosScrapingComponent } from './features/admin/gestion-sitios-
 import { GestionUbicacionFisicaComponent } from './features/admin/gestion-ubicacion-fisica.component';
 import { GestionUsuariosComponent } from './features/admin/gestion-usuarios.component';
 import { ReportesVentasComponent } from './features/admin/reportes-ventas.component';
+import { ValidarLibrosComponent } from './features/admin/validar-libros.component';
 import { CatalogoPublicoComponent } from './features/catalogo-publico/catalogo-publico.component';
 import { LibroDetalleComponent } from './features/catalogo-publico/libro-detalle.component';
 import { GestionarComponent } from './features/gestionar/gestionar.component';
@@ -71,6 +72,14 @@ export const routes: Routes = [
     // Exportación de reportes de ventas (PRD.md §5.5, TODO.md Tarea 1) — solo administrador, mismo patrón que /admin/usuarios.
     path: 'admin/reportes',
     component: ReportesVentasComponent,
+    canActivate: [RoleGuard('administrador')],
+  },
+  {
+    // Proceso asíncrono "Validar libros" (PVP + portada, por mueble) —
+    // ADR-012, docs/plan-validar-libros-async.md — solo administrador,
+    // mismo patrón que /admin/usuarios.
+    path: 'admin/validar-libros',
+    component: ValidarLibrosComponent,
     canActivate: [RoleGuard('administrador')],
   },
   { path: '**', redirectTo: '' },

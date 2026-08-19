@@ -15,13 +15,14 @@ describe('AdminInicioComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Administración');
   });
 
-  it('lista las 5 secciones', () => {
+  it('lista las 6 secciones', () => {
     const texto = fixture.nativeElement.textContent as string;
     expect(texto).toContain('Ubicación física');
     expect(texto).toContain('Usuarios');
     expect(texto).toContain('Editoriales');
     expect(texto).toContain('Sitios de scraping');
     expect(texto).toContain('Reportes');
+    expect(texto).toContain('Validar libros');
   });
 
   it('enlaza la sección Ubicación física a /admin/ubicaciones', () => {
@@ -46,6 +47,11 @@ describe('AdminInicioComponent', () => {
 
   it('enlaza la sección Reportes a /admin/reportes', () => {
     const enlace = fixture.nativeElement.querySelector('a[href="/admin/reportes"]') as HTMLAnchorElement | null;
+    expect(enlace).not.toBeNull();
+  });
+
+  it('enlaza la sección Validar libros a /admin/validar-libros', () => {
+    const enlace = fixture.nativeElement.querySelector('a[href="/admin/validar-libros"]') as HTMLAnchorElement | null;
     expect(enlace).not.toBeNull();
   });
 });
