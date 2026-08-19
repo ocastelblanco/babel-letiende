@@ -40,6 +40,26 @@ export async function guardar<T extends object>(
   await documento.send(new PutCommand({ TableName: nombreTabla, Item: item }));
 }
 
+/**
+ * Devuelve una COPIA de `item` sin las claves de `campos` cuyo valor sea
+ * `null` — nunca muta el original. Necesaria antes de un `PutCommand` sobre
+ * cualquier atributo que sea la clave de partición de un índice secundario
+ * global disperso (ej. `isbn` en `isbn-index` de `babel-libros`, tipado
+ * estrictamente `S`): para que un ítem quede FUERA de ese índice, el
+ * atributo debe estar AUSENTE — no vale que esté presente con valor `null`,
+ * DynamoDB rechaza ese caso con `ValidationException` por violar el tipo `S`
+ * declarado del GSI.
+ */
+export function omitirCamposNulos<T extends object>(item: T, campos: (keyof T)[]): T {
+  const copia = { ...item };
+  for (const campo of campos) {
+    if (copia[campo] === null) {
+      delete copia[campo];
+    }
+  }
+  return copia;
+}
+
 export async function eliminar(nombreTabla: string, clave: ClaveDynamoDB): Promise<void> {
   await documento.send(new DeleteCommand({ TableName: nombreTabla, Key: clave }));
 }
@@ -165,6 +185,33 @@ export async function fusionarLibroDuplicado<T extends object>(
   },
   ejemplaresNuevos: number,
 ): Promise<T> {
+  // `isbn` es la clave de partición del GSI disperso `isbn-index` (tipo `S`
+  // estricto, ver `omitirCamposNulos`): el body de
+  // `POST /api/libros/:bookId/fusionar-duplicado` permite editar `isbn` igual
+  // que `PUT /api/libros/:bookId`, así que también puede llegar `null` aquí.
+  // Un `SET #isbn = :isbn` con `:isbn = null` violaría ese tipo `S` (igual
+  // que un `PutItem`), así que si el isbn fusionado queda vacío se usa
+  // `REMOVE` en vez de `SET` para que el ítem quede FUERA del índice
+  // (atributo ausente) en lugar de con `isbn: null`.
+  const expressionAttributeValues: Record<string, unknown> = {
+    ':titulo': campos.titulo,
+    ':autor': campos.autor,
+    ':editorial': campos.editorial,
+    ':portadaUrl': campos.portadaUrl,
+    ':ubicacionId': campos.ubicacionId,
+    ':pvp': campos.pvp,
+    ':porcentajeDescuentoEditorial': campos.porcentajeDescuentoEditorial,
+    ':costo': campos.costo,
+    ':utilidadCatalogo': campos.utilidadCatalogo,
+    ':actualizadoEn': campos.actualizadoEn,
+    ':ejemplaresNuevos': ejemplaresNuevos,
+  };
+  const asignacionIsbn = campos.isbn === null ? '' : '#isbn = :isbn, ';
+  const remocionIsbn = campos.isbn === null ? ' REMOVE #isbn' : '';
+  if (campos.isbn !== null) {
+    expressionAttributeValues[':isbn'] = campos.isbn;
+  }
+
   try {
     const resultado = await documento.send(
       new UpdateCommand({
@@ -172,11 +219,11 @@ export async function fusionarLibroDuplicado<T extends object>(
         Key: { bookId },
         ConditionExpression: 'attribute_exists(#bookId)',
         UpdateExpression:
-          'SET #isbn = :isbn, #titulo = :titulo, #autor = :autor, #editorial = :editorial, ' +
+          `SET ${asignacionIsbn}#titulo = :titulo, #autor = :autor, #editorial = :editorial, ` +
           '#portadaUrl = :portadaUrl, #ubicacionId = :ubicacionId, #pvp = :pvp, ' +
           '#porcentajeDescuentoEditorial = :porcentajeDescuentoEditorial, #costo = :costo, ' +
           '#utilidadCatalogo = :utilidadCatalogo, #actualizadoEn = :actualizadoEn ' +
-          'ADD #cantidadTotal :ejemplaresNuevos, #cantidadDisponible :ejemplaresNuevos',
+          `ADD #cantidadTotal :ejemplaresNuevos, #cantidadDisponible :ejemplaresNuevos${remocionIsbn}`,
         ExpressionAttributeNames: {
           '#bookId': 'bookId',
           '#isbn': 'isbn',
@@ -193,20 +240,7 @@ export async function fusionarLibroDuplicado<T extends object>(
           '#cantidadTotal': 'cantidadTotal',
           '#cantidadDisponible': 'cantidadDisponible',
         },
-        ExpressionAttributeValues: {
-          ':isbn': campos.isbn,
-          ':titulo': campos.titulo,
-          ':autor': campos.autor,
-          ':editorial': campos.editorial,
-          ':portadaUrl': campos.portadaUrl,
-          ':ubicacionId': campos.ubicacionId,
-          ':pvp': campos.pvp,
-          ':porcentajeDescuentoEditorial': campos.porcentajeDescuentoEditorial,
-          ':costo': campos.costo,
-          ':utilidadCatalogo': campos.utilidadCatalogo,
-          ':actualizadoEn': campos.actualizadoEn,
-          ':ejemplaresNuevos': ejemplaresNuevos,
-        },
+        ExpressionAttributeValues: expressionAttributeValues,
         // `ALL_NEW` devuelve el ítem completo ya actualizado en la misma
         // llamada — evita un `GetItem` adicional (y el permiso IAM que
         // exigiría) solo para reportar el resultado al llamador.

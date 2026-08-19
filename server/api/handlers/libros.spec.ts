@@ -233,6 +233,27 @@ describe('handlerCrear (POST /api/libros)', () => {
 
     expect(respuesta).toMatchObject({ statusCode: 201 });
   });
+
+  // GSI `isbn-index` de `babel-libros`: tipa `isbn` como `S` estricto, así
+  // que un ítem sin ISBN debe persistirse SIN la clave `isbn` (ausente), no
+  // con `isbn: null` — de lo contrario DynamoDB responde `ValidationException`.
+  it('cataloga un libro sin isbn: el objeto guardado no tiene la clave isbn, pero la respuesta HTTP sí trae isbn: null', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+
+    const { isbn: _isbn, ...datosSinIsbn } = datosValidos;
+
+    const respuesta = await handlerCrear(eventoFalso(datosSinIsbn, 'Bearer token'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 201 });
+    expect(guardarMock).toHaveBeenCalledTimes(1);
+    const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(libroGuardado).not.toHaveProperty('isbn');
+
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo['isbn']).toBeNull();
+  });
 });
 
 const datosEditarValidos = {
@@ -423,6 +444,29 @@ describe('handlerEditar (PUT /api/libros/:bookId)', () => {
       const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
       expect(libroGuardado['cantidadTotal']).toBe(0);
       expect(libroGuardado['cantidadDisponible']).toBe(0);
+    });
+
+    // Mismo criterio que handlerCrear: el GSI `isbn-index` exige que el
+    // atributo esté ausente (no `null`) para que el libro quede fuera del
+    // índice disperso.
+    it('edita quitando el isbn: el objeto guardado no tiene la clave isbn, pero la respuesta HTTP sigue trayendo isbn: null', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+
+      const { isbn: _isbn, ...datosSinIsbn } = datosEditarValidos;
+
+      const respuesta = await handlerEditar(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosSinIsbn }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(libroGuardado).not.toHaveProperty('isbn');
+
+      const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+      expect(cuerpo['isbn']).toBeNull();
     });
   });
 });
