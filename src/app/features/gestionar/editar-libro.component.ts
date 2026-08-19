@@ -9,6 +9,7 @@ import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service'
 import { UsuariosService } from '../../core/api/usuarios.service';
 import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
+import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
 
 const PVP_MAXIMO = 5_000_000;
 
@@ -47,7 +48,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-editar-libro',
-  imports: [ReactiveFormsModule, PvpPipe],
+  imports: [ReactiveFormsModule, PvpPipe, SelectorPortadaComponent],
   templateUrl: './editar-libro.component.html',
 })
 export class EditarLibroComponent implements OnInit, OnDestroy {
@@ -127,6 +128,15 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
   protected readonly eliminandoBookId = signal<string | null>(null);
   protected readonly mensajeExito = signal<string | null>(null);
   protected readonly mensajeError = signal<string | null>(null);
+
+  /** Visibilidad del diálogo de selección manual de portada (`SelectorPortadaComponent`) — para placeholders genéricos sin palabra clave detectable. */
+  protected readonly selectorPortadaVisible = signal(false);
+
+  /** Reemplaza `portadaUrl` con la elegida en `SelectorPortadaComponent` y cierra el diálogo. */
+  protected alSeleccionarPortada(url: string): void {
+    this.formularioEdicion.controls.portadaUrl.setValue(url);
+    this.selectorPortadaVisible.set(false);
+  }
 
   ngOnInit(): void {
     void this.librosService.cargarInventario();

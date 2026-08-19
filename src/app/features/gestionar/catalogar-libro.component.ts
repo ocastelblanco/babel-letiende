@@ -10,6 +10,7 @@ import { EditorialesDescuentosService } from '../../core/api/editoriales-descuen
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.service';
 import type { LibroConUbicacion } from '../../core/models/libro.model';
+import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
 
 const PVP_MAXIMO = 5_000_000;
 
@@ -54,7 +55,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-catalogar-libro',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, SelectorPortadaComponent],
   templateUrl: './catalogar-libro.component.html',
 })
 export class CatalogarLibroComponent implements OnInit, OnDestroy {
@@ -96,6 +97,9 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   protected readonly buscandoMetadatos = signal(false);
   /** `true` cuando la última búsqueda de metadatos no encontró ningún dato — mensaje neutral, no bloqueante. */
   protected readonly metadatosNoEncontrados = signal(false);
+
+  /** Visibilidad del diálogo de selección manual de portada (`SelectorPortadaComponent`) — para placeholders genéricos sin palabra clave detectable. */
+  protected readonly selectorPortadaVisible = signal(false);
 
   /** Candidatos de la última búsqueda por título/autor (`GET /api/metadatos/buscar`) — para cuando el vendedor no tiene ISBN a mano. */
   protected readonly candidatos = signal<CandidatoLibro[]>([]);
@@ -247,6 +251,12 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   /** Se dispara al perder el foco el campo ISBN cuando se ingresó manualmente (sin cámara). */
   protected alPerderFocoIsbn(): void {
     void this.dispararBusquedaPorIsbn(this.formulario.controls.isbn.value);
+  }
+
+  /** Reemplaza `portadaUrl` con la elegida en `SelectorPortadaComponent` y cierra el diálogo. */
+  protected alSeleccionarPortada(url: string): void {
+    this.formulario.controls.portadaUrl.setValue(url);
+    this.selectorPortadaVisible.set(false);
   }
 
   /**

@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AuthService } from '../../core/auth/auth.service';
 import { LibrosService } from '../../core/api/libros.service';
+import { MetadatosService } from '../../core/api/metadatos.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { UsuariosService } from '../../core/api/usuarios.service';
 import type { Espacio } from '../../core/models/espacio.model';
@@ -62,6 +63,13 @@ const libroFalso: Libro = {
 
 const libroAgotado: Libro = { ...libroFalso, bookId: 'libro-2', titulo: 'Otro libro', autor: 'Otro autor', isbn: null, cantidadDisponible: 0 };
 
+const libroConPortada: Libro = {
+  ...libroFalso,
+  bookId: 'libro-3',
+  titulo: 'Libro con portada',
+  portadaUrl: 'https://ejemplo.com/portada-vieja.jpg',
+};
+
 const vendedorFalso: Usuario = {
   email: 'vendedor@letiende.co',
   nombre: 'Vendedor',
@@ -80,12 +88,14 @@ function configurarPrueba(
   const cargarUbicacionesMock = vi.fn().mockResolvedValue(undefined);
   const editarLibroMock = vi.fn().mockResolvedValue({ exito: true });
   const eliminarLibroMock = vi.fn().mockResolvedValue({ exito: true });
+  const buscarPortadasMock = vi.fn().mockResolvedValue([]);
   const usuario = opciones.rol ?? null;
 
   TestBed.configureTestingModule({
     providers: [
       { provide: AuthService, useValue: { usuario: signal(usuario ? { email: usuario.email } : null) } },
       { provide: UsuariosService, useValue: { usuarioActual: signal(usuario) } },
+      { provide: MetadatosService, useValue: { buscarPortadas: buscarPortadasMock } },
       {
         provide: LibrosService,
         useValue: {
@@ -122,6 +132,7 @@ function configurarPrueba(
     cargarUbicacionesMock,
     editarLibroMock,
     eliminarLibroMock,
+    buscarPortadasMock,
   };
 }
 
@@ -464,6 +475,95 @@ describe('EditarLibroComponent', () => {
       await componente.eliminar(libroFalso);
 
       expect(componente.mensajeError()).toBe('Este correo no está autorizado para eliminar libros en Babel.');
+    });
+  });
+
+  describe('selector manual de portada', () => {
+    function botonActualizarPortada(fixture: ComponentFixture<EditarLibroComponent>): HTMLButtonElement | null {
+      return fixture.nativeElement.querySelector('button[aria-label="Buscar otra portada"]');
+    }
+
+    /** Mismo patrón que `catalogar-libro.component.spec.ts`: un evento `input` real, no mutar el FormControl a mano — es lo que efectivamente dispara la actualización del `@if` que lee `formularioEdicion.controls.X.value`. */
+    function escribirEnCampo(fixture: ComponentFixture<EditarLibroComponent>, id: string, valor: string): void {
+      const campo = fixture.nativeElement.querySelector(`#${id}`) as HTMLInputElement;
+      campo.value = valor;
+      campo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('el thumbnail de portada aparece al editar un libro que ya tiene portadaUrl, y no aparece sin portada', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.editar(libroFalso); // portadaUrl vacío
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('img[alt]')).toBeNull();
+
+      componente.editar(libroConPortada);
+      fixture.detectChanges();
+      const img = fixture.nativeElement.querySelector('img[alt]') as HTMLImageElement;
+      expect(img.src).toBe(libroConPortada.portadaUrl);
+    });
+
+    it('el botón de actualizar portada está deshabilitado sin ISBN, habilitado con ISBN presente', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar({ ...libroConPortada, isbn: null });
+      fixture.detectChanges();
+
+      expect(botonActualizarPortada(fixture)?.disabled).toBe(true);
+
+      escribirEnCampo(fixture, 'editIsbn', '9780000000001');
+
+      expect(botonActualizarPortada(fixture)?.disabled).toBe(false);
+    });
+
+    it('clic en el botón abre el selector y busca portadas con el isbn actual', async () => {
+      const { fixture, buscarPortadasMock } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroConPortada);
+      fixture.detectChanges();
+
+      botonActualizarPortada(fixture)?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(buscarPortadasMock).toHaveBeenCalledWith(libroConPortada.isbn);
+      expect(fixture.nativeElement.textContent).toContain('Elegir portada');
+    });
+
+    it('seleccionar una portada en el diálogo actualiza portadaUrl y lo cierra', async () => {
+      const { fixture, buscarPortadasMock } = configurarPrueba();
+      buscarPortadasMock.mockResolvedValue([
+        { dominio: 'www.tornamesa.co', nombre: 'Tornamesa', portadaUrl: 'https://tornamesa.co/nueva.jpg' },
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroConPortada);
+      fixture.detectChanges();
+
+      botonActualizarPortada(fixture)?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const tarjeta = Array.from(fixture.nativeElement.querySelectorAll('button')).find((boton) =>
+        (boton as HTMLElement).textContent?.includes('Tornamesa'),
+      ) as HTMLButtonElement;
+      tarjeta.click();
+      fixture.detectChanges();
+
+      const botonCambiar = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+        (boton) => (boton as HTMLElement).textContent?.trim() === 'Cambiar',
+      ) as HTMLButtonElement;
+      botonCambiar.click();
+      fixture.detectChanges();
+
+      expect(componente.formularioEdicion.value.portadaUrl).toBe('https://tornamesa.co/nueva.jpg');
+      expect(componente.selectorPortadaVisible()).toBe(false);
     });
   });
 });

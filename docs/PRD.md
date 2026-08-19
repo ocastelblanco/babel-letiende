@@ -92,6 +92,8 @@ Vendedor → Panel "Ubicación del libro" (se completa UNA VEZ, no por cada libr
    ├─ Datos encontrados → se pre-cargan (siempre editables por el vendedor; al elegir un candidato de la búsqueda por título/autor, se sobrescribe cualquier dato ya escrito, porque es una elección explícita del vendedor) — la portada se muestra además como thumbnail junto al campo de URL, para que el vendedor confirme visualmente que es el libro que tiene en la mano
    └─ Datos no encontrados → el vendedor los completa manualmente
 
+**Selector manual de portada:** algunas portadas placeholder usan una URL con un ID individual, sin ninguna palabra clave detectable automáticamente (a diferencia de las que sí se filtran al momento de resolver metadatos, arriba). Si el vendedor/administrador nota que la portada cargada es genérica o incorrecta, puede pulsar un botón junto al thumbnail (con ISBN ya presente) para ver, en un diálogo, TODAS las portadas encontradas en vivo en los sitios de scraping autorizados y elegir la correcta con un clic — el sistema reemplaza el valor del campo, sin guardar todavía (se persiste al confirmar el formulario, como cualquier otro dato). Mismo mecanismo disponible al editar un libro ya catalogado (§5.3).
+
 → Sistema busca el precio de venta al público (PVP) por ISBN o por título/autor
    ├─ Scraping de los sitios autorizados para «pvp» (misma lista única, por orden de prioridad), precio en pesos colombianos
    ├─ Encontrado → se pre-carga como sugerencia editable (el backend valida que sea un número positivo dentro de un rango razonable)
@@ -124,6 +126,7 @@ Reemplaza por completo la funcionalidad anterior de "cambio de estante": ahora s
 Vendedor/Administrador → Busca el libro en la lista de catalogados (filtro por título, autor o ISBN — incluido lector de código de barras)
    → Presiona "Editar" sobre el libro encontrado
    → Puede modificar: Espacio, Mueble, Ubicación, número de ejemplares (incluso 0), PVP, % de descuento editorial
+   → Si la portada actual es un placeholder genérico, puede pedir un selector manual de portadas alternativas (mismo mecanismo que en Catalogar, §5.2)
    → (Solo administrador) Puede presionar "ELIMINAR LIBRO" para borrarlo por completo del sistema
    → Sistema guarda los cambios
 ```

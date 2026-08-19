@@ -178,4 +178,44 @@ describe('MetadatosService', () => {
       expect(await promesa).toBeNull();
     });
   });
+
+  describe('buscarPortadas', () => {
+    const portadas = [
+      { dominio: 'www.librerialerner.com.co', nombre: 'Librería Lerner', portadaUrl: 'https://lerner.com/portada.jpg' },
+      { dominio: 'www.tornamesa.co', nombre: 'Tornamesa', portadaUrl: 'https://tornamesa.co/portada.jpg' },
+    ];
+
+    it('devuelve [] sin llamar a la API cuando no hay ID Token', async () => {
+      const servicio = configurarPrueba(null);
+
+      const resultado = await servicio.buscarPortadas('9780000000001');
+
+      expect(resultado).toEqual([]);
+    });
+
+    it('llama a GET /api/metadatos/:isbn/portadas con el ID Token real', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPortadas('9780000000001');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/metadatos/9780000000001/portadas');
+      expect(peticion.request.method).toBe('GET');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-valido');
+      peticion.flush({ portadas });
+
+      expect(await promesa).toEqual(portadas);
+    });
+
+    it('devuelve [], sin lanzar, cuando /api/metadatos/:isbn/portadas falla', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.buscarPortadas('9780000000002');
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/metadatos/9780000000002/portadas')
+        .flush({ error: 'Error interno del servidor.' }, { status: 500, statusText: 'Internal Server Error' });
+
+      expect(await promesa).toEqual([]);
+    });
+  });
 });
