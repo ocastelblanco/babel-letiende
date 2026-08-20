@@ -123,3 +123,17 @@ Con esto se cierra por completo la Tarea 3 y el lote de 3 ajustes de catalogaci�
 - [x] Verificación visual interactiva del usuario en `staging` con login real — exitosa.
 
 Con esto queda cerrada la tarea completa (diseño, backend, frontend y verificación en vivo); sin tareas activas hasta el próximo lote de ajustes del usuario.
+
+---
+
+**Adaptadores de scraping nuevos — TAREA AD-HOC (2026-08-20):** el usuario agregó dos sitios en `/admin/sitios` (`production`): Casa Tomada y Librería de la U. No traían portada/datos al catalogar. Diagnosticado antes de tocar código: `babel-sitios-scraping-production` (verificado con `aws dynamodb scan`) tenía ambos dominios bien capturados — no fue un error de la interfaz de administración. La política (tabla) y el mecanismo (adaptador de código, `ADAPTADORES_POR_DOMINIO` en `scraping.ts`) son cosas separadas por diseño (ADR-010); un sitio en la lista sin adaptador se omite en silencio, sin ningún error visible.
+
+## Tarea — Adaptadores de scraping para Casa Tomada y Librería de la U — COMPLETA (2026-08-20)
+
+- [x] Investigado en vivo contra ambos sitios reales antes de escribir código: Librería de la U corre la misma API pública VTEX que Lerner/Nacional (mismos campos `Autor`/`Editorial` que Lerner); Casa Tomada corre exactamente la misma plataforma que Tornamesa (misma ruta de búsqueda, mismo JSON-LD `Book` de producto).
+- [x] `scrapearLibreriaDeLaU` reusa `consultarApiVtex` sin cambios. `consultarTornamesa` generalizada a `consultarPlataformaListaLibros(urlBase, query)`, compartida por Tornamesa y la nueva `scrapearCasaTomada`.
+- [x] Ambos dominios agregados a `ADAPTADORES_POR_DOMINIO`.
+- [x] 4 tests nuevos con fixtures basados en respuestas reales (347 tests backend en verde, antes 343).
+- [x] `docs/tech-specs.md` (conteo de sitios con adaptador + nota sobre política vs. mecanismo), `docs/MEMORY.md` §2.
+
+Fuera de alcance a propósito: `handlerBuscar`/`buscarPvpPorTexto` (búsqueda por título/autor sin ISBN, `metadatos.ts`) no se tocaron — ya excluían deliberadamente sitios sin datos completos en la misma respuesta (costo N+1, decisión de PR #48). Verificado por el usuario en `production` ("Todo funciona bien"). Con esto queda cerrada la tarea; sin tareas activas hasta el próximo lote de ajustes del usuario.
