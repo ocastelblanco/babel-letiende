@@ -1,0 +1,99 @@
+[
+  {
+    "productId": "512338477",
+    "productName": "Cien anos de soledad",
+    "brand": "Debolsillo",
+    "brandId": 2012435,
+    "brandImageUrl": null,
+    "linkText": "cel-cien-anos-de-soledad-debolsillo",
+    "productReference": "CEL9788497592208",
+    "productReferenceCode": "CEL9788497592208",
+    "categoryId": "214",
+    "productTitle": "Cien anos de soledad Libro Garcia Marquez Gabriel Precio Especial",
+    "metaTagDescription": "Compra el Libro Cien anos de soledad 9788497592208 Garcia Marquez Gabriel",
+    "releaseDate": "2026-06-17T00:00:00Z",
+    "categories": [
+      "/Biografías, literatura y estudios literarios/Textos antiguos, clásicos y medievales/",
+      "/Biografías, literatura y estudios literarios/"
+    ],
+    "categoriesIds": [
+      "/210/214/",
+      "/210/"
+    ],
+    "link": "https://www.libreriadelau.com/cel-cien-anos-de-soledad-debolsillo/p",
+    "Año de Edición": ["1900"],
+    "Proveedor": ["Celesa"],
+    "Autor": ["Varios autores"],
+    "ISXN": ["9788497592208"],
+    "Idioma": ["Español"],
+    "Núm. Páginas": ["496"],
+    "Título": ["Cien anos de soledad"],
+    "Editorial": ["DEBOLSILLO"],
+    "allSpecifications": [
+      "Año de Edición",
+      "Proveedor",
+      "Autor",
+      "ISXN",
+      "Idioma",
+      "Núm. Páginas",
+      "Título",
+      "Editorial"
+    ],
+    "description": "Senalada como catedral gotica del lenguaje este clasico del siglo XX es el enorme y esplendido tapiz de la saga de la familia Buendia en la mitica aldea de Macondo.",
+    "items": [
+      {
+        "itemId": "512338478",
+        "name": "Cien anos de soledad",
+        "nameComplete": "Cien anos de soledad",
+        "complementName": "",
+        "ean": "9788497592208",
+        "referenceId": [
+          { "Key": "RefId", "Value": "CEL9788497592208" }
+        ],
+        "measurementUnit": "un",
+        "unitMultiplier": 1.0,
+        "modalType": null,
+        "isKit": false,
+        "images": [
+          {
+            "imageId": "39823040",
+            "imageLabel": null,
+            "imageTag": "<img src=\"~/arquivos/ids/39823040-#width#-#height#/Cien-anos-de-soledad.jpg?v=638831461672230000\" width=\"#width#\" height=\"#height#\" alt=\"\" id=\"\" />",
+            "imageUrl": "https://libreriadelau.vteximg.com.br/arquivos/ids/39823040/Cien-anos-de-soledad.jpg?v=638831461672230000",
+            "imageText": null,
+            "imageLastModified": "2026-06-17T00:00:00.0000000Z"
+          }
+        ],
+        "attachments": [],
+        "sellers": [
+          {
+            "sellerId": "1",
+            "sellerName": "Librería de la U",
+            "addToCartLink": "https://www.libreriadelau.com/checkout/cart/add?sku=512338478&qty=1&seller=1&sc=1&price=8664000&cv=_&sc=1",
+            "sellerDefault": true,
+            "commertialOffer": {
+              "DiscountHighLight": [],
+              "GiftSkuIds": [],
+              "Teasers": [],
+              "PromotionTeasers": [],
+              "BuyTogether": [],
+              "Price": 86640.0,
+              "ListPrice": 86640.0,
+              "PriceWithoutDiscount": 86640.0,
+              "FullSellingPrice": 86640.0,
+              "RewardValue": 0.0,
+              "PriceValidUntil": "2036-06-17T00:00:00Z",
+              "AvailableQuantity": 5,
+              "IsAvailable": true,
+              "Tax": 0.0,
+              "GetInfoErrorMessage": null,
+              "CacheVersionUsedToCallCheckout": "_"
+            }
+          }
+        ],
+        "Videos": [],
+        "estimatedDateArrival": null
+      }
+    ]
+  }
+]
