@@ -49,6 +49,14 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Client
   },
   {
+    // Faltaba en esta lista (ADR-012 la agregó a app.routes.ts sin
+    // replicarla aquí) — sin esto cae en el catch-all `**` de abajo
+    // (RenderMode.Server), que SIEMPRE redirige a `/` en un recargo real de
+    // página por el mismo motivo ya documentado arriba para /catalogar.
+    path: 'admin/validar-libros',
+    renderMode: RenderMode.Client
+  },
+  {
     path: '**',
     renderMode: RenderMode.Server
   }
