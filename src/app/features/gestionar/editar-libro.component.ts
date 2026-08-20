@@ -230,9 +230,16 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
     this.escaneandoEdicion.set(false);
   }
 
-  /** Nombre de la ubicación dado su id, para mostrarla en cada fila de la lista. */
-  protected nombreUbicacion(ubicacionId: string): string {
-    return this.ubicaciones().find((ubicacion) => ubicacion.ubicacionId === ubicacionId)?.nombre ?? 'Sin ubicación';
+  /** Ruta jerárquica completa "Espacio → Mueble → Ubicación" de un libro, para describir su ubicación física en cada fila de la lista (a diferencia del selector de edición, aquí no hace falta la cascada, solo mostrar la cadena ya resuelta). `'Sin ubicación'` si algún eslabón ya no existe. */
+  protected rutaUbicacion(ubicacionId: string): string {
+    const ubicacion = this.ubicaciones().find((ubicacion) => ubicacion.ubicacionId === ubicacionId);
+    const mueble = ubicacion && this.muebles().find((mueble) => mueble.muebleId === ubicacion.muebleId);
+    const espacio = mueble && this.espacios().find((espacio) => espacio.espacioId === mueble.espacioId);
+
+    if (!ubicacion || !mueble || !espacio) {
+      return 'Sin ubicación';
+    }
+    return `${espacio.nombre} → ${mueble.nombre} → ${ubicacion.nombre}`;
   }
 
   /** Abre el formulario de edición precargado con TODOS los datos actuales del libro, incluida la cascada Espacio/Mueble resuelta desde su `ubicacionId`. */

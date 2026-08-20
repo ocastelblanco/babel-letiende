@@ -58,11 +58,11 @@
                 <img
                   [src]="libro.portadaUrl"
                   [alt]="libro.titulo"
-                  class="h-16 w-12 shrink-0 rounded-lg object-cover"
+                  class="h-24 w-16 shrink-0 rounded-lg object-cover"
                 />
               } @else {
                 <div
-                  class="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg bg-neutral text-[10px] text-primary/60"
+                  class="flex h-24 w-16 shrink-0 items-center justify-center rounded-lg bg-neutral text-[10px] text-primary/60"
                 >
                   Sin portada
                 </div>
@@ -73,9 +73,9 @@
                 @if (libro.isbn) {
                   <p class="text-xs text-primary/60">ISBN {{ libro.isbn }}</p>
                 }
+                <p class="text-xs text-primary/60">{{ rutaUbicacion(libro.ubicacionId) }}</p>
                 <p class="text-xs text-primary/60">
-                  {{ nombreUbicacion(libro.ubicacionId) }} · {{ libro.cantidadDisponible }}/{{ libro.cantidadTotal }}
-                  disponibles · {{ libro.pvp | pvp }}
+                  {{ libro.cantidadDisponible }}/{{ libro.cantidadTotal }} disponibles · {{ libro.pvp | pvp }}
                 </p>
               </div>
             </div>
