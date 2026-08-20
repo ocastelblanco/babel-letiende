@@ -193,6 +193,34 @@ describe('scrapearSitio', () => {
     });
   });
 
+  describe('Librería de la U (VTEX, mismos campos "Autor"/"Editorial" que Lerner)', () => {
+    it('extrae título/autor/editorial/portada/pvp desde el fixture real "encontrado"', async () => {
+      const fixture = JSON.parse(leerFixture('libreriadelau-api-encontrado.json'));
+      fetchMock.mockResolvedValue(respuestaJson(fixture));
+
+      const resultado = await scrapearSitio(sitio('www.libreriadelau.com'), ISBN);
+
+      expect(resultado).toEqual({
+        titulo: 'Cien anos de soledad',
+        autor: 'Varios autores',
+        editorial: 'DEBOLSILLO',
+        portadaUrl:
+          'https://libreriadelau.vteximg.com.br/arquivos/ids/39823040/Cien-anos-de-soledad.jpg?v=638831461672230000',
+        pvp: 86640,
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        `https://www.libreriadelau.com/api/catalog_system/pub/products/search?ft=${ISBN}`,
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+    });
+
+    it('devuelve campos ausentes (sin lanzar) cuando la API responde un array vacío', async () => {
+      fetchMock.mockResolvedValue(respuestaJson([]));
+      const resultado = await scrapearSitio(sitio('www.libreriadelau.com'), ISBN);
+      expect(resultado).toEqual({});
+    });
+  });
+
   describe('Tornamesa (búsqueda HTML + JSON-LD de producto)', () => {
     it('extrae título/autor/editorial/portada/pvp encadenando búsqueda y producto', async () => {
       const htmlBusqueda = leerFixture('tornamesa-busqueda.html');
@@ -226,6 +254,44 @@ describe('scrapearSitio', () => {
     it('devuelve campos ausentes cuando la búsqueda no contiene ningún link de producto', async () => {
       fetchMock.mockResolvedValue(respuestaHtml('<html><body>sin resultados</body></html>'));
       const resultado = await scrapearSitio(sitio('www.tornamesa.co'), ISBN);
+      expect(resultado).toEqual({});
+      expect(fetchMock).toHaveBeenCalledTimes(1); // nunca llega al paso 2
+    });
+  });
+
+  describe('Casa Tomada (misma plataforma que Tornamesa: búsqueda HTML + JSON-LD de producto)', () => {
+    it('extrae título/autor/editorial/portada/pvp encadenando búsqueda y producto', async () => {
+      const htmlBusqueda = leerFixture('casatomada-busqueda.html');
+      const htmlProducto = leerFixture('casatomada-producto.html');
+      fetchMock
+        .mockResolvedValueOnce(respuestaHtml(htmlBusqueda))
+        .mockResolvedValueOnce(respuestaHtml(htmlProducto));
+
+      const resultado = await scrapearSitio(sitio('www.libreriacasatomada.com'), ISBN);
+
+      expect(resultado).toEqual({
+        titulo: 'CIEN AÑOS DE SOLEDAD',
+        autor: 'GARCÍA MÁRQUEZ, GABRIEL',
+        editorial: 'LITERATURA RANDOM HOUSE',
+        portadaUrl: 'https://www.libreriacasatomada.com/imagenes/9786287/978628763871.GIF',
+        pvp: 75000, // "75.000.00" -> 7500000 -> /100 -> 75000
+      });
+
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('www.libreriacasatomada.com/busqueda/listaLibros.php'),
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://www.libreriacasatomada.com/libro/cien-anos-de-soledad_72996',
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+    });
+
+    it('devuelve campos ausentes cuando la búsqueda no contiene ningún link de producto', async () => {
+      fetchMock.mockResolvedValue(respuestaHtml('<html><body>sin resultados</body></html>'));
+      const resultado = await scrapearSitio(sitio('www.libreriacasatomada.com'), ISBN);
       expect(resultado).toEqual({});
       expect(fetchMock).toHaveBeenCalledTimes(1); // nunca llega al paso 2
     });

@@ -13,9 +13,10 @@
  *      cada salto — defensa en profundidad aplicada a todas las peticiones,
  *      incluidas las de "mismo dominio" (ej. Tornamesa paso 2).
  *
- *   2. Los 4 adaptadores por `dominio` (Librería Lerner, Librería Nacional,
- *      Tornamesa, Busca Libre): cada uno extrae solo texto/números planos
- *      (nunca HTML crudo — CLAUDE.md A03) desde el JSON/HTML del sitio.
+ *   2. Los 6 adaptadores por `dominio` (Librería Lerner, Librería Nacional,
+ *      Tornamesa, Busca Libre, Casa Tomada, Librería de la U): cada uno
+ *      extrae solo texto/números planos (nunca HTML crudo — CLAUDE.md A03)
+ *      desde el JSON/HTML del sitio.
  *
  * `scrapearSitio` es la única función pública de consumo externo: dado un
  * `SitioScraping` (política, ADR-010) y un ISBN, invoca el adaptador que
@@ -309,6 +310,14 @@ async function scrapearNacional(isbn: string): Promise<ResultadoScraping> {
   });
 }
 
+/** Librería de la U — misma API pública VTEX, mismos nombres de campo que Lerner ("Autor", "Editorial"), confirmado en vivo. */
+async function scrapearLibreriaDeLaU(isbn: string): Promise<ResultadoScraping> {
+  return consultarApiVtex('https://www.libreriadelau.com', isbn, {
+    campoAutor: 'Autor',
+    campoEditorial: 'Editorial',
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Búsqueda por texto (título/autor) — Librería Lerner y Librería Nacional
 // (TODO.md, Tarea de búsqueda por título/autor)
@@ -485,14 +494,18 @@ function comoString(valor: unknown): string | undefined {
 }
 
 /**
- * Búsqueda en Tornamesa (HTML, 2 peticiones: listado + producto) — recibe
- * cualquier texto de búsqueda, no solo ISBN: confirmado en vivo que
- * `palabrasBusqueda=` acepta consultas multi-palabra igual que un ISBN
- * (mismo endpoint). Compartida por `scrapearTornamesa` (por ISBN) y
+ * Búsqueda en la plataforma de listado+producto que comparten Tornamesa y
+ * Casa Tomada (HTML, 2 peticiones: listado + producto) — confirmado en vivo
+ * que ambos sitios corren el mismo software (idéntica ruta
+ * `/busqueda/listaLibros.php?tipoBus=full&palabrasBusqueda=`, idéntico JSON-LD
+ * `Book` en la página de producto), solo cambia `urlBase`. Recibe cualquier
+ * texto de búsqueda, no solo ISBN: `palabrasBusqueda=` acepta consultas
+ * multi-palabra igual que un ISBN (mismo endpoint). Compartida por
+ * `scrapearTornamesa`/`scrapearCasaTomada` (por ISBN) y
  * `buscarPvpEnTornamesaPorTexto` (por título/autor, fallback de PVP).
  */
-async function consultarTornamesa(query: string): Promise<ResultadoScraping> {
-  const urlBusqueda = `https://www.tornamesa.co/busqueda/listaLibros.php?tipoBus=full&palabrasBusqueda=${encodeURIComponent(query)}`;
+async function consultarPlataformaListaLibros(urlBase: string, query: string): Promise<ResultadoScraping> {
+  const urlBusqueda = `${urlBase}/busqueda/listaLibros.php?tipoBus=full&palabrasBusqueda=${encodeURIComponent(query)}`;
   const respuestaBusqueda = await fetchSeguro(urlBusqueda);
   if (!respuestaBusqueda) {
     return RESULTADO_VACIO;
@@ -513,7 +526,7 @@ async function consultarTornamesa(query: string): Promise<ResultadoScraping> {
 
   let urlProducto: string;
   try {
-    urlProducto = new URL(linkRelativo, 'https://www.tornamesa.co').toString();
+    urlProducto = new URL(linkRelativo, urlBase).toString();
   } catch {
     return RESULTADO_VACIO;
   }
@@ -549,7 +562,11 @@ async function consultarTornamesa(query: string): Promise<ResultadoScraping> {
 }
 
 async function scrapearTornamesa(isbn: string): Promise<ResultadoScraping> {
-  return consultarTornamesa(isbn);
+  return consultarPlataformaListaLibros('https://www.tornamesa.co', isbn);
+}
+
+async function scrapearCasaTomada(isbn: string): Promise<ResultadoScraping> {
+  return consultarPlataformaListaLibros('https://www.libreriacasatomada.com', isbn);
 }
 
 /**
@@ -565,7 +582,7 @@ export async function buscarPvpEnTornamesaPorTexto(titulo: string | null, autor:
   if (query === '') {
     return null;
   }
-  const resultado = await consultarTornamesa(query);
+  const resultado = await consultarPlataformaListaLibros('https://www.tornamesa.co', query);
   return resultado.pvp ?? null;
 }
 
@@ -617,6 +634,8 @@ const ADAPTADORES_POR_DOMINIO: Record<string, (isbn: string) => Promise<Resultad
   'www.librerianacional.com': scrapearNacional,
   'www.tornamesa.co': scrapearTornamesa,
   'www.buscalibre.com.co': scrapearBuscaLibre,
+  'www.libreriacasatomada.com': scrapearCasaTomada,
+  'www.libreriadelau.com': scrapearLibreriaDeLaU,
 };
 
 /**
