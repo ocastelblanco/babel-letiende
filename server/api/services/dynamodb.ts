@@ -7,6 +7,7 @@ import {
   QueryCommand,
   ScanCommand,
   UpdateCommand,
+  type ScanCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 
 /**
@@ -84,59 +85,84 @@ export async function consultarPorIndice<T extends object>(
 }
 
 /**
- * Escanea toda la tabla filtrando por un atributo numérico estrictamente
- * mayor que un valor. Un `Scan` recorre toda la tabla (no usa índice), así
- * que solo es aceptable para tablas pequeñas/alcance inicial — ver
- * TODO.md/MEMORY.md sobre filtros más finos como tarea futura.
+ * Un `Scan` de DynamoDB recorre como máximo ~1 MB de datos por llamada — si
+ * la tabla pesa más que eso, la respuesta trae `LastEvaluatedKey` y deja el
+ * resto sin recorrer, SIN lanzar ningún error (no es un fallo, es el
+ * comportamiento documentado de la API). Las 3 funciones de `Scan` de este
+ * archivo (`escanearMayorQue`/`escanearTodo`/`escanearProyeccion`) recorren
+ * TODAS las páginas antes de devolver el resultado — encontrado en
+ * producción (2026-08-19): con `babel-libros` ya sobre las ~1 MB (2.000+
+ * libros), el buscador de la pestaña Editar (`GET /api/libros/inventario`,
+ * que usa `escanearTodo`) solo veía una fracción del catálogo real, sin
+ * ningún error visible ni en el backend ni en el frontend — `staging`, con
+ * muchos menos libros, nunca cruzó ese límite y por eso el bug era invisible
+ * ahí. `FilterExpression` (`escanearMayorQue`) se aplica DESPUÉS del límite
+ * de 1 MB por página, así que ni siquiera filtrar ayuda a evitar esto.
+ */
+async function escanearPaginado<T extends object>(
+  parametros: Omit<ScanCommandInput, 'ExclusiveStartKey'>,
+): Promise<T[]> {
+  const items: T[] = [];
+  let ultimaClaveEvaluada: Record<string, unknown> | undefined;
+  do {
+    const resultado = await documento.send(
+      new ScanCommand({ ...parametros, ExclusiveStartKey: ultimaClaveEvaluada }),
+    );
+    items.push(...((resultado.Items ?? []) as T[]));
+    ultimaClaveEvaluada = resultado.LastEvaluatedKey;
+  } while (ultimaClaveEvaluada !== undefined);
+  return items;
+}
+
+/**
+ * Escanea toda la tabla (todas las páginas, ver `escanearPaginado`)
+ * filtrando por un atributo numérico estrictamente mayor que un valor. Un
+ * `Scan` recorre toda la tabla (no usa índice), así que solo es aceptable
+ * para tablas pequeñas/alcance inicial — ver TODO.md/MEMORY.md sobre
+ * filtros más finos como tarea futura.
  */
 export async function escanearMayorQue<T extends object>(
   nombreTabla: string,
   nombreAtributo: string,
   valorMinimoExcluido: number,
 ): Promise<T[]> {
-  const resultado = await documento.send(
-    new ScanCommand({
-      TableName: nombreTabla,
-      FilterExpression: '#atributo > :valor',
-      ExpressionAttributeNames: { '#atributo': nombreAtributo },
-      ExpressionAttributeValues: { ':valor': valorMinimoExcluido },
-    }),
-  );
-  return (resultado.Items ?? []) as T[];
+  return escanearPaginado<T>({
+    TableName: nombreTabla,
+    FilterExpression: '#atributo > :valor',
+    ExpressionAttributeNames: { '#atributo': nombreAtributo },
+    ExpressionAttributeValues: { ':valor': valorMinimoExcluido },
+  });
 }
 
 /**
- * Escanea toda la tabla sin filtro. Igual que `escanearMayorQue`, solo
- * aceptable para tablas pequeñas (ej. `babel-estantes`, sin `Query`/GSI
- * propio) — ver TODO.md/MEMORY.md sobre filtros más finos como tarea futura.
+ * Escanea toda la tabla sin filtro (todas las páginas, ver
+ * `escanearPaginado`). Igual que `escanearMayorQue`, solo aceptable para
+ * tablas pequeñas (ej. `babel-estantes`, sin `Query`/GSI propio) — ver
+ * TODO.md/MEMORY.md sobre filtros más finos como tarea futura.
  */
 export async function escanearTodo<T extends object>(nombreTabla: string): Promise<T[]> {
-  const resultado = await documento.send(new ScanCommand({ TableName: nombreTabla }));
-  return (resultado.Items ?? []) as T[];
+  return escanearPaginado<T>({ TableName: nombreTabla });
 }
 
 /**
- * Escanea toda la tabla trayendo solo los atributos indicados
- * (`ProjectionExpression`) — usado por `babel-validaciones-libros`
- * (`plan-validar-libros-async.md` §4.1): a diferencia de `escanearTodo`, cada
- * ítem de esa tabla puede pesar ~100 KB (`colaBookIds` con miles de
- * `bookId`), y el único propósito de escanearla en `POST
- * /api/validaciones-libros` es detectar si ya hay una corrida `en_progreso`
- * — no hace falta traer la cola completa de cada corrida histórica solo para
- * ese chequeo.
+ * Escanea toda la tabla (todas las páginas, ver `escanearPaginado`)
+ * trayendo solo los atributos indicados (`ProjectionExpression`) — usado
+ * por `babel-validaciones-libros` (`plan-validar-libros-async.md` §4.1): a
+ * diferencia de `escanearTodo`, cada ítem de esa tabla puede pesar ~100 KB
+ * (`colaBookIds` con miles de `bookId`), y el único propósito de escanearla
+ * en `POST /api/validaciones-libros` es detectar si ya hay una corrida
+ * `en_progreso` — no hace falta traer la cola completa de cada corrida
+ * histórica solo para ese chequeo.
  */
 export async function escanearProyeccion<T extends object>(
   nombreTabla: string,
   atributos: (keyof T & string)[],
 ): Promise<T[]> {
-  const resultado = await documento.send(
-    new ScanCommand({
-      TableName: nombreTabla,
-      ProjectionExpression: atributos.map((_, indice) => `#atributo${indice}`).join(', '),
-      ExpressionAttributeNames: Object.fromEntries(atributos.map((atributo, indice) => [`#atributo${indice}`, atributo])),
-    }),
-  );
-  return (resultado.Items ?? []) as T[];
+  return escanearPaginado<T>({
+    TableName: nombreTabla,
+    ProjectionExpression: atributos.map((_, indice) => `#atributo${indice}`).join(', '),
+    ExpressionAttributeNames: Object.fromEntries(atributos.map((atributo, indice) => [`#atributo${indice}`, atributo])),
+  });
 }
 
 /**
