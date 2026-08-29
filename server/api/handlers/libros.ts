@@ -958,3 +958,190 @@ export const handlerExportarInventario: APIGatewayProxyHandlerV2 = async (event)
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }
 };
+
+/**
+ * Normaliza texto para comparar títulos entre libros (Tarea 2 del lote de
+ * duplicados, `docs/plan-duplicados-catalogacion.md` §5): minúsculas, sin
+ * tildes/diacríticos (`NFD` + strip), sin caracteres especiales, espacios
+ * internos colapsados, sin espacios al inicio/final — el mismo criterio
+ * exacto que pidió el usuario. Exportada para tests propios.
+ */
+export function normalizarParaComparacion(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Componentes conexos (union-find) sobre el arreglo de libros: dos libros
+ * quedan en el mismo grupo si comparten ISBN **o** título normalizado — la
+ * relación ENCADENA (si A~B por ISBN y B~C por título, A/B/C quedan en el
+ * mismo grupo), la lectura correcta de "dos o más libros coinciden"
+ * (`docs/plan-duplicados-catalogacion.md` §5). Agrupa con `Map` por
+ * ISBN/título (en vez de comparar cada par, `O(n²)` inviable con 3.000+
+ * libros) y une en bloque cada bucket de 2+ índices.
+ */
+function agruparPorIsbnOTitulo(libros: Libro[]): number[] {
+  const padre = libros.map((_, indice) => indice);
+
+  function encontrarRaiz(indice: number): number {
+    while (padre[indice] !== indice) {
+      padre[indice] = padre[padre[indice] as number] as number;
+      indice = padre[indice] as number;
+    }
+    return indice;
+  }
+
+  function unir(a: number, b: number): void {
+    const raizA = encontrarRaiz(a);
+    const raizB = encontrarRaiz(b);
+    if (raizA !== raizB) {
+      padre[raizA] = raizB;
+    }
+  }
+
+  const porIsbn = new Map<string, number[]>();
+  const porTitulo = new Map<string, number[]>();
+  libros.forEach((libro, indice) => {
+    if (libro.isbn !== null) {
+      const indices = porIsbn.get(libro.isbn) ?? [];
+      indices.push(indice);
+      porIsbn.set(libro.isbn, indices);
+    }
+    const tituloNormalizado = normalizarParaComparacion(libro.titulo);
+    if (tituloNormalizado !== '') {
+      const indices = porTitulo.get(tituloNormalizado) ?? [];
+      indices.push(indice);
+      porTitulo.set(tituloNormalizado, indices);
+    }
+  });
+
+  for (const indices of [...porIsbn.values(), ...porTitulo.values()]) {
+    for (let i = 1; i < indices.length; i++) {
+      unir(indices[0] as number, indices[i] as number);
+    }
+  }
+
+  return libros.map((_, indice) => encontrarRaiz(indice));
+}
+
+/**
+ * `ISBN` / `Título` / `ISBN y título` según qué coincidencia originó que
+ * estos libros específicos cayeran en el mismo grupo (`docs/plan-duplicados-catalogacion.md`
+ * §5, S5) — se detecta buscando un ISBN o un título normalizado que se
+ * repita DENTRO del propio grupo (no contra el catálogo completo), así que
+ * también funciona correctamente en un grupo de 3+ libros donde solo un
+ * subconjunto comparte cada criterio.
+ */
+function motivoDelGrupo(librosDelGrupo: Libro[]): string {
+  const isbns = librosDelGrupo.map((libro) => libro.isbn).filter((isbn): isbn is string => isbn !== null);
+  const hayIsbnRepetido = new Set(isbns).size < isbns.length;
+  const titulos = librosDelGrupo.map((libro) => normalizarParaComparacion(libro.titulo));
+  const hayTituloRepetido = new Set(titulos).size < titulos.length;
+  if (hayIsbnRepetido && hayTituloRepetido) {
+    return 'ISBN y título';
+  }
+  return hayIsbnRepetido ? 'ISBN' : 'Título';
+}
+
+/**
+ * `GET /api/libros/exportar-repetidos` — genera un XLSX con los libros
+ * potencialmente repetidos en el catálogo (Tarea 2 del lote de duplicados,
+ * `docs/plan-duplicados-catalogacion.md` §5): dos o más libros coinciden si
+ * comparten ISBN o título normalizado (`agruparPorIsbnOTitulo`). Permite al
+ * librero detectar anomalías de catalogación YA EXISTENTES en producción —
+ * complementa la Tarea 1 (`catalogar-libro.component.ts`), que evita
+ * duplicados NUEVOS al catalogar en la misma ubicación, pero no toca los
+ * que ya están. Exige rol `administrador` EXCLUSIVAMENTE, mismo criterio
+ * que `exportar`/`exportar-inventario` (información de negocio). Ruta
+ * estática, sin conflicto con `/api/libros/{bookId}`.
+ *
+ * Mismo patrón de resolución de ubicación que `handlerExportarInventario`
+ * (3 `escanearTodo` en paralelo + `Map` en memoria, más barato que un
+ * `GetItem` por libro a este volumen).
+ */
+export const handlerExportarRepetidos: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || usuario.rol !== 'administrador') {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para exportar este reporte en Babel.' });
+    }
+
+    const [libros, ubicaciones, muebles, espacios] = await Promise.all([
+      escanearTodo<Libro>(nombreTablaLibros()),
+      escanearTodo<Ubicacion>(nombreTablaUbicaciones()),
+      escanearTodo<Mueble>(nombreTablaMuebles()),
+      escanearTodo<Espacio>(nombreTablaEspacios()),
+    ]);
+
+    const ubicacionPorId = new Map(ubicaciones.map((ubicacion) => [ubicacion.ubicacionId, ubicacion]));
+    const mueblePorId = new Map(muebles.map((mueble) => [mueble.muebleId, mueble]));
+    const espacioPorId = new Map(espacios.map((espacio) => [espacio.espacioId, espacio]));
+
+    const raizPorIndice = agruparPorIsbnOTitulo(libros);
+    const indicesPorRaiz = new Map<number, number[]>();
+    raizPorIndice.forEach((raiz, indice) => {
+      const indices = indicesPorRaiz.get(raiz) ?? [];
+      indices.push(indice);
+      indicesPorRaiz.set(raiz, indices);
+    });
+
+    // Solo grupos de 2 o más libros — un grupo de 1 no es un repetido.
+    // Numerados en el orden en que se encuentran (1, 2, 3…), no por el
+    // índice interno del union-find.
+    let numeroDeGrupo = 0;
+    const filas: Record<string, unknown>[] = [];
+    for (const indices of indicesPorRaiz.values()) {
+      if (indices.length < 2) {
+        continue;
+      }
+      numeroDeGrupo++;
+      const librosDelGrupo = indices.map((indice) => libros[indice] as Libro);
+      const motivo = motivoDelGrupo(librosDelGrupo);
+      for (const libro of librosDelGrupo) {
+        const ubicacion = ubicacionPorId.get(libro.ubicacionId);
+        const mueble = ubicacion ? mueblePorId.get(ubicacion.muebleId) : undefined;
+        const espacio = mueble ? espacioPorId.get(mueble.espacioId) : undefined;
+        filas.push({
+          Grupo: numeroDeGrupo,
+          Motivo: motivo,
+          libroId: libro.bookId,
+          ISBN: libro.isbn ?? '—',
+          Título: libro.titulo,
+          Autor: libro.autor,
+          Editorial: libro.editorial ?? '—',
+          PVP: libro.pvp,
+          Espacio: espacio?.nombre ?? '—',
+          Mueble: mueble?.nombre ?? '—',
+          Ubicación: ubicacion?.nombre ?? '—',
+        });
+      }
+    }
+
+    const libroExcel = XLSX.utils.book_new();
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    XLSX.utils.book_append_sheet(libroExcel, hoja, 'Repetidos');
+    const contenidoBase64 = XLSX.write(libroExcel, { type: 'base64', bookType: 'xlsx' }) as string;
+
+    return {
+      statusCode: 200,
+      isBase64Encoded: true,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="reporte-repetidos.xlsx"',
+      },
+      body: contenidoBase64,
+    };
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};

@@ -36,10 +36,11 @@ export type ResultadoExportarInventario = { exito: true } | { exito: false; erro
  * Cliente de `/api/libros` (tech-specs.md §5). `GET /api/libros` y
  * `GET /api/libros/:bookId` son públicos, sin autenticación. `cargarInventario`
  * (`GET /api/libros/inventario`), `editarLibro` (`PUT /api/libros/:bookId`),
- * `eliminarLibro` (`DELETE /api/libros/:bookId`) y `exportarInventario`
- * (`GET /api/libros/exportar`) exigen sesión — el backend valida siempre el
- * rol real contra `babel-usuarios` (CLAUDE.md A01); este servicio nunca
- * decide por sí mismo si el usuario puede escribir/exportar.
+ * `eliminarLibro` (`DELETE /api/libros/:bookId`), `exportarInventario`
+ * (`GET /api/libros/exportar`) y `exportarRepetidos`
+ * (`GET /api/libros/exportar-repetidos`) exigen sesión — el backend valida
+ * siempre el rol real contra `babel-usuarios` (CLAUDE.md A01); este
+ * servicio nunca decide por sí mismo si el usuario puede escribir/exportar.
  */
 @Injectable({ providedIn: 'root' })
 export class LibrosService {
@@ -212,7 +213,7 @@ export class LibrosService {
           responseType: 'blob',
         }),
       );
-      this.descargarArchivo(archivo);
+      this.descargarArchivo(archivo, 'reporte-inventario.xlsx');
       return { exito: true };
     } catch (error) {
       return {
@@ -222,12 +223,43 @@ export class LibrosService {
     }
   }
 
+  /**
+   * Llama `GET /api/libros/exportar-repetidos` con el ID Token actual y
+   * dispara la descarga del `.xlsx` recibido (Tarea 2 del lote de
+   * duplicados, `docs/plan-duplicados-catalogacion.md` §5) — mismo patrón
+   * que `exportarInventario`. Nunca lanza: ante sesión ausente, `403`
+   * (exclusivo de `administrador`, CLAUDE.md A01) o error de red, devuelve
+   * `{ exito: false, error }`.
+   */
+  async exportarRepetidos(): Promise<ResultadoExportarInventario> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return { exito: false, error: 'No se pudo exportar el reporte de repetidos. Intenta de nuevo.' };
+    }
+
+    try {
+      const archivo = await firstValueFrom(
+        this.http.get('/api/libros/exportar-repetidos', {
+          headers: { Authorization: `Bearer ${idToken}` },
+          responseType: 'blob',
+        }),
+      );
+      this.descargarArchivo(archivo, 'reporte-repetidos.xlsx');
+      return { exito: true };
+    } catch (error) {
+      return {
+        exito: false,
+        error: this.mensajeError(error, 'No se pudo exportar el reporte de repetidos. Intenta de nuevo.'),
+      };
+    }
+  }
+
   /** Dispara la descarga de un blob en el navegador con un `<a>` temporal — mismo patrón que `VentasService`. */
-  private descargarArchivo(archivo: Blob): void {
+  private descargarArchivo(archivo: Blob, nombreArchivo: string): void {
     const url = URL.createObjectURL(archivo);
     const enlace = document.createElement('a');
     enlace.href = url;
-    enlace.download = 'reporte-inventario.xlsx';
+    enlace.download = nombreArchivo;
     enlace.click();
     URL.revokeObjectURL(url);
   }

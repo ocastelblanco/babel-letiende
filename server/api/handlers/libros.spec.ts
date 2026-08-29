@@ -54,12 +54,14 @@ const {
   handlerEliminar,
   handlerInventario,
   handlerExportarInventario,
+  handlerExportarRepetidos,
   handlerDetalle,
   handlerBuscarPorIsbn,
   handlerFusionarDuplicado,
   validarDatosNuevoLibro,
   validarDatosEditarLibro,
   validarDatosFusionarDuplicado,
+  normalizarParaComparacion,
 } = await import('./libros');
 const { ItemNoExisteError } = await import('../services/dynamodb');
 
@@ -916,6 +918,147 @@ describe('handlerExportarInventario (GET /api/libros/exportar)', () => {
       Cantidad: 0,
     });
   });
+});
+
+describe('normalizarParaComparacion', () => {
+  it('quita tildes/diacríticos y pasa a minúsculas', () => {
+    expect(normalizarParaComparacion('Cien Años De Soledad')).toBe('cien anos de soledad');
+  });
+
+  it('quita caracteres especiales/puntuación', () => {
+    expect(normalizarParaComparacion('¡Cien Años, de Soledad!')).toBe('cien anos de soledad');
+  });
+
+  it('colapsa espacios internos múltiples y quita espacios al inicio/final', () => {
+    expect(normalizarParaComparacion('  Cien   años   de Soledad  ')).toBe('cien anos de soledad');
+  });
+
+  it('dos variantes de escritura del mismo título normalizan al mismo resultado', () => {
+    expect(normalizarParaComparacion('CIEN AÑOS DE SOLEDAD')).toBe(normalizarParaComparacion('cien años de soledad'));
+  });
+});
+
+describe('handlerExportarRepetidos (GET /api/libros/exportar-repetidos)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    process.env['TABLA_MUEBLES'] = 'babel-muebles-test';
+    process.env['TABLA_ESPACIOS'] = 'babel-espacios-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerExportarRepetidos(eventoConBookId({}), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el rol es vendedor (exige administrador exclusivamente)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+
+    const respuesta = await handlerExportarRepetidos(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(escanearTodoMock).not.toHaveBeenCalled();
+  });
+
+  it(
+    'agrupa por componentes conexos (ISBN o título normalizado, encadenado), excluye grupos de un solo ' +
+      'libro, y numera/ordena las filas por grupo',
+    async () => {
+      verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-1' });
+      obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+
+      const ubicacionDeLibroFalso = { ubicacionId: 'ubicacion-1', muebleId: 'mueble-1', nombre: 'Estante 1' };
+
+      // Grupo 1: mismo ISBN, títulos distintos — Motivo "ISBN".
+      const libroA = { ...libroFalso, bookId: 'libro-a', isbn: '9780000000000', titulo: 'Libro A' };
+      const libroB = { ...libroFalso, bookId: 'libro-b', isbn: '9780000000000', titulo: 'Libro B' };
+
+      // Sin ningún repetido — no debe aparecer en el reporte (grupo de 1).
+      const libroUnico = { ...libroFalso, bookId: 'libro-unico', isbn: '9999999999999', titulo: 'Libro único' };
+
+      // Grupo 2: mismo título normalizado (tildes/mayúsculas distintas), sin ISBN — Motivo "Título".
+      const libroD = { ...libroFalso, bookId: 'libro-d', isbn: null, titulo: 'Cien Años De Soledad' };
+      const libroE = { ...libroFalso, bookId: 'libro-e', isbn: null, titulo: 'cien anos de soledad' };
+
+      // Grupo 3: encadenamiento transitivo — F~G por ISBN, G~H por título — Motivo "ISBN y título".
+      const libroF = { ...libroFalso, bookId: 'libro-f', isbn: '111', titulo: 'Título Uno' };
+      const libroG = { ...libroFalso, bookId: 'libro-g', isbn: '111', titulo: 'Título Dos' };
+      const libroH = { ...libroFalso, bookId: 'libro-h', isbn: '222', titulo: 'título dos' };
+
+      escanearTodoMock
+        .mockResolvedValueOnce([libroA, libroB, libroUnico, libroD, libroE, libroF, libroG, libroH])
+        .mockResolvedValueOnce([ubicacionDeLibroFalso])
+        .mockResolvedValueOnce([muebleFalso])
+        .mockResolvedValueOnce([espacioFalso]);
+
+      const respuesta = await handlerExportarRepetidos(
+        eventoConBookId({ authorization: 'Bearer token' }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({
+        statusCode: 200,
+        isBase64Encoded: true,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': 'attachment; filename="reporte-repetidos.xlsx"',
+        },
+      });
+
+      const filas = filasDelXlsx(respuesta.body as string);
+      // 2 (grupo 1) + 2 (grupo 2) + 3 (grupo 3) = 7 filas — libroUnico queda excluido.
+      expect(filas).toHaveLength(7);
+      expect(filas.some((fila) => fila['libroId'] === 'libro-unico')).toBe(false);
+
+      const filaLibroA = filas.find((fila) => fila['libroId'] === 'libro-a');
+      const filaLibroB = filas.find((fila) => fila['libroId'] === 'libro-b');
+      expect(filaLibroA?.['Motivo']).toBe('ISBN');
+      expect(filaLibroA?.['Grupo']).toBe(filaLibroB?.['Grupo']);
+      expect(filaLibroA).toMatchObject({
+        ISBN: '9780000000000',
+        Título: 'Libro A',
+        Autor: libroFalso.autor,
+        Editorial: libroFalso.editorial,
+        PVP: libroFalso.pvp,
+        Espacio: espacioFalso.nombre,
+        Mueble: muebleFalso.nombre,
+        Ubicación: ubicacionDeLibroFalso.nombre,
+      });
+
+      const filaLibroD = filas.find((fila) => fila['libroId'] === 'libro-d');
+      const filaLibroE = filas.find((fila) => fila['libroId'] === 'libro-e');
+      expect(filaLibroD?.['Motivo']).toBe('Título');
+      expect(filaLibroD?.['Grupo']).toBe(filaLibroE?.['Grupo']);
+      expect(filaLibroD?.['ISBN']).toBe('—');
+      // Ningún grupo comparte número con otro.
+      expect(filaLibroD?.['Grupo']).not.toBe(filaLibroA?.['Grupo']);
+
+      const filaLibroF = filas.find((fila) => fila['libroId'] === 'libro-f');
+      const filaLibroG = filas.find((fila) => fila['libroId'] === 'libro-g');
+      const filaLibroH = filas.find((fila) => fila['libroId'] === 'libro-h');
+      // Encadenamiento transitivo: F~G (isbn), G~H (título) — los 3 quedan en el mismo grupo.
+      expect(filaLibroF?.['Grupo']).toBe(filaLibroG?.['Grupo']);
+      expect(filaLibroG?.['Grupo']).toBe(filaLibroH?.['Grupo']);
+      expect(filaLibroF?.['Motivo']).toBe('ISBN y título');
+
+      // Las filas quedan ordenadas por grupo (no intercaladas entre grupos).
+      const numerosDeGrupo = filas.map((fila) => fila['Grupo'] as number);
+      const numerosOrdenados = [...numerosDeGrupo].sort((a, b) => a - b);
+      expect(numerosDeGrupo).toEqual(numerosOrdenados);
+    },
+  );
 });
 
 describe('handlerDetalle (GET /api/libros/:bookId)', () => {

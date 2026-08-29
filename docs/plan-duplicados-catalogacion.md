@@ -80,17 +80,17 @@ flowchart TD
 - [x] Cuidado con `disabled` en Angular Reactive Forms: un control deshabilitado **queda fuera** de `formulario.value`. Se usa `getRawValue()` en `guardar()`.
 - [x] Tests: ambos casos, el cálculo del delta, el delta no positivo, la reclasificación al mover el panel, y que el panel de ubicación ya no se sobrescribe en el caso "otra ubicación". 9 tests nuevos/reescritos (369 tests frontend en total). `npm run build` limpio; smoke test `ng serve` + `curl /catalogar` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
 
-## 5. Tarea 2 — Reporte de libros repetidos *(slot activo)*
+## 5. Tarea 2 — Reporte de libros repetidos *(COMPLETA, 2026-08-29)*
 
 **Por qué en paralelo con la Tarea 1:** la Tarea 1 evita duplicados **nuevos**; este reporte permite encontrar y limpiar los que **ya están** en producción. Es la mitad correctiva del problema y es independiente.
 
-- [ ] Backend: `GET /api/libros/exportar-repetidos`, función Lambda propia (ADR-008), rol `administrador` exclusivamente (mismo criterio que `exportar`/`exportar-inventario`: dato de negocio). Ruta estática, sin conflicto con `/api/libros/{bookId}`.
-- [ ] Reutilizar el patrón de `handlerExportarInventario`: 3 `escanearTodo` en paralelo + `Map` en memoria para resolver Espacio/Mueble/Ubicación.
-- [ ] `normalizarParaComparacion(texto)`: minúsculas, sin tildes (NFD + quitar diacríticos), sin caracteres especiales, espacios internos colapsados, `trim`. Función pura y exportada, con tests propios.
-- [ ] Agrupar con **componentes conexos (union-find)**: dos libros quedan unidos si comparten ISBN **o** título normalizado; la relación encadena. Es la lectura correcta de "dos o más libros coinciden", y evita resultados incoherentes cuando A comparte ISBN con B y B comparte título con C.
-- [ ] Emitir solo los grupos de **2 o más** libros. Columnas: `Grupo`, `Motivo`, `libroId`, `ISBN`, `Título`, `Autor`, `Editorial`, `PVP`, `Espacio`, `Mueble`, `Ubicación` (**S4**, **S5**).
-- [ ] Frontend: tercer bloque en `/admin/reportes`, calcado del bloque "Reporte de inventario" ya existente.
-- [ ] Tests: normalización, encadenamiento transitivo, grupos de un solo libro excluidos, coincidencia solo por ISBN, solo por título, y por ambos.
+- [x] Backend: `GET /api/libros/exportar-repetidos`, función Lambda propia (`handlerExportarRepetidos`, ADR-008), rol `administrador` exclusivamente (mismo criterio que `exportar`/`exportar-inventario`: dato de negocio). Ruta estática, sin conflicto con `/api/libros/{bookId}`.
+- [x] Reutiliza el patrón de `handlerExportarInventario`: 3 `escanearTodo` en paralelo + `Map` en memoria para resolver Espacio/Mueble/Ubicación.
+- [x] `normalizarParaComparacion(texto)`: minúsculas, sin tildes (NFD + quitar diacríticos), sin caracteres especiales, espacios internos colapsados, `trim`. Función pura y exportada, con tests propios.
+- [x] Agrupa con **componentes conexos (union-find)**: dos libros quedan unidos si comparten ISBN **o** título normalizado; la relación encadena. Implementado con `Map` por ISBN/título en vez de comparar cada par (`O(n²)` inviable con 3.000+ libros).
+- [x] Emite solo los grupos de **2 o más** libros. Columnas: `Grupo`, `Motivo`, `libroId`, `ISBN`, `Título`, `Autor`, `Editorial`, `PVP`, `Espacio`, `Mueble`, `Ubicación` (**S4**, **S5**). `Motivo` (`ISBN`/`Título`/`ISBN y título`) se calcula por grupo, buscando un ISBN o título repetido DENTRO del propio grupo — funciona también en grupos de 3+ libros formados por encadenamiento.
+- [x] Frontend: tercer bloque en `/admin/reportes`, calcado del bloque "Reporte de inventario" ya existente (`LibrosService.exportarRepetidos()`, mismo patrón de descarga de blob).
+- [x] Tests: normalización (tildes, caracteres especiales, espacios), encadenamiento transitivo (grupo de 3 formado por ISBN + título), grupo de un solo libro excluido, coincidencia solo por ISBN, solo por título. 7 tests backend + 7 frontend nuevos (361 backend / 376 frontend en total). `npm run build`/`build:api`/`serverless print --stage dev`/`serverless package --stage dev` verificados sin errores — el zip empaquetado incluye `libros.js`/`verificar-token.js`/`dynamodb.js`. Smoke test `ng serve` + `curl /admin/reportes` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
 
 ## 6. Tarea 3 — Babel como primera fuente al buscar por título/autor *(slot activo)*
 
@@ -102,7 +102,7 @@ Depende de la decisión **D3**. Es la única parte del lote que necesita infraes
 - [ ] `buscarCandidatos()` consulta **primero** el índice en memoria; solo si no hay coincidencias razonables recurre a `MetadatosService.buscarCandidatos` (externo). Los resultados de Babel se marcan visualmente como "ya en el catálogo".
 - [ ] Al elegir un resultado de Babel, entra por el mismo camino de duplicados de la Tarea 1 (misma ubicación / otra ubicación).
 
-## 7. Tarea 4 — Apilamiento en el catálogo público *(en cola)*
+## 7. Tarea 4 — Apilamiento en el catálogo público *(slot activo)*
 
 - [ ] Backend: extender `GET /api/libros/:bookId` de forma **aditiva** — conserva todos los campos actuales de `LibroConUbicacion` y agrega `ejemplares: EjemplarConUbicacion[]`. Con ISBN, se resuelven con una `Query` al GSI `isbn-index` (sin `Scan`); sin ISBN, `ejemplares` trae solo el propio libro (**D2**). Único consumidor hoy: `LibroDetalleComponent`, así que el riesgo de romper algo es mínimo.
 - [ ] Frontend, listado (`CatalogoPublicoComponent`): agrupar por ISBN dentro del `computed` que ya filtra y ordena — la lista completa ya está en memoria, no hace falta tocar `GET /api/libros`. Una tarjeta por grupo, sumando `cantidadDisponible`.
@@ -115,9 +115,9 @@ Depende de la decisión **D3**. Es la única parte del lote que necesita infraes
 ## 8. Orden y justificación
 
 1. **Tarea 1** (COMPLETA, 2026-08-29) — era el arreglo directo del problema reportado y no necesitó backend nuevo.
-2. **Tarea 2** (activa) — independiente, y permite limpiar los duplicados que ya existen en producción.
+2. **Tarea 2** (COMPLETA, 2026-08-29) — independiente, permite limpiar los duplicados que ya existen en producción.
 3. **Tarea 3** (activa, promovida al cerrar la Tarea 1) — mejora real, pero es la única que agrega infraestructura; conviene hacerla sin prisa.
-4. **Tarea 4** (en cola) — es cosmética/UX y no depende de ninguna de las anteriores.
+4. **Tarea 4** (activa, promovida al cerrar la Tarea 2) — es cosmética/UX y no depende de ninguna de las anteriores.
 
 Las tareas se implementan **de una en una, un PR por tarea** (`MEMORY.md`: el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation).
 

@@ -44,6 +44,11 @@ export class ReportesVentasComponent {
   protected readonly mensajeErrorInventario = signal<string | null>(null);
   protected readonly mensajeExitoInventario = signal<string | null>(null);
 
+  /** Estado del reporte de libros repetidos (Tarea 2 del lote de duplicados, `docs/plan-duplicados-catalogacion.md` §5) — independiente de los otros dos, sin filtros. */
+  protected readonly exportandoRepetidos = signal(false);
+  protected readonly mensajeErrorRepetidos = signal<string | null>(null);
+  protected readonly mensajeExitoRepetidos = signal<string | null>(null);
+
   protected readonly formulario = this.fb.nonNullable.group({
     desde: [''],
     hasta: [''],
@@ -98,6 +103,28 @@ export class ReportesVentasComponent {
       }
     } finally {
       this.exportandoInventario.set(false);
+    }
+  }
+
+  /**
+   * Exporta el listado de libros repetidos a Excel (Tarea 2 del lote de
+   * duplicados, `docs/plan-duplicados-catalogacion.md` §5) — sin filtros,
+   * mismo patrón que `exportarInventario`.
+   */
+  protected async exportarRepetidos(): Promise<void> {
+    this.mensajeExitoRepetidos.set(null);
+    this.mensajeErrorRepetidos.set(null);
+
+    this.exportandoRepetidos.set(true);
+    try {
+      const resultado = await this.librosService.exportarRepetidos();
+      if (resultado.exito) {
+        this.mensajeExitoRepetidos.set('Reporte de repetidos exportado correctamente.');
+      } else {
+        this.mensajeErrorRepetidos.set(resultado.error);
+      }
+    } finally {
+      this.exportandoRepetidos.set(false);
     }
   }
 }
