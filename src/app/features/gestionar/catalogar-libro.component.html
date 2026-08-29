@@ -221,7 +221,15 @@
               </div>
               }
               <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-primary">{{ candidato.titulo }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="truncate text-sm font-semibold text-primary">{{ candidato.titulo }}</p>
+                  @if (candidato.origen === 'babel') {
+                  <span
+                        class="shrink-0 rounded-full bg-tertiary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-tertiary">
+                    Ya en el catálogo
+                  </span>
+                  }
+                </div>
                 @if (candidato.autor) {
                 <p class="truncate text-xs text-primary/70">{{ candidato.autor }}</p>
                 }

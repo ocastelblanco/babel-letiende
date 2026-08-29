@@ -92,15 +92,17 @@ flowchart TD
 - [x] Frontend: tercer bloque en `/admin/reportes`, calcado del bloque "Reporte de inventario" ya existente (`LibrosService.exportarRepetidos()`, mismo patrón de descarga de blob).
 - [x] Tests: normalización (tildes, caracteres especiales, espacios), encadenamiento transitivo (grupo de 3 formado por ISBN + título), grupo de un solo libro excluido, coincidencia solo por ISBN, solo por título. 7 tests backend + 7 frontend nuevos (361 backend / 376 frontend en total). `npm run build`/`build:api`/`serverless print --stage dev`/`serverless package --stage dev` verificados sin errores — el zip empaquetado incluye `libros.js`/`verificar-token.js`/`dynamodb.js`. Smoke test `ng serve` + `curl /admin/reportes` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
 
-## 6. Tarea 3 — Babel como primera fuente al buscar por título/autor *(slot activo)*
+## 6. Tarea 3 — Babel como primera fuente al buscar por título/autor *(COMPLETA, 2026-08-29)*
 
-Depende de la decisión **D3**. Es la única parte del lote que necesita infraestructura nueva.
+Depende de la decisión **D3**. Fue la única parte del lote que necesitó infraestructura nueva.
 
-- [ ] Backend: `GET /api/libros/indice`, función Lambda propia, rol `vendedor`/`administrador`. Usa `escanearProyeccion` con los campos mínimos: `bookId`, `isbn`, `titulo`, `autor`, `ubicacionId`, `pvp`, `portadaUrl`, `cantidadDisponible`.
-- [ ] **Medir el tamaño real de la respuesta** con el catálogo de producción antes de dar la tarea por buena. Si `portadaUrl` infla demasiado el payload en móvil, sacarlo y resolver la portada al seleccionar.
-- [ ] Frontend: `LibrosService.cargarIndice()` con caché en un Signal a nivel de servicio (`providedIn: 'root'`), cargado una vez por sesión al entrar a Catalogar; nunca lanza (mismo criterio que el resto del flujo de catalogación).
-- [ ] `buscarCandidatos()` consulta **primero** el índice en memoria; solo si no hay coincidencias razonables recurre a `MetadatosService.buscarCandidatos` (externo). Los resultados de Babel se marcan visualmente como "ya en el catálogo".
-- [ ] Al elegir un resultado de Babel, entra por el mismo camino de duplicados de la Tarea 1 (misma ubicación / otra ubicación).
+- [x] Backend: `GET /api/libros/indice` (`handlerIndice`, función Lambda propia, rol `vendedor`/`administrador`). Usa `escanearProyeccion` con los campos mínimos: `bookId`, `isbn`, `titulo`, `autor`, `ubicacionId`, `pvp`, `portadaUrl`, `cantidadDisponible`.
+- [x] **Medido el tamaño real de la respuesta** contra el catálogo de `production` (`aws dynamodb scan` con la misma `ProjectionExpression`, 2026-08-29): 1.534 libros hoy, ~360 B/libro sin comprimir (~100 B/libro con gzip). A 3.000 libros (volumen fundacional) el índice pesa ~1 MB sin comprimir, **~300 KB con gzip** (que API Gateway HTTP API aplica automáticamente) — aceptable para una sola carga por sesión. Decisión: **mantener `portadaUrl`** pese a ser el campo más pesado, para que el vendedor siga viendo la miniatura del candidato (igual que ya ve con los candidatos externos) — es el primer campo a sacrificar si el catálogo crece mucho más allá de ese volumen.
+- [x] Frontend: `LibrosService.cargarIndice()` con caché en un Signal a nivel de servicio (`providedIn: 'root'`), cargado una vez por sesión al entrar a Catalogar (`indiceSolicitado`, evita pedirlo dos veces incluso si la primera falló); nunca lanza.
+- [x] `buscarCandidatos()` consulta **primero** el índice en memoria (`filtrarIndice`, insensible a mayúsculas/tildes — si el vendedor escribió título Y autor, exige que AMBOS coincidan); solo si no hay coincidencias recurre a `MetadatosService.buscarCandidatos` (externo). Los resultados de Babel se marcan visualmente con una etiqueta "Ya en el catálogo".
+- [x] Al elegir un resultado de Babel, se resuelve la ficha completa por `bookId` (`LibrosService.obtenerDetalle`, el índice ligero no trae `editorial`/descuento) y entra por el MISMO camino de duplicados de la Tarea 1 (`seleccionarDuplicado`, misma ubicación / otra ubicación) — reutilizado tal cual, sin duplicar lógica.
+- [x] Ajuste retroactivo a `seleccionarDuplicado` (Tarea 1): ahora también precarga el campo `isbn` — necesario para este flujo (un candidato de Babel elegido por título/autor puede llegar sin que el campo isbn se haya tocado todavía); sin efecto en el flujo por ISBN de la Tarea 1, donde el campo ya tenía ese mismo valor.
+- [x] 5 tests backend (`handlerIndice`) + 4 (`LibrosService.cargarIndice`, incluida la caché de sesión) + 6 (`CatalogarLibroComponent`, búsqueda en índice/fallback externo/AND de título+autor/selección misma-otra ubicación) nuevos (366 backend / 386 frontend en total). `npm run build`/`build:api`/`serverless print --stage dev`/`serverless package --stage dev` verificados sin errores (zip con `libros.js`/`verificar-token.js`/`dynamodb.js`). Smoke test `ng serve` + `curl /catalogar` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
 
 ## 7. Tarea 4 — Apilamiento en el catálogo público *(slot activo)*
 
@@ -116,8 +118,8 @@ Depende de la decisión **D3**. Es la única parte del lote que necesita infraes
 
 1. **Tarea 1** (COMPLETA, 2026-08-29) — era el arreglo directo del problema reportado y no necesitó backend nuevo.
 2. **Tarea 2** (COMPLETA, 2026-08-29) — independiente, permite limpiar los duplicados que ya existen en producción.
-3. **Tarea 3** (activa, promovida al cerrar la Tarea 1) — mejora real, pero es la única que agrega infraestructura; conviene hacerla sin prisa.
-4. **Tarea 4** (activa, promovida al cerrar la Tarea 2) — es cosmética/UX y no depende de ninguna de las anteriores.
+3. **Tarea 3** (COMPLETA, 2026-08-29) — era la única que agregaba infraestructura; el tamaño real del índice se midió contra producción antes de darla por buena (§6).
+4. **Tarea 4** (activa, última del lote) — es cosmética/UX y no depende de ninguna de las anteriores.
 
 Las tareas se implementan **de una en una, un PR por tarea** (`MEMORY.md`: el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation).
 

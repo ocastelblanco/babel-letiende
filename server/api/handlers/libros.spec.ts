@@ -10,6 +10,7 @@ const {
   eliminarMock,
   escanearMayorQueMock,
   escanearTodoMock,
+  escanearProyeccionMock,
   consultarPorIndiceMock,
   fusionarLibroDuplicadoMock,
 } = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const {
   eliminarMock: vi.fn(),
   escanearMayorQueMock: vi.fn(),
   escanearTodoMock: vi.fn(),
+  escanearProyeccionMock: vi.fn(),
   consultarPorIndiceMock: vi.fn(),
   fusionarLibroDuplicadoMock: vi.fn(),
 }));
@@ -43,6 +45,7 @@ vi.mock('../services/dynamodb', async () => {
     eliminar: eliminarMock,
     escanearMayorQue: escanearMayorQueMock,
     escanearTodo: escanearTodoMock,
+    escanearProyeccion: escanearProyeccionMock,
     consultarPorIndice: consultarPorIndiceMock,
     fusionarLibroDuplicado: fusionarLibroDuplicadoMock,
   };
@@ -55,6 +58,7 @@ const {
   handlerInventario,
   handlerExportarInventario,
   handlerExportarRepetidos,
+  handlerIndice,
   handlerDetalle,
   handlerBuscarPorIsbn,
   handlerFusionarDuplicado,
@@ -1059,6 +1063,126 @@ describe('handlerExportarRepetidos (GET /api/libros/exportar-repetidos)', () => 
       expect(numerosDeGrupo).toEqual(numerosOrdenados);
     },
   );
+});
+
+describe('handlerIndice (GET /api/libros/indice)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerIndice(eventoConBookId({}), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(escanearProyeccionMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el correo no tiene fila en babel-usuarios', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValue(undefined);
+
+    const respuesta = await handlerIndice(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+    expect(escanearProyeccionMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 200 con los 8 campos mínimos para un vendedor, pidiendo solo esa proyección', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    escanearProyeccionMock.mockResolvedValue([
+      {
+        bookId: 'libro-1',
+        isbn: '9780000000000',
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        ubicacionId: 'ubicacion-1',
+        pvp: 45000,
+        portadaUrl: 'https://books.google.com/portada.jpg',
+        cantidadDisponible: 2,
+      },
+    ]);
+
+    const respuesta = await handlerIndice(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    expect(escanearProyeccionMock).toHaveBeenCalledWith('babel-libros-test', [
+      'bookId',
+      'isbn',
+      'titulo',
+      'autor',
+      'ubicacionId',
+      'pvp',
+      'portadaUrl',
+      'cantidadDisponible',
+    ]);
+    const cuerpo = JSON.parse(respuesta.body as string) as unknown[];
+    expect(cuerpo).toEqual([
+      {
+        bookId: 'libro-1',
+        isbn: '9780000000000',
+        titulo: 'Cien años de soledad',
+        autor: 'Gabriel García Márquez',
+        ubicacionId: 'ubicacion-1',
+        pvp: 45000,
+        portadaUrl: 'https://books.google.com/portada.jpg',
+        cantidadDisponible: 2,
+      },
+    ]);
+  });
+
+  it('responde 200 para un administrador', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+    escanearProyeccionMock.mockResolvedValue([]);
+
+    const respuesta = await handlerIndice(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+  });
+
+  it('restituye isbn: null explícito para un libro persistido sin el atributo isbn (undefined, no null)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    // Un libro sin ISBN se persiste con el atributo AUSENTE (`omitirCamposNulos`), así que `escanearProyeccion`
+    // lo devuelve sin la clave `isbn` — no con `isbn: null` (mismo gotcha que `normalizarLibro`, MEMORY.md §7).
+    escanearProyeccionMock.mockResolvedValue([
+      {
+        bookId: 'libro-sin-isbn',
+        titulo: 'Libro sin ISBN',
+        autor: 'Autor',
+        ubicacionId: 'ubicacion-1',
+        pvp: 30000,
+        portadaUrl: null,
+        cantidadDisponible: 1,
+      },
+    ]);
+
+    const respuesta = await handlerIndice(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    const cuerpo = JSON.parse(respuesta.body as string) as { isbn: string | null }[];
+    expect(cuerpo[0]).toHaveProperty('isbn', null);
+  });
 });
 
 describe('handlerDetalle (GET /api/libros/:bookId)', () => {

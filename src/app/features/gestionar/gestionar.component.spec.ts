@@ -72,6 +72,11 @@ function configurarPrueba(): ComponentFixture<GestionarComponent> {
           cargarInventario: vi.fn().mockResolvedValue(undefined),
           editarLibro: vi.fn(),
           eliminarLibro: vi.fn(),
+          // Tarea 3 del lote de duplicados — `CatalogarLibroComponent.ngOnInit`
+          // llama `cargarIndice()`.
+          indice: signal([]),
+          cargarIndice: vi.fn().mockResolvedValue(undefined),
+          obtenerDetalle: vi.fn(),
         },
       },
       {

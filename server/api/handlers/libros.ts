@@ -9,6 +9,7 @@ import {
   consultarPorIndice,
   eliminar,
   escanearMayorQue,
+  escanearProyeccion,
   escanearTodo,
   fusionarLibroDuplicado,
   guardar,
@@ -1138,6 +1139,76 @@ export const handlerExportarRepetidos: APIGatewayProxyHandlerV2 = async (event):
       },
       body: contenidoBase64,
     };
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/** Campos mínimos que expone `GET /api/libros/indice` (Tarea 3 del lote de duplicados, `docs/plan-duplicados-catalogacion.md` §6). */
+interface LibroIndice {
+  bookId: string;
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  ubicacionId: string;
+  pvp: number;
+  portadaUrl: string | null;
+  cantidadDisponible: number;
+}
+
+/**
+ * `GET /api/libros/indice` — índice ligero de TODO el catálogo (Tarea 3 del
+ * lote de duplicados, `docs/plan-duplicados-catalogacion.md` §6): Babel
+ * como primera fuente al buscar por título/autor al catalogar, cacheado en
+ * el cliente una vez por sesión, sin golpear un `Scan` completo por cada
+ * tecleo del vendedor. Exige rol `vendedor`/`administrador`, mismo criterio
+ * que `handlerInventario` — es de solo lectura, sin datos sensibles.
+ *
+ * Usa `escanearProyeccion` (`ProjectionExpression` de DynamoDB) para traer
+ * SOLO los 8 campos mínimos, no el libro completo — medido contra el
+ * catálogo real de `production` (1.534 libros, 2026-08-29, `aws dynamodb
+ * scan` con la misma proyección): ~360 bytes/libro sin comprimir, ~100
+ * bytes/libro con gzip (que API Gateway HTTP API aplica automáticamente
+ * cuando el cliente lo acepta). A 3.000 libros (volumen fundacional del
+ * proyecto) el índice completo pesa ~1 MB sin comprimir, ~300 KB
+ * comprimido — aceptable para una sola carga por sesión al entrar a
+ * Catalogar. Se decidió mantener `portadaUrl` pese a ser, con diferencia,
+ * el campo más pesado (para que el vendedor siga viendo la miniatura al
+ * elegir un candidato de Babel, igual que ya ve con los candidatos
+ * externos) — de crecer el catálogo mucho más allá de ese volumen, es el
+ * primer campo a sacrificar.
+ *
+ * NO filtra por `cantidadDisponible` (a diferencia de `GET /api/libros`,
+ * catálogo público): el propósito es detectar duplicados al catalogar, así
+ * que un libro agotado sigue siendo relevante — mismo criterio que `GET
+ * /api/libros/inventario`/`GET /api/libros/por-isbn/:isbn`.
+ */
+export const handlerIndice: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para ver el índice de libros en Babel.' });
+    }
+
+    const libros = await escanearProyeccion<LibroIndice>(nombreTablaLibros(), [
+      'bookId',
+      'isbn',
+      'titulo',
+      'autor',
+      'ubicacionId',
+      'pvp',
+      'portadaUrl',
+      'cantidadDisponible',
+    ]);
+    // Mismo motivo que `normalizarLibro`: un libro sin ISBN se persiste sin
+    // el atributo (`omitirCamposNulos`), así que llega `undefined`, no
+    // `null` — se restituye aquí para cumplir el contrato de `LibroIndice`.
+    return respuestaJson(200, libros.map((libro) => ({ ...libro, isbn: libro.isbn ?? null })));
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

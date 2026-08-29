@@ -180,15 +180,17 @@ Se promueve la Tarea 3 al segundo slot activo (con la Tarea 2, que sigue activa 
 
 Se promueve la Tarea 4 al segundo slot activo (con la Tarea 3, que sigue activa y sin empezar).
 
-## Tarea 3 — Babel como primera fuente al buscar por título/autor (ACTIVA)
+## Tarea 3 — Babel como primera fuente al buscar por título/autor — COMPLETA (2026-08-29)
 
-`GET /api/libros/indice` (`escanearProyeccion`, campos mínimos) cacheado por sesión en el cliente. Es la única tarea del lote que agrega infraestructura; medir el tamaño real del payload contra el catálogo de producción antes de dar la tarea por buena. Ver §6 del plan.
+- [x] Backend: `GET /api/libros/indice` (`handlerIndice`, `escanearProyeccion` con los 8 campos mínimos). Rol IAM de solo lectura calcado de `LibrosInventarioLambdaRole`.
+- [x] **Tamaño real medido contra `production`** (`aws dynamodb scan` con la misma proyección, 2026-08-29): 1.534 libros hoy, ~360 B/libro sin comprimir, ~100 B/libro con gzip. A 3.000 libros (volumen fundacional) el índice pesa ~300 KB comprimido — se decidió mantener `portadaUrl` pese a ser el campo más pesado, para conservar la miniatura de los candidatos de Babel.
+- [x] Frontend: `LibrosService.cargarIndice()` cacheado una sola vez por sesión (`indiceSolicitado`); `buscarCandidatos()` filtra primero el índice en memoria (`filtrarIndice`, exige que título Y autor coincidan si ambos se escribieron) y solo cae a la búsqueda externa sin coincidencias. Los candidatos de Babel se marcan con la etiqueta "Ya en el catálogo".
+- [x] Al elegir un candidato de Babel, se resuelve la ficha completa por `bookId` (`LibrosService.obtenerDetalle`) y entra por el mismo camino de duplicados de la Tarea 1 (`seleccionarDuplicado`, misma/otra ubicación) — reutilizado sin duplicar lógica. Ajuste retroactivo menor a `seleccionarDuplicado`: también precarga `isbn`.
+- [x] 15 tests nuevos (5 backend + 4 `LibrosService` + 6 `CatalogarLibroComponent`) — 366 backend / 386 frontend en total. `build`/`build:api`/`serverless print`/`serverless package --stage dev` verificados. Smoke test `ng serve` + `curl /catalogar` (200) — verificación visual con login real pendiente del usuario en `staging`.
 
-## Tarea 4 — Apilamiento en el catálogo público (ACTIVA)
+## Tarea 4 — Apilamiento en el catálogo público (ACTIVA — única tarea activa, no hay más en cola)
 
-Agrupación por ISBN en el listado (en memoria, sin tocar `GET /api/libros`) y `ejemplares[]` aditivo en `GET /api/libros/:bookId` para los paneles de ubicación con VENDER por panel. Cosmética/UX, sin dependencias. Ver §7 del plan.
-
-**Con esto quedan activas las 2 últimas tareas del lote — no hay más ítems en cola detrás de ellas.**
+Agrupación por ISBN en el listado (en memoria, sin tocar `GET /api/libros`) y `ejemplares[]` aditivo en `GET /api/libros/:bookId` para los paneles de ubicación con VENDER por panel. Cosmética/UX, sin dependencias. Ver §7 del plan. Con esto se cierra el lote completo de duplicados/apilamiento/reporte traído por el usuario el 2026-08-29.
 
 **Orden de implementación:** una tarea, una rama, un PR, de una en una — el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation (`MEMORY.md` §7).
 
