@@ -161,19 +161,27 @@ Diseño completo, decisiones de producto y desglose de tareas en **`docs/plan-du
 
 **Hallazgo de la revisión del código actual, que explica el incidente:** `seleccionarDuplicado` (`catalogar-libro.component.ts`) **sobrescribe silenciosamente el panel "Ubicación del libro"** con la ubicación del duplicado — el vendedor elige la ubicación B, escanea un ISBN que ya existe en A, y el formulario salta a A sin avisar. Además la advertencia actual no distingue "misma ubicación" de "otra ubicación", que es justo la diferencia que importa. Se corrige en la Tarea 1.
 
-## Tarea 1 — Duplicados en catalogación: los dos flujos de advertencia (ACTIVA)
+## Tarea 1 — Duplicados en catalogación: los dos flujos de advertencia — COMPLETA (2026-08-29)
 
-Solo `CatalogarLibroComponent` y su plantilla — **sin backend nuevo**: `GET /api/libros/por-isbn/:isbn` ya devuelve la ubicación resuelta y `POST /api/libros/:bookId/fusionar-duplicado` ya suma de forma atómica. Es el arreglo directo del problema reportado. Detalle y checklist en `docs/plan-duplicados-catalogacion.md` §4.
+- [x] `CatalogarLibroComponent`: nuevo `computed` `duplicadoEnMismaUbicacion` clasifica cada coincidencia contra `panelUbicacionId()` — reactivo, se reclasifica solo si el vendedor cambia el panel después de detectar el duplicado, sin volver a golpear el backend.
+- [x] **Caso MISMA ubicación (bloqueante):** advertencia con el texto exacto pedido; `effect()` en el constructor deshabilita todo el formulario salvo `cantidadTotal` (que pasa a representar el TOTAL existente, no ejemplares nuevos) y cambia el botón a "Editar libro"; sin enlace de ignorar. Al guardar, se calcula el DELTA (`cantidadNueva - total existente`) y solo si es positivo se envía a `fusionar-duplicado` — un delta ≤ 0 muestra un mensaje que remite a la pestaña Editar, sin enviar nada.
+- [x] **Caso OTRA ubicación (informativo):** el panel de ubicación **YA NO se sobrescribe** con la ubicación del duplicado — corregida la causa real del incidente reportado por el usuario. El botón sigue diciendo "Catalogar libro" y, al guardar, crea un `bookId` nuevo e independiente (`POST /api/libros`, nunca `fusionar-duplicado`) en la ubicación que el vendedor ya había elegido.
+- [x] Invertido el orden de `dispararBusquedaPorIsbn`: Babel se consulta primero (`GET /api/libros/por-isbn/:isbn`); si el ISBN ya está catalogado, la búsqueda de metadatos externos **no se llama en absoluto**.
+- [x] Sin backend nuevo — reutiliza `GET /api/libros/por-isbn/:isbn` y `POST /api/libros/:bookId/fusionar-duplicado` tal cual existían.
+- [x] 9 tests nuevos/reescritos en `catalogar-libro.component.spec.ts` (369 tests frontend en verde, antes 365) cubriendo ambos casos, el cálculo del delta, el delta no positivo, la reclasificación al cambiar el panel, y que el panel ya no se sobrescribe. `npm run build` limpio. Smoke test `ng serve` + `curl /catalogar` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
 
-Incluye invertir el orden de `dispararBusquedaPorIsbn` para que Babel sea de verdad la primera fuente por ISBN: si el ISBN ya está catalogado, **no se llama a la búsqueda de metadatos externos en absoluto** (hoy siempre se llaman las dos, en serie).
+Se promueve la Tarea 3 al segundo slot activo (con la Tarea 2, que sigue activa y sin empezar).
 
 ## Tarea 2 — Reporte de libros repetidos (ACTIVA)
 
 Independiente de la Tarea 1, y complementaria: la Tarea 1 evita duplicados **nuevos**, este reporte permite encontrar y limpiar los que **ya están** en producción. `GET /api/libros/exportar-repetidos` (Lambda propia, ADR-008, solo `administrador`), calcado del patrón de `handlerExportarInventario`, con agrupación por **componentes conexos** (dos libros se unen si comparten ISBN o título normalizado; la relación encadena) y un tercer bloque en `/admin/reportes`. Detalle y checklist en `docs/plan-duplicados-catalogacion.md` §5.
 
-### En cola (no ocupan slot activo hasta que se cierre alguna de las 2 anteriores)
+## Tarea 3 — Babel como primera fuente al buscar por título/autor (ACTIVA)
 
-- **Tarea 3 — Babel como primera fuente al buscar por título/autor:** `GET /api/libros/indice` (`escanearProyeccion`, campos mínimos) cacheado por sesión en el cliente. Es la única tarea del lote que agrega infraestructura; conviene hacerla sin prisa y midiendo el tamaño real del payload contra el catálogo de producción. Ver §6 del plan.
+`GET /api/libros/indice` (`escanearProyeccion`, campos mínimos) cacheado por sesión en el cliente. Es la única tarea del lote que agrega infraestructura; medir el tamaño real del payload contra el catálogo de producción antes de dar la tarea por buena. Ver §6 del plan.
+
+### En cola (no ocupa slot activo hasta que se cierre alguna de las 2 anteriores)
+
 - **Tarea 4 — Apilamiento en el catálogo público:** agrupación por ISBN en el listado (en memoria, sin tocar `GET /api/libros`) y `ejemplares[]` aditivo en `GET /api/libros/:bookId` para los paneles de ubicación con VENDER por panel. Cosmética/UX, sin dependencias. Ver §7 del plan.
 
 **Orden de implementación:** una tarea, una rama, un PR, de una en una — el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation (`MEMORY.md` §7).

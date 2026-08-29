@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
@@ -52,6 +52,21 @@ function normalizarTexto(valor: string): string {
  * `EditorialesDescuentosService.descuentos`, se pre-carga su
  * `porcentajePorDefecto` — pero nunca si el vendedor ya tocó el campo a mano
  * (`descuentoTocadoManualmente`), para no pisar una corrección explícita.
+ *
+ * Duplicados por ISBN (`docs/plan-duplicados-catalogacion.md` Tarea 1): al
+ * detectar el ISBN en `babel-libros` (`GET /api/libros/por-isbn/:isbn`), se
+ * clasifica cada coincidencia contra el panel "Ubicación del libro" ya
+ * elegido. Si coincide en la MISMA ubicación (`duplicadoEnMismaUbicacion`),
+ * el flujo es bloqueante: todo el formulario queda `disable()` salvo
+ * `cantidadTotal` (que pasa a representar el TOTAL existente, no ejemplares
+ * nuevos) y el botón cambia a "Editar libro" — al guardar se envía solo la
+ * DIFERENCIA a `POST /api/libros/:bookId/fusionar-duplicado`. Si coincide en
+ * OTRA ubicación, es solo informativo: los campos siguen editables y
+ * "Catalogar libro" sigue creando un libro nuevo e independiente en la
+ * ubicación elegida (mover un ejemplar existente a otra ubicación es tarea
+ * de `EditarLibroComponent`, no de este flujo). La clasificación es
+ * reactiva (`computed`): si el vendedor cambia el panel de ubicación
+ * después de detectar el duplicado, el caso se reclasifica solo.
  */
 @Component({
   selector: 'app-catalogar-libro',
@@ -117,6 +132,29 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   /** `true` mientras se consulta `GET /api/libros/por-isbn/:isbn` — el botón "Catalogar libro" se deshabilita también mientras esto o `buscandoMetadatos()` estén en curso, para que no se pueda guardar contra un `bookId` de duplicado ya obsoleto si el vendedor cambió el ISBN y no esperó (corrección de condición de carrera, MEMORY.md). */
   protected readonly buscandoDuplicados = signal(false);
 
+  /**
+   * `true` cuando el duplicado detectado (`libroDuplicadoSeleccionado`) ya
+   * existe en la MISMA ubicación elegida en el panel — el caso bloqueante
+   * (`docs/plan-duplicados-catalogacion.md` §4). Depende de dos signals
+   * (`libroDuplicadoSeleccionado`/`panelUbicacionId`), así que se recalcula
+   * solo si el vendedor cambia el panel DESPUÉS de detectar el duplicado —
+   * no hace falta volver a disparar la búsqueda por ISBN para reclasificar.
+   */
+  protected readonly duplicadoEnMismaUbicacion = computed(() => {
+    const duplicado = this.libroDuplicadoSeleccionado();
+    return duplicado !== null && duplicado.ubicacionId === this.panelUbicacionId();
+  });
+
+  /**
+   * `true` mientras `cantidadTotal` está mostrando el TOTAL existente del
+   * duplicado (precargado por el `effect` del constructor cuando
+   * `duplicadoEnMismaUbicacion()` es `true`) — permite revertir a `1`
+   * ("ejemplares nuevos") al salir de ese estado sin pisar un valor que el
+   * vendedor haya escrito libremente en cualquier otro caso (sin duplicado,
+   * o duplicado en otra ubicación).
+   */
+  private cantidadReflejaTotalExistente = false;
+
   /** Referencia al `<video>` que muestra la vista de la cámara mientras se escanea. */
   private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');
 
@@ -134,6 +172,45 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     porcentajeDescuentoEditorial: [35, [Validators.required, Validators.min(0), Validators.max(100)]],
     cantidadTotal: [1, [Validators.required, Validators.min(1)]],
   });
+
+  /**
+   * Reacciona a `duplicadoEnMismaUbicacion()`: en el caso bloqueante,
+   * deshabilita todo el formulario salvo `cantidadTotal` y la precarga con
+   * el TOTAL existente del duplicado; al salir de ese estado (duplicado
+   * descartado, ISBN cambiado, o el vendedor movió el panel a otra
+   * ubicación), reactiva los campos y — solo si `cantidadTotal` seguía
+   * mostrando ese total (`cantidadReflejaTotalExistente`) — la revierte a
+   * `1`. No usa signals para las mutaciones de `FormGroup` (no aplica la
+   * restricción de escritura de signals dentro de `effect`).
+   */
+  constructor() {
+    effect(() => {
+      const duplicado = this.libroDuplicadoSeleccionado();
+      const mismaUbicacion = this.duplicadoEnMismaUbicacion();
+      const controles = this.formulario.controls;
+      const controlesBloqueables = [
+        controles.isbn,
+        controles.titulo,
+        controles.autor,
+        controles.editorial,
+        controles.portadaUrl,
+        controles.pvp,
+        controles.porcentajeDescuentoEditorial,
+      ];
+
+      if (mismaUbicacion && duplicado) {
+        controlesBloqueables.forEach((control) => control.disable());
+        controles.cantidadTotal.setValue(duplicado.cantidadTotal);
+        this.cantidadReflejaTotalExistente = true;
+      } else {
+        controlesBloqueables.forEach((control) => control.enable());
+        if (this.cantidadReflejaTotalExistente) {
+          controles.cantidadTotal.setValue(1);
+          this.cantidadReflejaTotalExistente = false;
+        }
+      }
+    });
+  }
 
   ngOnInit(): void {
     void this.ubicacionFisicaService.cargarEspacios();
@@ -260,28 +337,36 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Encadena `buscarYPrecargarMetadatos` (metadatos externos) y
-   * `buscarDuplicadosPorIsbn` (libros ya catalogados) para el mismo ISBN —
-   * en ese orden, nunca en paralelo, para que la ficha ya catalogada (más
-   * confiable) pueda pisar de forma determinista lo que la búsqueda de
-   * metadatos externos haya precargado (`TODO.md` Tarea 2.3, precedencia de
-   * datos). Punto de disparo único para escaneo, blur del ISBN manual y
-   * selección de un candidato con ISBN.
+   * Busca primero en **Babel** (`buscarDuplicadosPorIsbn`, `GET
+   * /api/libros/por-isbn/:isbn`) — la propia base de datos, más confiable, es
+   * siempre la primera fuente al escanear/escribir un ISBN
+   * (`docs/plan-duplicados-catalogacion.md` §3). Si el ISBN ya está
+   * catalogado, la búsqueda de metadatos externos (`api.letiende.co` +
+   * scraping, varios segundos) NI SIQUIERA SE LLAMA: los datos de Babel ya
+   * son la ficha completa y más confiable. Solo si Babel no tiene nada se
+   * cae al fallback externo (`buscarYPrecargarMetadatos`). Punto de disparo
+   * único para escaneo, blur del ISBN manual y selección de un candidato con
+   * ISBN.
    *
-   * El reset de `libroDuplicadoSeleccionado`/`coincidenciasIsbn` ocurre aquí,
-   * de forma SÍNCRONA, ANTES de cualquier `await` — no depende de que
-   * termine `buscarYPrecargarMetadatos` primero. Corrige una condición de
-   * carrera (MEMORY.md): si dependiera de `buscarDuplicadosPorIsbn` (que
-   * solo corre después de esa primera espera), un vendedor que cambia el
-   * ISBN y pulsa "Catalogar libro" durante esa ventana podía guardar contra
-   * el `bookId` de un duplicado ya obsoleto, corrompiendo un libro sin
-   * relación con lo que pensaba guardar.
+   * El reset de `libroDuplicadoSeleccionado`/`coincidenciasIsbn`/
+   * `metadatosNoEncontrados` ocurre aquí, de forma SÍNCRONA, ANTES de
+   * cualquier `await` — no depende de que termine ninguna de las dos
+   * búsquedas primero. Corrige una condición de carrera (MEMORY.md): si
+   * dependiera de `buscarDuplicadosPorIsbn` (que corre después de ese
+   * `await`), un vendedor que cambia el ISBN y pulsa "Catalogar libro"
+   * durante esa ventana podía guardar contra el `bookId` de un duplicado ya
+   * obsoleto, corrompiendo un libro sin relación con lo que pensaba guardar.
    */
   private async dispararBusquedaPorIsbn(isbn: string, opciones: { sobrescribir?: boolean } = {}): Promise<void> {
     this.libroDuplicadoSeleccionado.set(null);
     this.coincidenciasIsbn.set([]);
+    this.metadatosNoEncontrados.set(false);
+
+    const huboCoincidenciaEnBabel = await this.buscarDuplicadosPorIsbn(isbn);
+    if (huboCoincidenciaEnBabel) {
+      return;
+    }
     await this.buscarYPrecargarMetadatos(isbn, opciones);
-    await this.buscarDuplicadosPorIsbn(isbn);
   }
 
   /**
@@ -311,7 +396,6 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     }
     const sobrescribir = opciones.sobrescribir ?? false;
 
-    this.metadatosNoEncontrados.set(false);
     this.buscandoMetadatos.set(true);
     try {
       const metadatos = await this.metadatosService.obtenerMetadatos(isbnLimpio);
@@ -348,34 +432,35 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Busca libros ya catalogados con este ISBN exacto
-   * (`GET /api/libros/por-isbn/:isbn`, `TODO.md` Tarea 2.3) para evitar
-   * duplicados — siempre se dispara DESPUÉS de `buscarYPrecargarMetadatos`
-   * (`dispararBusquedaPorIsbn`), nunca antes, para que sus datos (la ficha ya
-   * catalogada, más confiable) puedan pisar lo que la búsqueda de metadatos
-   * externos haya precargado. El reset de `libroDuplicadoSeleccionado`/
-   * `coincidenciasIsbn` para el nuevo ISBN ya ocurrió de forma síncrona en
-   * `dispararBusquedaPorIsbn`, antes de llegar aquí.
+   * Busca libros ya catalogados con este ISBN exacto (`GET
+   * /api/libros/por-isbn/:isbn`, `docs/plan-duplicados-catalogacion.md` §3) —
+   * primera fuente al resolver un ISBN, antes que cualquier búsqueda
+   * externa (`dispararBusquedaPorIsbn`). El reset de
+   * `libroDuplicadoSeleccionado`/`coincidenciasIsbn` para el nuevo ISBN ya
+   * ocurrió de forma síncrona en `dispararBusquedaPorIsbn`, antes de llegar
+   * aquí.
    *
-   * 0 coincidencias: no hace nada más (ya quedó reseteado). 1 coincidencia:
-   * se selecciona automáticamente (`seleccionarDuplicado`). Varias: quedan
-   * en `coincidenciasIsbn` para que el vendedor elija cuál (o las descarte
-   * con `descartarDuplicado`).
+   * 0 coincidencias: no hace nada más (ya quedó reseteado), devuelve
+   * `false` para que `dispararBusquedaPorIsbn` caiga al fallback externo. 1
+   * coincidencia: se selecciona automáticamente (`seleccionarDuplicado`).
+   * Varias: quedan en `coincidenciasIsbn` para que el vendedor elija cuál (o
+   * las descarte con `descartarDuplicado`). En ambos casos con coincidencia
+   * devuelve `true` — la búsqueda externa nunca se llama.
    *
-   * Nunca lanza ni bloquea el formulario — mismo criterio que
-   * `buscarYPrecargarMetadatos`: ante sesión ausente o cualquier error de
-   * red/servidor, el vendedor sigue pudiendo catalogar manualmente sin
-   * ningún duplicado detectado.
+   * Nunca lanza ni bloquea el formulario — ante sesión ausente o cualquier
+   * error de red/servidor, devuelve `false` (sin duplicado detectado) y el
+   * vendedor sigue pudiendo catalogar manualmente, cayendo al fallback
+   * externo como si Babel no tuviera nada.
    */
-  private async buscarDuplicadosPorIsbn(isbn: string): Promise<void> {
+  private async buscarDuplicadosPorIsbn(isbn: string): Promise<boolean> {
     const isbnLimpio = isbn.trim();
     if (isbnLimpio === '') {
-      return;
+      return false;
     }
 
     const idToken = await this.authService.obtenerIdToken();
     if (!idToken) {
-      return;
+      return false;
     }
 
     this.buscandoDuplicados.set(true);
@@ -387,28 +472,39 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       );
       if (coincidencias.length === 1) {
         this.seleccionarDuplicado(coincidencias[0] as LibroConUbicacion);
+        return true;
       } else if (coincidencias.length > 1) {
         this.coincidenciasIsbn.set(coincidencias);
+        return true;
       }
+      return false;
     } catch {
-      // Ante cualquier error, sin duplicado detectado — no bloquea el formulario.
+      // Ante cualquier error, sin duplicado detectado — cae al fallback externo.
+      return false;
     } finally {
       this.buscandoDuplicados.set(false);
     }
   }
 
   /**
-   * Precarga TODO el formulario con los datos de un libro ya catalogado
-   * (`TODO.md` Tarea 2.3) — la ficha ya catalogada pisa cualquier dato que
-   * haya puesto `buscarYPrecargarMetadatos`, sea cual sea el estado previo de
-   * cada campo (más confiable que una búsqueda automática de metadatos
-   * externos). También actualiza el panel "Ubicación del libro" para que
-   * coincida con la ubicación del duplicado, resolviendo espacioId/muebleId
-   * desde ubicacionId (cascada, mismo patrón que
-   * `EditarLibroComponent.editar`). `cantidadTotal` NO se llena con la
-   * cantidad existente del duplicado — se resetea a 1: a partir de aquí
-   * representa "ejemplares nuevos que se suman", no el total (decisión de
-   * producto ya confirmada, `TODO.md`).
+   * Precarga el formulario con los datos de un libro ya catalogado
+   * (`docs/plan-duplicados-catalogacion.md` §4) — la ficha ya catalogada
+   * pisa cualquier dato que haya puesto `buscarYPrecargarMetadatos`, sea
+   * cual sea el estado previo de cada campo (más confiable que una búsqueda
+   * automática de metadatos externos). `cantidadTotal` se precarga con `1`
+   * ("ejemplares nuevos que se suman") — el `effect` del constructor la
+   * reemplaza por el TOTAL existente si resulta que el duplicado está en la
+   * MISMA ubicación ya elegida en el panel (`duplicadoEnMismaUbicacion`).
+   *
+   * A diferencia del comportamiento anterior, el panel "Ubicación del
+   * libro" YA NO se sobrescribe con la ubicación del duplicado — ese
+   * sobreescribir en silencio la elección del vendedor fue la causa real de
+   * un libro catalogado dos veces en la misma ubicación en producción (ver
+   * `docs/plan-duplicados-catalogacion.md` §1). Si el vendedor ya eligió una
+   * ubicación distinta antes de escanear, esa elección se respeta tal cual
+   * está — `duplicadoEnMismaUbicacion` decide, comparando contra el panel
+   * SIN TOCARLO, si esto es una coincidencia bloqueante (misma ubicación) o
+   * solo informativa (otra ubicación).
    */
   protected seleccionarDuplicado(libro: LibroConUbicacion): void {
     this.libroDuplicadoSeleccionado.set(libro);
@@ -422,14 +518,6 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     controles.pvp.setValue(libro.pvp);
     controles.porcentajeDescuentoEditorial.setValue(libro.porcentajeDescuentoEditorial);
     controles.cantidadTotal.setValue(1);
-
-    const ubicacionActual = this.ubicaciones().find((ubicacion) => ubicacion.ubicacionId === libro.ubicacionId);
-    const muebleActual = ubicacionActual
-      ? this.muebles().find((mueble) => mueble.muebleId === ubicacionActual.muebleId)
-      : undefined;
-    this.panelEspacioId.set(muebleActual?.espacioId ?? '');
-    this.panelMuebleId.set(ubicacionActual?.muebleId ?? '');
-    this.panelUbicacionId.set(libro.ubicacionId ?? '');
   }
 
   /** El vendedor descarta el/los duplicado(s) detectado(s) y decide catalogar una entrada nueva independiente — conserva todo lo ya escrito en el formulario (`TODO.md` Tarea 2.3). */
@@ -550,6 +638,28 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
 
     const valores = this.formulario.getRawValue();
     const duplicado = this.libroDuplicadoSeleccionado();
+    const mismaUbicacion = this.duplicadoEnMismaUbicacion();
+
+    // Caso bloqueante (`docs/plan-duplicados-catalogacion.md` §4): el
+    // vendedor ve el TOTAL existente en `cantidadTotal` y debe AUMENTARLO —
+    // el delta (nunca un total absoluto) es lo único que viaja al backend,
+    // igual que antes, para no reabrir la condición de carrera que corrige
+    // `fusionar-duplicado` (dos vendedores editando el mismo duplicado casi
+    // al mismo tiempo perderían ejemplares, MEMORY.md). Un delta no positivo
+    // (número igual o menor al existente) no envía nada — reducir ejemplares
+    // es tarea de la pestaña Editar, no de este flujo.
+    let delta = 0;
+    if (mismaUbicacion && duplicado) {
+      delta = valores.cantidadTotal - duplicado.cantidadTotal;
+      if (delta <= 0) {
+        this.mensajeError.set(
+          'La cantidad no puede ser igual o menor a la que ya existe en esta ubicación. ' +
+            'Para reducir ejemplares, hazlo desde la pestaña Editar.',
+        );
+        return;
+      }
+    }
+
     const camposComunes = {
       isbn: valores.isbn.trim() === '' ? null : valores.isbn.trim(),
       titulo: valores.titulo,
@@ -568,29 +678,26 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (duplicado) {
-        // Editando un duplicado ya catalogado (`TODO.md` Tarea 2.3): usa el
-        // endpoint dedicado de fusión atómica
+      if (mismaUbicacion && duplicado) {
+        // Endpoint dedicado de fusión atómica
         // (`POST /api/libros/:bookId/fusionar-duplicado`) en vez de `PUT` —
         // el backend SUMA `ejemplaresNuevos` a
         // `cantidadTotal`/`cantidadDisponible` con un único `UpdateItem`
-        // atómico (`ADD`), sin leer el total actual primero. Enviar
-        // `ejemplaresNuevos: valores.cantidadTotal` tal cual lo escribió el
-        // vendedor — el CLIENTE NUNCA calcula un total absoluto
-        // ("existente + nuevo"): hacerlo aquí reabre la condición de carrera
-        // que este endpoint corrige (dos vendedores fusionando el mismo
-        // duplicado casi al mismo tiempo perderían ejemplares, MEMORY.md).
+        // atómico (`ADD`), sin leer el total actual primero.
         const libroActualizado = await firstValueFrom(
           this.http.post<{ titulo: string }>(
             `/api/libros/${duplicado.bookId}/fusionar-duplicado`,
-            { ...camposComunes, ubicacionId, ejemplaresNuevos: valores.cantidadTotal },
+            { ...camposComunes, ubicacionId, ejemplaresNuevos: delta },
             { headers: { Authorization: `Bearer ${idToken}` } },
           ),
         );
-        this.mensajeExito.set(
-          `«${libroActualizado.titulo}» actualizado — se agregaron ${valores.cantidadTotal} ejemplares nuevos.`,
-        );
+        this.mensajeExito.set(`«${libroActualizado.titulo}» actualizado — se agregaron ${delta} ejemplares nuevos.`);
       } else {
+        // Libro nuevo e independiente — también cuando hay un duplicado
+        // detectado en OTRA ubicación (caso informativo): un ejemplar del
+        // mismo ISBN en una ubicación distinta es un `bookId` propio, nunca
+        // una fusión con el libro de la otra ubicación (mover un ejemplar
+        // existente a otra ubicación es tarea de `EditarLibroComponent`).
         const libroCreado = await firstValueFrom(
           this.http.post<{ titulo: string }>(
             '/api/libros',

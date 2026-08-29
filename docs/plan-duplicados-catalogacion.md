@@ -67,18 +67,18 @@ flowchart TD
 
 ---
 
-## 4. Tarea 1 — Duplicados en catalogación *(slot activo)*
+## 4. Tarea 1 — Duplicados en catalogación *(COMPLETA, 2026-08-29)*
 
 **Alcance:** solo `CatalogarLibroComponent` y su plantilla. **No requiere backend nuevo** — `GET /api/libros/por-isbn/:isbn` ya devuelve todo lo necesario (incluida la ubicación resuelta) y `POST /api/libros/:bookId/fusionar-duplicado` ya suma de forma atómica.
 
-- [ ] Invertir el orden en `dispararBusquedaPorIsbn`: consultar Babel primero y **saltarse** la búsqueda de metadatos externos si hay coincidencia.
-- [ ] Clasificar las coincidencias contra `panelUbicacionId()`: `mismaUbicacion` vs. `otrasUbicaciones` (regla **S1**).
-- [ ] **Caso misma ubicación:** advertencia con el texto exacto pedido; precargar todos los campos; `disable()` en todos salvo `cantidadTotal`; precargar `cantidadTotal` con el `cantidadTotal` existente; botón "Editar libro"; sin enlace de ignorar (**S2**).
-- [ ] Al guardar en ese caso: `delta = cantidadNueva - cantidadOriginal`; si `delta <= 0`, mensaje que remite a **Editar** (**S3**); si `delta > 0`, `POST .../fusionar-duplicado` con `ejemplaresNuevos: delta`.
-- [ ] Tras guardar: `reset()` del formulario **conservando** `panelEspacioId`/`panelMuebleId`/`panelUbicacionId`, re-`enable()` de los campos y botón de vuelta a "Catalogar libro".
-- [ ] **Caso otra ubicación:** advertencia con el texto Markdown pedido (título en negrita + Espacio/Mueble/Ubicación); precargar datos; **dejar de sobrescribir el panel de ubicación** (corrige el comportamiento actual); conservar el enlace de ignorar.
-- [ ] Cuidado con `disabled` en Angular Reactive Forms: un control deshabilitado **queda fuera** de `formulario.value`. Usar `getRawValue()` donde haga falta, o el `delta` calculado se romperá en silencio.
-- [ ] Tests: ambos casos, el cálculo del delta, el delta no positivo, la conservación de la ubicación al limpiar, y que el panel de ubicación ya no se sobrescribe en el caso "otra ubicación".
+- [x] Invertir el orden en `dispararBusquedaPorIsbn`: consultar Babel primero y **saltarse** la búsqueda de metadatos externos si hay coincidencia.
+- [x] Clasificar las coincidencias contra `panelUbicacionId()`: `mismaUbicacion` vs. `otrasUbicaciones` (regla **S1**) — nuevo `computed` `duplicadoEnMismaUbicacion`, reactivo (se reclasifica solo si el vendedor cambia el panel después de detectar el duplicado).
+- [x] **Caso misma ubicación:** advertencia con el texto exacto pedido; precargar todos los campos; `disable()` en todos salvo `cantidadTotal`; precargar `cantidadTotal` con el `cantidadTotal` existente; botón "Editar libro"; sin enlace de ignorar (**S2**). Implementado con un `effect()` en el constructor que reacciona a `duplicadoEnMismaUbicacion()`.
+- [x] Al guardar en ese caso: `delta = cantidadNueva - cantidadOriginal`; si `delta <= 0`, mensaje que remite a **Editar** (**S3**); si `delta > 0`, `POST .../fusionar-duplicado` con `ejemplaresNuevos: delta`.
+- [x] Tras guardar: `reset()` del formulario **conservando** `panelEspacioId`/`panelMuebleId`/`panelUbicacionId`, re-`enable()` de los campos (vía el mismo `effect`, al quedar `libroDuplicadoSeleccionado` en `null`) y botón de vuelta a "Catalogar libro".
+- [x] **Caso otra ubicación:** advertencia con el texto Markdown pedido (título en negrita + Espacio/Mueble/Ubicación); precargar datos; **dejar de sobrescribir el panel de ubicación** (corrige el comportamiento actual — causa real del incidente reportado); conservar el enlace de ignorar. Al guardar, crea un `bookId` nuevo e independiente (`POST /api/libros`, nunca `fusionar-duplicado`) en la ubicación que el vendedor ya había elegido.
+- [x] Cuidado con `disabled` en Angular Reactive Forms: un control deshabilitado **queda fuera** de `formulario.value`. Se usa `getRawValue()` en `guardar()`.
+- [x] Tests: ambos casos, el cálculo del delta, el delta no positivo, la reclasificación al mover el panel, y que el panel de ubicación ya no se sobrescribe en el caso "otra ubicación". 9 tests nuevos/reescritos (369 tests frontend en total). `npm run build` limpio; smoke test `ng serve` + `curl /catalogar` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
 
 ## 5. Tarea 2 — Reporte de libros repetidos *(slot activo)*
 
@@ -92,7 +92,7 @@ flowchart TD
 - [ ] Frontend: tercer bloque en `/admin/reportes`, calcado del bloque "Reporte de inventario" ya existente.
 - [ ] Tests: normalización, encadenamiento transitivo, grupos de un solo libro excluidos, coincidencia solo por ISBN, solo por título, y por ambos.
 
-## 6. Tarea 3 — Babel como primera fuente al buscar por título/autor *(en cola)*
+## 6. Tarea 3 — Babel como primera fuente al buscar por título/autor *(slot activo)*
 
 Depende de la decisión **D3**. Es la única parte del lote que necesita infraestructura nueva.
 
@@ -114,9 +114,9 @@ Depende de la decisión **D3**. Es la única parte del lote que necesita infraes
 
 ## 8. Orden y justificación
 
-1. **Tarea 1** (activa) — es el arreglo directo del problema reportado y no necesita backend nuevo.
+1. **Tarea 1** (COMPLETA, 2026-08-29) — era el arreglo directo del problema reportado y no necesitó backend nuevo.
 2. **Tarea 2** (activa) — independiente, y permite limpiar los duplicados que ya existen en producción.
-3. **Tarea 3** (en cola) — mejora real, pero es la única que agrega infraestructura; conviene hacerla sin prisa.
+3. **Tarea 3** (activa, promovida al cerrar la Tarea 1) — mejora real, pero es la única que agrega infraestructura; conviene hacerla sin prisa.
 4. **Tarea 4** (en cola) — es cosmética/UX y no depende de ninguna de las anteriores.
 
 Las tareas se implementan **de una en una, un PR por tarea** (`MEMORY.md`: el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation).
