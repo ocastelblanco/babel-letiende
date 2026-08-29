@@ -33,7 +33,7 @@ Antes de diseñar nada se revisó el código real. Buena parte de la infraestruc
 | D3 | Cómo consultar Babel primero al **buscar por título/autor** | **Índice ligero cacheado en el cliente**: endpoint nuevo con campos mínimos, cargado una vez por sesión, filtrado en memoria. |
 | D4 | **PVP** en la ficha apilada cuando los ejemplares difieren | **PVP por panel de ubicación**; en la cabecera, el valor único si todos coinciden, o un **rango** si no. |
 
-### Supuestos adicionales (decididos por defecto, confirmar si alguno no encaja)
+### Supuestos adicionales — CONFIRMADOS por el usuario (2026-08-29)
 
 - **S1 — Precedencia.** Si el mismo ISBN existe **a la vez** en la ubicación elegida y en otras, gana el caso "misma ubicación" (es el que bloquea). Las demás ubicaciones se listan como información dentro de esa misma advertencia.
 - **S2 — Sin escape en el caso bloqueante.** En "misma ubicación" **desaparece** el enlace "Ignorar y catalogar como nuevo": permitirlo es exactamente lo que se quiere evitar. En "otra ubicación" **sí** se conserva (tu texto dice "ignore esta advertencia").
