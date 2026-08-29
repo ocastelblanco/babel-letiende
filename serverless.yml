@@ -156,6 +156,12 @@ functions:
     description: >-
       GET /api/libros — catálogo público de consulta, sin autenticación
       (tech-specs.md §5).
+    # provider.timeout (10s) no alcanza con el catálogo real (2.000+ libros,
+    # ya sobre el límite de ~1 MB por página de Scan): escanearMayorQue pagina
+    # todas las páginas correctamente (fix real de producción, ver
+    # dynamodb.ts), pero eso significa varias llamadas Scan secuenciales en
+    # vez de una sola — 25s da margen real sobre ese escenario.
+    timeout: 25
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
     package:
@@ -522,6 +528,10 @@ functions:
       agotados), exige rol vendedor o administrador (CLAUDE.md A01, área
       "Gestionar" pestaña "Editar"). Ruta estática, prioridad sobre
       /api/libros/{bookId}.
+    # provider.timeout (10s) no alcanza con el catálogo real (2.000+ libros,
+    # ya sobre el límite de ~1 MB por página de Scan) — mismo motivo que la
+    # función `libros`, ver ese comentario.
+    timeout: 25
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
@@ -581,6 +591,10 @@ functions:
       (Espacio/Mueble/Ubicación resueltos por nombre), exige rol
       administrador exclusivamente (CLAUDE.md A01, ADR-008,
       ajustes-finales.md Tarea G).
+    # provider.timeout (10s) no alcanza con el catálogo real (2.000+ libros,
+    # ya sobre el límite de ~1 MB por página de Scan) — mismo motivo que la
+    # función `libros`, ver ese comentario.
+    timeout: 25
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
@@ -1380,6 +1394,10 @@ functions:
       validación de PVP/portada del inventario (ADR-012). Solo
       administrador. Responde 202 y dispara validarLibrosWorker sin
       esperar su respuesta.
+    # provider.timeout (10s) no alcanza con el catálogo real (2.000+ libros,
+    # ya sobre el límite de ~1 MB por página de Scan) al construir la cola
+    # inicial — mismo motivo que la función `libros`, ver ese comentario.
+    timeout: 25
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
@@ -1620,6 +1638,10 @@ functions:
     description: >-
       GET /api/ventas — lista/filtra ventas para reportes, exige rol
       administrador exclusivamente (CLAUDE.md A01, ADR-008).
+    # provider.timeout (10s) puede no alcanzar según crezca babel-ventas —
+    # mismo motivo que la función `libros` (escanearTodo ya pagina Scan
+    # completos, ver dynamodb.ts), aplicado preventivamente aquí también.
+    timeout: 25
     environment:
       TABLA_VENTAS: ${self:custom.nombresTablas.ventas}
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
@@ -1680,6 +1702,10 @@ functions:
       GET /api/ventas/exportar — genera un archivo XLSX con las ventas
       filtradas, exige rol administrador exclusivamente (CLAUDE.md A01,
       ADR-008, TODO.md Tarea 1).
+    # provider.timeout (10s) puede no alcanzar según crezca babel-ventas —
+    # mismo motivo que la función `libros` (escanearTodo ya pagina Scan
+    # completos, ver dynamodb.ts), aplicado preventivamente aquí también.
+    timeout: 25
     environment:
       TABLA_VENTAS: ${self:custom.nombresTablas.ventas}
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
