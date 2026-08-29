@@ -41,6 +41,26 @@ interface Libro {
   actualizadoEn: string;
 }
 
+/**
+ * Restituye el `isbn: null` que el contrato `Libro` promete al frontend.
+ *
+ * Un libro sin ISBN se persiste con el atributo AUSENTE en `babel-libros`
+ * (`omitirCamposNulos`, porque el GSI disperso `isbn-index` tipa `isbn`
+ * estrictamente `S` y rechazaría un `null`), así que todo ítem que vuelva
+ * crudo de un `Scan`/`GetItem`/`Query` llega sin la clave `isbn` — es decir,
+ * `undefined` en el JSON de la respuesta, no `null` como declara
+ * `Libro.isbn: string | null`. Esa discrepancia entre lo que el tipo promete
+ * y lo que el JSON entrega tumbó el buscador de la pestaña "Editar" en
+ * producción (2026-08-29): un `libro.isbn !== null` en el cliente dejaba
+ * pasar el `undefined` y reventaba el `computed` del filtro. Todo handler que
+ * devuelva libros leídos de la tabla pasa por aquí; los que construyen el
+ * objeto en memoria (`handlerCrear`/`handlerEditar`) ya traen `isbn`
+ * explícito y no lo necesitan.
+ */
+function normalizarLibro<T extends Libro>(libro: T): T {
+  return { ...libro, isbn: libro.isbn ?? null };
+}
+
 /** Copia local de `src/app/core/models/usuario.model.ts` — mismo motivo que arriba. */
 interface Usuario {
   email: string;
@@ -134,7 +154,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayPro
       'cantidadDisponible',
       0,
     );
-    return respuestaJson(200, libros);
+    return respuestaJson(200, libros.map(normalizarLibro));
   } catch {
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }
@@ -206,7 +226,7 @@ export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<A
 
     const ubicacion = await resolverUbicacion(libro.ubicacionId);
 
-    const libroConUbicacion: LibroConUbicacion = { ...libro, ubicacion };
+    const libroConUbicacion: LibroConUbicacion = { ...normalizarLibro(libro), ubicacion };
 
     return respuestaJson(200, libroConUbicacion);
   } catch {
@@ -245,7 +265,10 @@ export const handlerBuscarPorIsbn: APIGatewayProxyHandlerV2 = async (event): Pro
 
     const libros = await consultarPorIndice<Libro>(nombreTablaLibros(), 'isbn-index', 'isbn', isbn);
     const librosConUbicacion: LibroConUbicacion[] = await Promise.all(
-      libros.map(async (libro) => ({ ...libro, ubicacion: await resolverUbicacion(libro.ubicacionId) })),
+      libros.map(async (libro) => ({
+        ...normalizarLibro(libro),
+        ubicacion: await resolverUbicacion(libro.ubicacionId),
+      })),
     );
 
     return respuestaJson(200, librosConUbicacion);
@@ -837,7 +860,7 @@ export const handlerInventario: APIGatewayProxyHandlerV2 = async (event): Promis
     }
 
     const libros = await escanearTodo<Libro>(nombreTablaLibros());
-    return respuestaJson(200, libros);
+    return respuestaJson(200, libros.map(normalizarLibro));
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

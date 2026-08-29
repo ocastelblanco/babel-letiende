@@ -790,6 +790,29 @@ describe('handlerInventario (GET /api/libros/inventario)', () => {
     expect(cuerpo).toHaveLength(2);
     expect(escanearTodoMock).toHaveBeenCalledWith('babel-libros-test');
   });
+
+  it('devuelve isbn: null explícito para un libro persistido sin el atributo isbn', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    // Un libro catalogado sin ISBN se guarda con el atributo AUSENTE
+    // (`omitirCamposNulos`, GSI `isbn-index` tipado `S`), así que el `Scan` lo
+    // devuelve sin la clave — no con `isbn: null`. Regresión de producción
+    // 2026-08-29: ese `undefined` llegaba al cliente y reventaba el filtro
+    // por título/autor de la pestaña "Editar".
+    const libroSinIsbn: Record<string, unknown> = { ...libroFalso, bookId: 'libro-sin-isbn' };
+    delete libroSinIsbn['isbn'];
+    escanearTodoMock.mockResolvedValue([libroSinIsbn]);
+
+    const respuesta = await handlerInventario(
+      eventoConBookId({ authorization: 'Bearer token' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse(respuesta.body as string) as { isbn: string | null }[];
+    expect(cuerpo[0]).toHaveProperty('isbn', null);
+  });
 });
 
 /** Decodifica el `body` base64 de `handlerExportarInventario` a filas planas — mismo patrón que `ventas.spec.ts`, `handlerExportar`. */
