@@ -202,6 +202,28 @@ describe('EditarLibroComponent', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Otro libro');
     });
 
+    it('filtra sin reventar cuando un libro llega sin la clave isbn (undefined, no null)', () => {
+      // Regresión de producción 2026-08-29: un libro catalogado sin ISBN se
+      // persiste con el atributo AUSENTE en DynamoDB (`omitirCamposNulos`,
+      // GSI `isbn-index` tipado `S`), así que el JSON de
+      // `GET /api/libros/inventario` llegaba con `isbn` `undefined`. El guard
+      // `libro.isbn !== null` lo dejaba pasar y `undefined.includes(...)`
+      // tumbaba el `computed` y con él el render de TODA la lista.
+      const libroSinIsbn = { ...libroAgotado, titulo: 'Libro sin ISBN' } as Omit<Libro, 'isbn'> & {
+        isbn?: string | null;
+      };
+      delete libroSinIsbn.isbn;
+      const { fixture } = configurarPrueba({ libros: [libroFalso, libroSinIsbn as Libro] });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.filtro.set('soledad');
+
+      expect(() => fixture.detectChanges()).not.toThrow();
+      expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
+      expect(fixture.nativeElement.textContent).not.toContain('Libro sin ISBN');
+    });
+
     it('muestra un mensaje cuando el filtro no encuentra resultados', () => {
       const { fixture } = configurarPrueba();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

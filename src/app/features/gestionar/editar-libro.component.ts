@@ -72,6 +72,20 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
   );
 
   protected readonly filtro = signal('');
+  /**
+   * Filtro por título/autor/ISBN sobre el inventario ya cargado.
+   *
+   * Los campos se leen SIEMPRE con `?? ''` y nunca comparando contra `null`:
+   * un libro catalogado sin ISBN se persiste con el atributo AUSENTE en
+   * DynamoDB (`omitirCamposNulos`, GSI `isbn-index` tipado `S`), así que en
+   * el JSON de `GET /api/libros/inventario` ese `isbn` llega `undefined`, no
+   * `null`. El guard anterior (`libro.isbn !== null`) lo dejaba pasar y
+   * `undefined.includes(...)` reventaba dentro del `computed`, tumbando el
+   * render de TODA la lista apenas se escribía algo en el buscador
+   * (encontrado en producción 2026-08-29). El backend ya normaliza `isbn` a
+   * `null` en la respuesta (`normalizarLibro`), pero este componente ya no
+   * vuelve a depender de eso.
+   */
   protected readonly librosFiltrados = computed(() => {
     const normalizado = normalizarTexto(this.filtro());
     const isbnBuscado = this.filtro().trim();
@@ -80,9 +94,9 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
     }
     return this.inventario().filter(
       (libro) =>
-        normalizarTexto(libro.titulo).includes(normalizado) ||
-        normalizarTexto(libro.autor).includes(normalizado) ||
-        (libro.isbn !== null && libro.isbn.includes(isbnBuscado)),
+        normalizarTexto(libro.titulo ?? '').includes(normalizado) ||
+        normalizarTexto(libro.autor ?? '').includes(normalizado) ||
+        (libro.isbn ?? '').includes(isbnBuscado),
     );
   });
 
