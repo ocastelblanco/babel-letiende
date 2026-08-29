@@ -322,4 +322,49 @@ describe('LibrosService', () => {
       expect(createObjectURLSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('exportarRepetidos', () => {
+    it('devuelve exito: false sin llamar a la API cuando no hay sesión', async () => {
+      const servicio = configurarPrueba(null);
+
+      const resultado = await servicio.exportarRepetidos();
+
+      expect(resultado).toEqual({ exito: false, error: expect.any(String) });
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
+    });
+
+    it('descarga el archivo con su propio nombre y devuelve éxito cuando /api/libros/exportar-repetidos responde 200', async () => {
+      const servicio = configurarPrueba('token-valido');
+      const enlaceFalso = { href: '', download: '', click: vi.fn() } as unknown as HTMLAnchorElement;
+      const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(enlaceFalso);
+
+      const promesa = servicio.exportarRepetidos();
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/libros/exportar-repetidos');
+      expect(peticion.request.method).toBe('GET');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-valido');
+      peticion.flush(new Blob(['contenido-falso']));
+
+      expect(await promesa).toEqual({ exito: true });
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:falso');
+      // Nombre de archivo propio — nunca "reporte-inventario.xlsx" (parametrizado en `descargarArchivo`).
+      expect(enlaceFalso.download).toBe('reporte-repetidos.xlsx');
+      createElementSpy.mockRestore();
+    });
+
+    it('devuelve el mensaje de error del backend cuando el rol no es administrador (403), sin descargar nada', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      const promesa = servicio.exportarRepetidos();
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/libros/exportar-repetidos')
+        .flush(new Blob(['{}']), { status: 403, statusText: 'Forbidden' });
+
+      const resultado = await promesa;
+      expect(resultado.exito).toBe(false);
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -172,17 +172,23 @@ Diseño completo, decisiones de producto y desglose de tareas en **`docs/plan-du
 
 Se promueve la Tarea 3 al segundo slot activo (con la Tarea 2, que sigue activa y sin empezar).
 
-## Tarea 2 — Reporte de libros repetidos (ACTIVA)
+## Tarea 2 — Reporte de libros repetidos — COMPLETA (2026-08-29)
 
-Independiente de la Tarea 1, y complementaria: la Tarea 1 evita duplicados **nuevos**, este reporte permite encontrar y limpiar los que **ya están** en producción. `GET /api/libros/exportar-repetidos` (Lambda propia, ADR-008, solo `administrador`), calcado del patrón de `handlerExportarInventario`, con agrupación por **componentes conexos** (dos libros se unen si comparten ISBN o título normalizado; la relación encadena) y un tercer bloque en `/admin/reportes`. Detalle y checklist en `docs/plan-duplicados-catalogacion.md` §5.
+- [x] Backend: `GET /api/libros/exportar-repetidos` (`handlerExportarRepetidos`, Lambda propia, ADR-008, solo `administrador`), calcado del patrón de `handlerExportarInventario`. Agrupación por **componentes conexos** (`agruparPorIsbnOTitulo`, union-find sobre buckets `Map` por ISBN/título normalizado — evita el `O(n²)` de comparar cada par) — dos libros se unen si comparten ISBN o título normalizado; la relación encadena. `Motivo` (`ISBN`/`Título`/`ISBN y título`) se calcula por grupo, funciona también en grupos de 3+ formados por encadenamiento. Columnas: `Grupo`, `Motivo`, `libroId`, `ISBN`, `Título`, `Autor`, `Editorial`, `PVP`, `Espacio`, `Mueble`, `Ubicación`.
+- [x] Frontend: `LibrosService.exportarRepetidos()` (mismo patrón de descarga de blob que `exportarInventario`, `descargarArchivo` parametrizado para el nombre de archivo) + tercer bloque "Reporte de libros repetidos" en `/admin/reportes` (`ReportesVentasComponent`), calcado del bloque de inventario.
+- [x] 7 tests backend (`normalizarParaComparacion` + agrupación/encadenamiento/exclusión de grupos de 1) + 7 frontend nuevos (361 backend / 376 frontend en total). `npm run build`/`build:api`/`serverless print --stage dev`/`serverless package --stage dev` verificados sin errores (zip empaquetado con `libros.js`/`verificar-token.js`/`dynamodb.js`). Smoke test `ng serve` + `curl /admin/reportes` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
+
+Se promueve la Tarea 4 al segundo slot activo (con la Tarea 3, que sigue activa y sin empezar).
 
 ## Tarea 3 — Babel como primera fuente al buscar por título/autor (ACTIVA)
 
 `GET /api/libros/indice` (`escanearProyeccion`, campos mínimos) cacheado por sesión en el cliente. Es la única tarea del lote que agrega infraestructura; medir el tamaño real del payload contra el catálogo de producción antes de dar la tarea por buena. Ver §6 del plan.
 
-### En cola (no ocupa slot activo hasta que se cierre alguna de las 2 anteriores)
+## Tarea 4 — Apilamiento en el catálogo público (ACTIVA)
 
-- **Tarea 4 — Apilamiento en el catálogo público:** agrupación por ISBN en el listado (en memoria, sin tocar `GET /api/libros`) y `ejemplares[]` aditivo en `GET /api/libros/:bookId` para los paneles de ubicación con VENDER por panel. Cosmética/UX, sin dependencias. Ver §7 del plan.
+Agrupación por ISBN en el listado (en memoria, sin tocar `GET /api/libros`) y `ejemplares[]` aditivo en `GET /api/libros/:bookId` para los paneles de ubicación con VENDER por panel. Cosmética/UX, sin dependencias. Ver §7 del plan.
+
+**Con esto quedan activas las 2 últimas tareas del lote — no hay más ítems en cola detrás de ellas.**
 
 **Orden de implementación:** una tarea, una rama, un PR, de una en una — el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation (`MEMORY.md` §7).
 

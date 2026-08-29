@@ -95,5 +95,29 @@
         {{ exportandoInventario() ? 'Exportando…' : 'Exportar inventario a Excel' }}
       </button>
     </div>
+
+    <div class="mt-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <h2 class="text-lg font-bold text-primary">Reporte de libros repetidos</h2>
+      <p class="text-sm text-primary/70">
+        Exporta un listado de libros que coinciden en ISBN o en título (Grupo, Motivo, libroId, ISBN, título, autor,
+        editorial, PVP y ubicación) a un archivo Excel, para detectar anomalías de catalogación.
+      </p>
+
+      @if (mensajeExitoRepetidos()) {
+        <p class="text-sm font-semibold text-tertiary">{{ mensajeExitoRepetidos() }}</p>
+      }
+      @if (mensajeErrorRepetidos()) {
+        <p class="text-sm text-danger">{{ mensajeErrorRepetidos() }}</p>
+      }
+
+      <button
+        type="button"
+        (click)="exportarRepetidos()"
+        class="flex h-12 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        [disabled]="exportandoRepetidos()"
+      >
+        {{ exportandoRepetidos() ? 'Exportando…' : 'Exportar repetidos a Excel' }}
+      </button>
+    </div>
   </div>
 </div>

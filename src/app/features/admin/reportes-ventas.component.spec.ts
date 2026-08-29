@@ -6,21 +6,26 @@ import { ReportesVentasComponent } from './reportes-ventas.component';
 function configurarPrueba(
   resultado: { exito: true } | { exito: false; error: string } = { exito: true },
   resultadoInventario: { exito: true } | { exito: false; error: string } = { exito: true },
+  resultadoRepetidos: { exito: true } | { exito: false; error: string } = { exito: true },
 ) {
   const exportarVentasMock = vi.fn().mockResolvedValue(resultado);
   const exportarInventarioMock = vi.fn().mockResolvedValue(resultadoInventario);
+  const exportarRepetidosMock = vi.fn().mockResolvedValue(resultadoRepetidos);
 
   TestBed.configureTestingModule({
     providers: [
       { provide: VentasService, useValue: { exportarVentas: exportarVentasMock } },
-      { provide: LibrosService, useValue: { exportarInventario: exportarInventarioMock } },
+      {
+        provide: LibrosService,
+        useValue: { exportarInventario: exportarInventarioMock, exportarRepetidos: exportarRepetidosMock },
+      },
     ],
   });
 
   const fixture: ComponentFixture<ReportesVentasComponent> = TestBed.createComponent(ReportesVentasComponent);
   fixture.detectChanges();
 
-  return { fixture, exportarVentasMock, exportarInventarioMock };
+  return { fixture, exportarVentasMock, exportarInventarioMock, exportarRepetidosMock };
 }
 
 function botonExportar(fixture: ComponentFixture<ReportesVentasComponent>): HTMLButtonElement {
@@ -127,9 +132,16 @@ describe('ReportesVentasComponent', () => {
   });
 
   describe('reporte de inventario', () => {
+    /**
+     * Localiza por POSICIÓN en el DOM (siempre el primero de los `type="button"`,
+     * en el orden fijo en que aparecen en la plantilla: inventario, luego
+     * repetidos) — no por texto, que cambia a "Exportando…" mientras carga, ni
+     * por "el último", que dejó de identificar a este botón al agregar el
+     * tercer bloque (repetidos).
+     */
     function botonExportarInventario(fixture: ComponentFixture<ReportesVentasComponent>): HTMLButtonElement {
       const botones = fixture.nativeElement.querySelectorAll('button[type="button"]') as NodeListOf<HTMLButtonElement>;
-      return botones[botones.length - 1] as HTMLButtonElement;
+      return botones[0] as HTMLButtonElement;
     }
 
     it('muestra la sección de reporte de inventario', () => {
@@ -191,6 +203,77 @@ describe('ReportesVentasComponent', () => {
 
       expect(fixture.nativeElement.textContent).toContain(
         'Este correo no está autorizado para exportar el inventario en Babel.',
+      );
+    });
+  });
+
+  describe('reporte de libros repetidos', () => {
+    /** El segundo (y último) `type="button"` en el orden fijo de la plantilla — ver nota de `botonExportarInventario` arriba. */
+    function botonExportarRepetidos(fixture: ComponentFixture<ReportesVentasComponent>): HTMLButtonElement {
+      const botones = fixture.nativeElement.querySelectorAll('button[type="button"]') as NodeListOf<HTMLButtonElement>;
+      return botones[1] as HTMLButtonElement;
+    }
+
+    it('muestra la sección de reporte de libros repetidos', () => {
+      const { fixture } = configurarPrueba();
+
+      expect(fixture.nativeElement.textContent).toContain('Reporte de libros repetidos');
+    });
+
+    it('llama a exportarRepetidos al hacer click en el botón', async () => {
+      const { fixture, exportarRepetidosMock } = configurarPrueba();
+
+      botonExportarRepetidos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(exportarRepetidosMock).toHaveBeenCalledTimes(1);
+      expect(fixture.nativeElement.textContent).toContain('Reporte de repetidos exportado correctamente.');
+    });
+
+    it('muestra el estado de carga mientras exporta repetidos, independiente de los otros dos reportes', async () => {
+      let resolver!: (valor: { exito: true }) => void;
+      const exportarRepetidosMock = vi.fn().mockReturnValue(new Promise((resolve) => (resolver = resolve)));
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: VentasService, useValue: { exportarVentas: vi.fn() } },
+          { provide: LibrosService, useValue: { exportarInventario: vi.fn(), exportarRepetidos: exportarRepetidosMock } },
+        ],
+      });
+      const fixture: ComponentFixture<ReportesVentasComponent> = TestBed.createComponent(ReportesVentasComponent);
+      fixture.detectChanges();
+
+      botonExportarRepetidos(fixture).click();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(botonExportarRepetidos(fixture).disabled).toBe(true);
+      expect(botonExportarRepetidos(fixture).textContent).toContain('Exportando…');
+      expect(botonExportar(fixture).disabled).toBe(false);
+
+      resolver({ exito: true });
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(botonExportarRepetidos(fixture).disabled).toBe(false);
+    });
+
+    it('muestra un mensaje de error cuando exportarRepetidos falla', async () => {
+      const { fixture } = configurarPrueba(
+        { exito: true },
+        { exito: true },
+        { exito: false, error: 'Este correo no está autorizado para exportar este reporte en Babel.' },
+      );
+
+      botonExportarRepetidos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain(
+        'Este correo no está autorizado para exportar este reporte en Babel.',
       );
     });
   });
