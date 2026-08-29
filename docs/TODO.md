@@ -137,3 +137,19 @@ Con esto queda cerrada la tarea completa (diseño, backend, frontend y verificac
 - [x] `docs/tech-specs.md` (conteo de sitios con adaptador + nota sobre política vs. mecanismo), `docs/MEMORY.md` §2.
 
 Fuera de alcance a propósito: `handlerBuscar`/`buscarPvpPorTexto` (búsqueda por título/autor sin ISBN, `metadatos.ts`) no se tocaron — ya excluían deliberadamente sitios sin datos completos en la misma respuesta (costo N+1, decisión de PR #48). Verificado por el usuario en `production` ("Todo funciona bien"). Con esto queda cerrada la tarea; sin tareas activas hasta el próximo lote de ajustes del usuario.
+
+---
+
+**Bug real reportado por el usuario en `production` (2026-08-29):** el buscador de "Catalogar > Editar" se bloqueaba y no filtraba nada al escribir un título o autor. Dos correcciones previas no lo resolvieron por atacar la hipótesis equivocada — CloudWatch nunca mostró ningún error porque el fallo nunca llegó al Lambda.
+
+## Tarea — Fix del buscador de "Catalogar > Editar" — COMPLETA (2026-08-29)
+
+- [x] **Intento 1 (PR #101):** `escanearTodo`/`escanearMayorQue`/`escanearProyeccion` no seguían `LastEvaluatedKey` de un `Scan` de DynamoDB (límite ~1MB por página) — con `babel-libros` ya sobre 2.000+ libros, solo se traía la primera página. Corregido con `escanearPaginado()` compartido. Necesario y correcto, pero no era la causa de este bug puntual.
+- [x] **Intento 2 (PR #102):** consecuencia del intento 1 — varios `Scan` secuenciales podían superar el timeout por defecto (10s), sobre todo en cold start. Subido a 25s. Tampoco era la causa de este bug.
+- [x] **Causa raíz real, encontrada con el stack de DevTools que aportó el usuario (PR #103):** un libro sin ISBN se persiste con el atributo `isbn` AUSENTE en `babel-libros` (`omitirCamposNulos`, PR #89 — el GSI `isbn-index` tipa `isbn` estrictamente `S`), así que `GET /api/libros/inventario` devolvía esos libros con `isbn` `undefined`, no `null`. El guard `libro.isbn !== null` de `editar-libro.component.ts` dejaba pasar el `undefined`, y `undefined.includes(...)` reventaba el `computed` `librosFiltrados`, tumbando el render de TODA la lista. Misma clase de bug que el gotcha de `palabrasClaveInvalidas` del 2026-08-19 (`MEMORY.md` §7) — un campo no-`undefined` en el tipo TS puede seguir ausente en datos ya persistidos.
+- [x] Fix en dos capas: filtro del componente con `?? ''` en vez de comparar contra `null`; nuevo helper `normalizarLibro()` en `server/api/handlers/libros.ts` que restituye `isbn: null` en los 4 endpoints que devuelven libros crudos de DynamoDB.
+- [x] 2 tests de regresión (el del componente reproduce el `TypeError` exacto sin el fix). 365 tests frontend / 354 backend en verde, build limpio.
+- [x] `docs/MEMORY.md` §2 (bitácora completa de los 3 PRs) y §7 (gotcha nuevo).
+
+Verificado por el usuario en `production` ("Funciona bien, ya fusioné el PR"). Con esto queda cerrada la tarea; sin tareas activas hasta el próximo lote de ajustes del usuario.
+
