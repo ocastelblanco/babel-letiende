@@ -153,3 +153,29 @@ Fuera de alcance a propósito: `handlerBuscar`/`buscarPvpPorTexto` (búsqueda po
 
 Verificado por el usuario en `production` ("Funciona bien, ya fusioné el PR"). Con esto queda cerrada la tarea; sin tareas activas hasta el próximo lote de ajustes del usuario.
 
+---
+
+**Lote de 3 funcionalidades nuevas — TRAÍDO POR EL USUARIO (2026-08-29):** el usuario detectó que un mismo libro se catalogó **dos veces en la misma ubicación**, pese a la advertencia de duplicados que ya existe (Tarea 2.3, PR #79). El lote ataca el problema en tres frentes: prevenirlo al catalogar, detectar los casos ya existentes con un reporte, y dejar de mostrarlos como libros distintos en el catálogo público.
+
+Diseño completo, decisiones de producto y desglose de tareas en **`docs/plan-duplicados-catalogacion.md`** (PR #105, docs-only). Las 4 ambigüedades reales se resolvieron con el usuario antes de escribir el plan: semántica del campo Cantidad (precargar el total y enviar la **diferencia** al endpoint atómico ya existente, conservando la protección contra la condición de carrera del PR #79); criterio de apilamiento (**solo por ISBN**, los libros sin ISBN no se apilan); cómo consultar Babel primero al buscar por título/autor (**índice ligero cacheado en el cliente** — `babel-libros` no tiene índice por título, así que un `Scan` por búsqueda caería sobre la ruta crítica de catalogación); y el PVP en la ficha apilada (**por panel**, con rango en la cabecera si difieren). 7 supuestos adicionales (§2 del plan) quedaron **confirmados por el usuario tal cual** el 2026-08-29, sin ajustes.
+
+**Hallazgo de la revisión del código actual, que explica el incidente:** `seleccionarDuplicado` (`catalogar-libro.component.ts`) **sobrescribe silenciosamente el panel "Ubicación del libro"** con la ubicación del duplicado — el vendedor elige la ubicación B, escanea un ISBN que ya existe en A, y el formulario salta a A sin avisar. Además la advertencia actual no distingue "misma ubicación" de "otra ubicación", que es justo la diferencia que importa. Se corrige en la Tarea 1.
+
+## Tarea 1 — Duplicados en catalogación: los dos flujos de advertencia (ACTIVA)
+
+Solo `CatalogarLibroComponent` y su plantilla — **sin backend nuevo**: `GET /api/libros/por-isbn/:isbn` ya devuelve la ubicación resuelta y `POST /api/libros/:bookId/fusionar-duplicado` ya suma de forma atómica. Es el arreglo directo del problema reportado. Detalle y checklist en `docs/plan-duplicados-catalogacion.md` §4.
+
+Incluye invertir el orden de `dispararBusquedaPorIsbn` para que Babel sea de verdad la primera fuente por ISBN: si el ISBN ya está catalogado, **no se llama a la búsqueda de metadatos externos en absoluto** (hoy siempre se llaman las dos, en serie).
+
+## Tarea 2 — Reporte de libros repetidos (ACTIVA)
+
+Independiente de la Tarea 1, y complementaria: la Tarea 1 evita duplicados **nuevos**, este reporte permite encontrar y limpiar los que **ya están** en producción. `GET /api/libros/exportar-repetidos` (Lambda propia, ADR-008, solo `administrador`), calcado del patrón de `handlerExportarInventario`, con agrupación por **componentes conexos** (dos libros se unen si comparten ISBN o título normalizado; la relación encadena) y un tercer bloque en `/admin/reportes`. Detalle y checklist en `docs/plan-duplicados-catalogacion.md` §5.
+
+### En cola (no ocupan slot activo hasta que se cierre alguna de las 2 anteriores)
+
+- **Tarea 3 — Babel como primera fuente al buscar por título/autor:** `GET /api/libros/indice` (`escanearProyeccion`, campos mínimos) cacheado por sesión en el cliente. Es la única tarea del lote que agrega infraestructura; conviene hacerla sin prisa y midiendo el tamaño real del payload contra el catálogo de producción. Ver §6 del plan.
+- **Tarea 4 — Apilamiento en el catálogo público:** agrupación por ISBN en el listado (en memoria, sin tocar `GET /api/libros`) y `ejemplares[]` aditivo en `GET /api/libros/:bookId` para los paneles de ubicación con VENDER por panel. Cosmética/UX, sin dependencias. Ver §7 del plan.
+
+**Orden de implementación:** una tarea, una rama, un PR, de una en una — el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation (`MEMORY.md` §7).
+
+
