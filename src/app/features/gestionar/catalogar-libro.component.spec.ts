@@ -414,8 +414,10 @@ describe('CatalogarLibroComponent', () => {
       fixture.detectChanges();
 
       callbackDecodificacion?.({ getText: () => '9780000000001' });
-      await Promise.resolve();
-      await Promise.resolve();
+      // Babel se consulta primero (`GET /api/libros/por-isbn/:isbn`); sin
+      // coincidencias, recién ahí cae al fallback externo de metadatos.
+      await flushBusquedaDuplicados(httpMock, '9780000000001');
+      await dejarPasarMicrotareas();
       fixture.detectChanges();
 
       expect(obtenerMetadatosMock).toHaveBeenCalledWith('9780000000001');
@@ -426,8 +428,6 @@ describe('CatalogarLibroComponent', () => {
       expect(componente.formulario.value.editorial).toBe(metadatosEncontrados.editorial);
       expect(componente.formulario.value.portadaUrl).toBe(metadatosEncontrados.portadaUrl);
       expect(componente.formulario.value.pvp).toBe(metadatosEncontrados.pvp);
-
-      await flushBusquedaDuplicados(httpMock, '9780000000001');
     });
 
     it('pre-carga el pvp cuando el campo está en su valor por defecto (0)', async () => {
@@ -439,15 +439,13 @@ describe('CatalogarLibroComponent', () => {
       campoIsbn.value = '9780000000001';
       campoIsbn.dispatchEvent(new Event('input'));
       campoIsbn.dispatchEvent(new Event('blur'));
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushBusquedaDuplicados(httpMock, '9780000000001');
+      await dejarPasarMicrotareas();
       fixture.detectChanges();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       expect(componente.formulario.value.pvp).toBe(metadatosEncontrados.pvp);
-
-      await flushBusquedaDuplicados(httpMock, '9780000000001');
     });
 
     it('no sobrescribe un pvp que el vendedor ya escribió a mano', async () => {
@@ -463,15 +461,13 @@ describe('CatalogarLibroComponent', () => {
       campoIsbn.value = '9780000000001';
       campoIsbn.dispatchEvent(new Event('input'));
       campoIsbn.dispatchEvent(new Event('blur'));
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushBusquedaDuplicados(httpMock, '9780000000001');
+      await dejarPasarMicrotareas();
       fixture.detectChanges();
 
       expect(componente.formulario.value.pvp).toBe(99_000);
       // Los demás campos que sí estaban vacíos igual se pre-cargan.
       expect(componente.formulario.value.titulo).toBe(metadatosEncontrados.titulo);
-
-      await flushBusquedaDuplicados(httpMock, '9780000000001');
     });
 
     it('un ISBN ingresado manualmente dispara la búsqueda al perder el foco del campo', async () => {
@@ -483,16 +479,14 @@ describe('CatalogarLibroComponent', () => {
       campoIsbn.value = '9780000000001';
       campoIsbn.dispatchEvent(new Event('input'));
       campoIsbn.dispatchEvent(new Event('blur'));
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushBusquedaDuplicados(httpMock, '9780000000001');
+      await dejarPasarMicrotareas();
       fixture.detectChanges();
 
       expect(obtenerMetadatosMock).toHaveBeenCalledWith('9780000000001');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       expect(componente.formulario.value.titulo).toBe(metadatosEncontrados.titulo);
-
-      await flushBusquedaDuplicados(httpMock, '9780000000001');
     });
 
     it('no sobrescribe un campo que el vendedor ya completó a mano', async () => {
@@ -508,15 +502,13 @@ describe('CatalogarLibroComponent', () => {
       campoIsbn.value = '9780000000001';
       campoIsbn.dispatchEvent(new Event('input'));
       campoIsbn.dispatchEvent(new Event('blur'));
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushBusquedaDuplicados(httpMock, '9780000000001');
+      await dejarPasarMicrotareas();
       fixture.detectChanges();
 
       expect(componente.formulario.value.titulo).toBe('Título escrito a mano');
       // Los campos que sí estaban vacíos igual se pre-cargan.
       expect(componente.formulario.value.autor).toBe(metadatosEncontrados.autor);
-
-      await flushBusquedaDuplicados(httpMock, '9780000000001');
     });
 
     it('un fallo de la búsqueda de metadatos no bloquea la edición manual del formulario', async () => {
@@ -528,8 +520,8 @@ describe('CatalogarLibroComponent', () => {
       campoIsbn.value = '0000000000000';
       campoIsbn.dispatchEvent(new Event('input'));
       campoIsbn.dispatchEvent(new Event('blur'));
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushBusquedaDuplicados(httpMock, '0000000000000');
+      await dejarPasarMicrotareas();
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).toContain('No se encontraron datos');
@@ -538,8 +530,6 @@ describe('CatalogarLibroComponent', () => {
       const componente = fixture.componentInstance as any;
       componente.formulario.controls.titulo.setValue('Escrito manualmente tras el fallo');
       expect(componente.formulario.value.titulo).toBe('Escrito manualmente tras el fallo');
-
-      await flushBusquedaDuplicados(httpMock, '0000000000000');
     });
   });
 
@@ -770,8 +760,10 @@ describe('CatalogarLibroComponent', () => {
 
       const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
       botonCandidato.click();
-      await Promise.resolve();
-      await Promise.resolve();
+      // Babel se consulta primero por el isbn del candidato; sin
+      // coincidencias, recién ahí cae al fallback externo de metadatos.
+      await flushBusquedaDuplicados(httpMock, '9780307474728');
+      await dejarPasarMicrotareas();
       fixture.detectChanges();
 
       expect(obtenerMetadatosMock).toHaveBeenCalledWith('9780307474728');
@@ -780,8 +772,6 @@ describe('CatalogarLibroComponent', () => {
       const componente = fixture.componentInstance as any;
       expect(componente.formulario.value.isbn).toBe('9780307474728');
       expect(componente.formulario.value.pvp).toBe(65_000);
-
-      await flushBusquedaDuplicados(httpMock, '9780307474728');
     });
 
     it('sobrescribe campos que el vendedor ya había completado a mano al elegir un candidato (selección explícita)', async () => {
@@ -852,8 +842,8 @@ describe('CatalogarLibroComponent', () => {
     });
   });
 
-  describe('detección de libros ya catalogados por ISBN (TODO.md Tarea 2.3)', () => {
-    /** `espacioFalso`/`muebleFalso`/`ubicacionFalsa` (fixtures del módulo) resuelven la cadena Espacio/Mueble/Ubicación de este duplicado. */
+  describe('detección de libros ya catalogados por ISBN (docs/plan-duplicados-catalogacion.md Tarea 1)', () => {
+    /** `espacioFalso`/`muebleFalso`/`ubicacionFalsa` (fixtures del módulo) resuelven la cadena Espacio/Mueble/Ubicación de este duplicado — está en `ubicacion-1`. */
     const libroDuplicadoFalso: LibroConUbicacion = {
       isbn: '9780000000001',
       bookId: 'libro-duplicado-1',
@@ -886,10 +876,6 @@ describe('CatalogarLibroComponent', () => {
       httpMock = mock;
 
       blurIsbn(fixture, '9780000000001');
-      await Promise.resolve();
-      await Promise.resolve();
-      fixture.detectChanges();
-
       await flushBusquedaDuplicados(httpMock, '9780000000001', []);
       fixture.detectChanges();
 
@@ -897,40 +883,248 @@ describe('CatalogarLibroComponent', () => {
       const componente = fixture.componentInstance as any;
       expect(componente.libroDuplicadoSeleccionado()).toBeNull();
       expect(componente.coincidenciasIsbn()).toEqual([]);
-      expect(fixture.nativeElement.textContent).not.toContain('ya está catalogado');
+      expect(fixture.nativeElement.textContent).not.toContain('ya existe');
     });
 
-    it('con 1 coincidencia precarga el formulario completo y el panel de ubicación', async () => {
-      const { fixture, httpMock: mock } = configurarPrueba();
-      httpMock = mock;
+    describe('caso MISMA ubicación (bloqueante)', () => {
+      it('bloquea el formulario salvo Cantidad, la precarga con el TOTAL existente y cambia el botón a "Editar libro"', async () => {
+        const { fixture, httpMock: mock } = configurarPrueba();
+        httpMock = mock;
+        seleccionarUbicacionPanel(fixture, 'ubicacion-1'); // misma ubicación del duplicado
 
-      blurIsbn(fixture, '9780000000001');
-      await Promise.resolve();
-      await Promise.resolve();
-      fixture.detectChanges();
+        blurIsbn(fixture, '9780000000001');
+        await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
+        fixture.detectChanges();
 
-      await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
-      fixture.detectChanges();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componente = fixture.componentInstance as any;
+        expect(componente.duplicadoEnMismaUbicacion()).toBe(true);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const componente = fixture.componentInstance as any;
-      expect(componente.libroDuplicadoSeleccionado()).toEqual(libroDuplicadoFalso);
-      expect(componente.formulario.value.titulo).toBe(libroDuplicadoFalso.titulo);
-      expect(componente.formulario.value.autor).toBe(libroDuplicadoFalso.autor);
-      expect(componente.formulario.value.editorial).toBe(libroDuplicadoFalso.editorial);
-      expect(componente.formulario.value.portadaUrl).toBe(libroDuplicadoFalso.portadaUrl);
-      expect(componente.formulario.value.pvp).toBe(libroDuplicadoFalso.pvp);
-      expect(componente.formulario.value.porcentajeDescuentoEditorial).toBe(
-        libroDuplicadoFalso.porcentajeDescuentoEditorial,
-      );
-      // `cantidadTotal` se resetea a 1 — a partir de aquí representa "ejemplares nuevos", no el total existente.
-      expect(componente.formulario.value.cantidadTotal).toBe(1);
-      expect(componente.panelEspacioId()).toBe('espacio-1');
-      expect(componente.panelMuebleId()).toBe('mueble-1');
-      expect(componente.panelUbicacionId()).toBe('ubicacion-1');
+        // Todos los campos del formulario quedan `disabled` salvo Cantidad.
+        const controles = componente.formulario.controls;
+        expect(controles.isbn.disabled).toBe(true);
+        expect(controles.titulo.disabled).toBe(true);
+        expect(controles.autor.disabled).toBe(true);
+        expect(controles.editorial.disabled).toBe(true);
+        expect(controles.portadaUrl.disabled).toBe(true);
+        expect(controles.pvp.disabled).toBe(true);
+        expect(controles.porcentajeDescuentoEditorial.disabled).toBe(true);
+        expect(controles.cantidadTotal.disabled).toBe(false);
 
-      expect(fixture.nativeElement.textContent).toContain('Este libro ya está catalogado');
-      expect(fixture.nativeElement.textContent).toContain('2 disponibles');
+        // `cantidadTotal` refleja el TOTAL existente (3), no "1 ejemplar nuevo".
+        expect(componente.formulario.getRawValue().cantidadTotal).toBe(3);
+
+        expect(fixture.nativeElement.textContent).toContain(
+          'Este libro ya existe en esta misma ubicación. Si desea catalogar un ejemplar adicional, aumente la',
+        );
+        expect(fixture.nativeElement.textContent).toContain('Cantidad');
+        // Sin enlace de ignorar — es un caso bloqueante, no se puede descartar.
+        expect(
+          Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+            (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Ignorar y catalogar como nuevo',
+          ),
+        ).toBeFalsy();
+
+        const botonGuardar = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+        expect(botonGuardar.textContent?.trim()).toBe('Editar libro');
+      });
+
+      it('al guardar, envía SOLO la diferencia a fusionar-duplicado (no el total absoluto)', async () => {
+        const { fixture, httpMock: mock } = configurarPrueba();
+        httpMock = mock;
+        seleccionarUbicacionPanel(fixture, 'ubicacion-1');
+
+        blurIsbn(fixture, '9780000000001');
+        await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
+        fixture.detectChanges();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componente = fixture.componentInstance as any;
+        // El total existente es 3 (precargado); el vendedor lo sube a 5.
+        componente.formulario.controls.cantidadTotal.setValue(5);
+
+        const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+        formulario.dispatchEvent(new Event('submit'));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Endpoint dedicado de fusión atómica — nunca `PUT /api/libros/:bookId`
+        // (que exigiría calcular un total absoluto en el cliente, la condición
+        // de carrera corregida en el PR #79, MEMORY.md).
+        const peticion = httpMock.expectOne(`/api/libros/${libroDuplicadoFalso.bookId}/fusionar-duplicado`);
+        expect(peticion.request.method).toBe('POST');
+        expect(peticion.request.body).toEqual({
+          isbn: '9780000000001',
+          titulo: libroDuplicadoFalso.titulo,
+          autor: libroDuplicadoFalso.autor,
+          editorial: libroDuplicadoFalso.editorial,
+          portadaUrl: libroDuplicadoFalso.portadaUrl,
+          pvp: libroDuplicadoFalso.pvp,
+          porcentajeDescuentoEditorial: libroDuplicadoFalso.porcentajeDescuentoEditorial,
+          ubicacionId: 'ubicacion-1',
+          // El DELTA (5 - 3 = 2) — NUNCA el total absoluto (5) calculado en el cliente.
+          ejemplaresNuevos: 2,
+        });
+        peticion.flush({ titulo: libroDuplicadoFalso.titulo });
+        await Promise.resolve();
+        await Promise.resolve();
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.textContent).toContain('actualizado');
+        expect(fixture.nativeElement.textContent).toContain('se agregaron 2 ejemplares nuevos');
+        httpMock.expectNone('/api/libros');
+
+        // Tras guardar, el formulario vuelve a estar editable y el botón
+        // vuelve a decir "Catalogar libro" — el panel de ubicación persiste.
+        expect(componente.formulario.controls.titulo.disabled).toBe(false);
+        expect(componente.panelUbicacionId()).toBe('ubicacion-1');
+        const botonGuardar = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+        expect(botonGuardar.textContent?.trim()).toBe('Catalogar libro');
+      });
+
+      it('un número igual o menor al total existente no envía nada y remite a la pestaña Editar', async () => {
+        const { fixture, httpMock: mock } = configurarPrueba();
+        httpMock = mock;
+        seleccionarUbicacionPanel(fixture, 'ubicacion-1');
+
+        blurIsbn(fixture, '9780000000001');
+        await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
+        fixture.detectChanges();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componente = fixture.componentInstance as any;
+        // El total existente es 3 — dejarlo igual (delta 0) no debe enviar nada.
+        componente.formulario.controls.cantidadTotal.setValue(3);
+
+        const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+        formulario.dispatchEvent(new Event('submit'));
+        await Promise.resolve();
+        fixture.detectChanges();
+
+        httpMock.expectNone(`/api/libros/${libroDuplicadoFalso.bookId}/fusionar-duplicado`);
+        expect(fixture.nativeElement.textContent).toContain('Editar');
+      });
+
+      it('si el vendedor cambia el panel a OTRA ubicación, el caso se reclasifica solo (sin volver a buscar el ISBN)', async () => {
+        const { fixture, httpMock: mock } = configurarPrueba();
+        httpMock = mock;
+        seleccionarUbicacionPanel(fixture, 'ubicacion-1');
+
+        blurIsbn(fixture, '9780000000001');
+        await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
+        fixture.detectChanges();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componente = fixture.componentInstance as any;
+        expect(componente.duplicadoEnMismaUbicacion()).toBe(true);
+
+        seleccionarUbicacionPanel(fixture, 'ubicacion-2');
+        fixture.detectChanges();
+
+        expect(componente.duplicadoEnMismaUbicacion()).toBe(false);
+        expect(componente.formulario.controls.titulo.disabled).toBe(false);
+        // Vuelve a representar "ejemplares nuevos" (1), no el total existente.
+        expect(componente.formulario.getRawValue().cantidadTotal).toBe(1);
+      });
+    });
+
+    describe('caso OTRA ubicación (informativo)', () => {
+      it('NO sobrescribe el panel de ubicación, precarga los datos, y deja el formulario editable', async () => {
+        const { fixture, httpMock: mock } = configurarPrueba();
+        httpMock = mock;
+        // El vendedor ya eligió una ubicación DISTINTA a la del duplicado
+        // ('ubicacion-1') antes de escanear — esa elección debe respetarse.
+        seleccionarUbicacionPanel(fixture, 'ubicacion-2');
+
+        blurIsbn(fixture, '9780000000001');
+        await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
+        fixture.detectChanges();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componente = fixture.componentInstance as any;
+        expect(componente.duplicadoEnMismaUbicacion()).toBe(false);
+        // El panel NO se sobrescribió con la ubicación del duplicado — corrige
+        // el bug de producción (docs/plan-duplicados-catalogacion.md §1).
+        expect(componente.panelUbicacionId()).toBe('ubicacion-2');
+
+        expect(componente.formulario.value.titulo).toBe(libroDuplicadoFalso.titulo);
+        expect(componente.formulario.value.autor).toBe(libroDuplicadoFalso.autor);
+        expect(componente.formulario.controls.titulo.disabled).toBe(false);
+        // Representa "ejemplares nuevos" (1), no el total existente del duplicado.
+        expect(componente.formulario.value.cantidadTotal).toBe(1);
+
+        expect(fixture.nativeElement.textContent).toContain(
+          `El libro ${libroDuplicadoFalso.titulo} ya existe en:`,
+        );
+        expect(fixture.nativeElement.textContent).toContain(espacioFalso.nombre);
+        expect(fixture.nativeElement.textContent).toContain(muebleFalso.nombre);
+        expect(fixture.nativeElement.textContent).toContain(ubicacionFalsa.nombre);
+        expect(fixture.nativeElement.textContent).toContain('ignore esta advertencia');
+        expect(fixture.nativeElement.textContent).toContain('EDITAR');
+
+        const botonGuardar = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+        expect(botonGuardar.textContent?.trim()).toBe('Catalogar libro');
+      });
+
+      it('al guardar, crea un libro NUEVO e independiente (POST /api/libros, nunca fusionar-duplicado)', async () => {
+        const { fixture, httpMock: mock } = configurarPrueba();
+        httpMock = mock;
+        seleccionarUbicacionPanel(fixture, 'ubicacion-2');
+
+        blurIsbn(fixture, '9780000000001');
+        await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
+        fixture.detectChanges();
+
+        const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+        formulario.dispatchEvent(new Event('submit'));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const peticion = httpMock.expectOne('/api/libros');
+        expect(peticion.request.method).toBe('POST');
+        expect(peticion.request.body).toEqual({
+          isbn: '9780000000001',
+          titulo: libroDuplicadoFalso.titulo,
+          autor: libroDuplicadoFalso.autor,
+          editorial: libroDuplicadoFalso.editorial,
+          portadaUrl: libroDuplicadoFalso.portadaUrl,
+          pvp: libroDuplicadoFalso.pvp,
+          porcentajeDescuentoEditorial: libroDuplicadoFalso.porcentajeDescuentoEditorial,
+          cantidadTotal: 1,
+          ubicacionId: 'ubicacion-2',
+        });
+        peticion.flush({ titulo: libroDuplicadoFalso.titulo });
+        await Promise.resolve();
+        await Promise.resolve();
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.textContent).toContain('catalogado correctamente');
+        httpMock.expectNone(`/api/libros/${libroDuplicadoFalso.bookId}/fusionar-duplicado`);
+      });
+
+      it('"Ignorar y catalogar como nuevo" descarta el duplicado sin perder lo ya escrito', async () => {
+        const { fixture, httpMock: mock } = configurarPrueba();
+        httpMock = mock;
+        seleccionarUbicacionPanel(fixture, 'ubicacion-2');
+
+        blurIsbn(fixture, '9780000000001');
+        await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
+        fixture.detectChanges();
+
+        const botonIgnorar = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+          (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Ignorar y catalogar como nuevo',
+        ) as HTMLButtonElement;
+        expect(botonIgnorar).toBeTruthy();
+        botonIgnorar.click();
+        fixture.detectChanges();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const componente = fixture.componentInstance as any;
+        expect(componente.libroDuplicadoSeleccionado()).toBeNull();
+        // El título precargado por el duplicado se conserva — solo se descarta el estado de duplicado.
+        expect(componente.formulario.value.titulo).toBe(libroDuplicadoFalso.titulo);
+        expect(fixture.nativeElement.textContent).not.toContain('ya existe');
+      });
     });
 
     it('con varias coincidencias se puede elegir una de la lista', async () => {
@@ -943,10 +1137,6 @@ describe('CatalogarLibroComponent', () => {
       };
 
       blurIsbn(fixture, '9780000000001');
-      await Promise.resolve();
-      await Promise.resolve();
-      fixture.detectChanges();
-
       await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso, segundoDuplicado]);
       fixture.detectChanges();
 
@@ -967,94 +1157,15 @@ describe('CatalogarLibroComponent', () => {
       expect(componente.formulario.value.titulo).toBe('Otro libro ya catalogado');
     });
 
-    it('"Ignorar y catalogar como nuevo" descarta el duplicado sin perder lo ya escrito', async () => {
-      const { fixture, httpMock: mock } = configurarPrueba();
-      httpMock = mock;
-
-      blurIsbn(fixture, '9780000000001');
-      await Promise.resolve();
-      await Promise.resolve();
-      fixture.detectChanges();
-
-      await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
-      fixture.detectChanges();
-
-      const botonIgnorar = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
-        (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Ignorar y catalogar como nuevo',
-      ) as HTMLButtonElement;
-      expect(botonIgnorar).toBeTruthy();
-      botonIgnorar.click();
-      fixture.detectChanges();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const componente = fixture.componentInstance as any;
-      expect(componente.libroDuplicadoSeleccionado()).toBeNull();
-      // El título precargado por el duplicado se conserva — solo se descarta el estado de duplicado.
-      expect(componente.formulario.value.titulo).toBe(libroDuplicadoFalso.titulo);
-      expect(fixture.nativeElement.textContent).not.toContain('ya está catalogado');
-    });
-
-    it('al guardar con un duplicado seleccionado llama POST fusionar-duplicado con el DELTA, no PUT ni un total absoluto', async () => {
-      const { fixture, httpMock: mock } = configurarPrueba();
-      httpMock = mock;
-
-      blurIsbn(fixture, '9780000000001');
-      await Promise.resolve();
-      await Promise.resolve();
-      fixture.detectChanges();
-
-      await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
-      fixture.detectChanges();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const componente = fixture.componentInstance as any;
-      componente.formulario.controls.cantidadTotal.setValue(2);
-
-      const formulario = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-      formulario.dispatchEvent(new Event('submit'));
-      await Promise.resolve();
-      await Promise.resolve();
-
-      // Endpoint dedicado de fusión atómica — nunca `PUT /api/libros/:bookId`
-      // (que exigiría calcular un total absoluto en el cliente, la condición
-      // de carrera corregida en MEMORY.md).
-      const peticion = httpMock.expectOne(`/api/libros/${libroDuplicadoFalso.bookId}/fusionar-duplicado`);
-      expect(peticion.request.method).toBe('POST');
-      expect(peticion.request.body).toEqual({
-        isbn: '9780000000001',
-        titulo: libroDuplicadoFalso.titulo,
-        autor: libroDuplicadoFalso.autor,
-        editorial: libroDuplicadoFalso.editorial,
-        portadaUrl: libroDuplicadoFalso.portadaUrl,
-        pvp: libroDuplicadoFalso.pvp,
-        porcentajeDescuentoEditorial: libroDuplicadoFalso.porcentajeDescuentoEditorial,
-        ubicacionId: 'ubicacion-1',
-        // El DELTA tal cual lo escribió el vendedor (2) — NUNCA
-        // "cantidadTotal existente + nuevo" calculado en el cliente.
-        ejemplaresNuevos: 2,
-      });
-      peticion.flush({ titulo: libroDuplicadoFalso.titulo });
-      await Promise.resolve();
-      await Promise.resolve();
-      fixture.detectChanges();
-
-      expect(fixture.nativeElement.textContent).toContain('actualizado');
-      expect(fixture.nativeElement.textContent).toContain('se agregaron 2 ejemplares nuevos');
-      httpMock.expectNone('/api/libros');
-    });
-
     it(
       'cambiar el ISBN resetea el duplicado seleccionado de forma SÍNCRONA, sin esperar a que termine la ' +
-        'búsqueda de metadatos (corrección de condición de carrera, MEMORY.md)',
+        'búsqueda por ISBN en Babel (corrección de condición de carrera, MEMORY.md)',
       async () => {
-        const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+        const { fixture, httpMock: mock } = configurarPrueba();
         httpMock = mock;
 
         // Primero selecciona un duplicado con el ISBN original.
         blurIsbn(fixture, '9780000000001');
-        await Promise.resolve();
-        await Promise.resolve();
-        fixture.detectChanges();
         await flushBusquedaDuplicados(httpMock, '9780000000001', [libroDuplicadoFalso]);
         fixture.detectChanges();
 
@@ -1062,34 +1173,26 @@ describe('CatalogarLibroComponent', () => {
         const componente = fixture.componentInstance as any;
         expect(componente.libroDuplicadoSeleccionado()).toEqual(libroDuplicadoFalso);
 
-        // Ahora cambia el ISBN — congela `buscarYPrecargarMetadatos` a mitad
-        // de camino (promesa deliberadamente sin resolver) para simular la
+        // Ahora cambia el ISBN — deliberadamente NO se flushea la nueva
+        // petición `GET /api/libros/por-isbn/:isbn` todavía, para simular la
         // ventana de espera donde vivía el bug: si el reset dependiera de que
         // esa búsqueda termine primero, `libroDuplicadoSeleccionado` seguiría
-        // apuntando al duplicado viejo mientras esta promesa está pendiente.
-        let resolverMetadatos: (() => void) | undefined;
-        obtenerMetadatosMock.mockReturnValue(
-          new Promise((resolve) => {
-            resolverMetadatos = () => resolve(metadatosVacios);
-          }),
-        );
-
+        // apuntando al duplicado viejo mientras la petición está pendiente.
         blurIsbn(fixture, '9780000000099');
 
         // CERO `await` todavía: el reset debe ser síncrono, no depender de
-        // que `buscarYPrecargarMetadatos` (todavía congelada) resuelva.
+        // que la nueva búsqueda por ISBN (todavía sin resolver) termine.
         expect(componente.libroDuplicadoSeleccionado()).toBeNull();
         expect(componente.coincidenciasIsbn()).toEqual([]);
 
-        // Limpieza: libera la promesa congelada y drena la búsqueda de
-        // duplicados resultante para no dejar una petición HTTP pendiente.
-        resolverMetadatos?.();
+        // Limpieza: drena la nueva búsqueda de duplicados (sin coincidencias,
+        // cae al fallback externo) para no dejar una petición HTTP pendiente.
         await flushBusquedaDuplicados(httpMock, '9780000000099', []);
       },
     );
 
     it(
-      'el botón "Catalogar libro" se deshabilita mientras se buscan metadatos o duplicados por ISBN, no solo ' +
+      'el botón "Catalogar libro" se deshabilita mientras se busca en Babel o en metadatos externos, no solo ' +
         'mientras se guarda',
       async () => {
         const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
@@ -1098,8 +1201,9 @@ describe('CatalogarLibroComponent', () => {
         const botonGuardar = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
         expect(botonGuardar.disabled).toBe(false);
 
-        // Congela `buscarYPrecargarMetadatos` para inspeccionar el botón
-        // mientras `buscandoMetadatos()` sigue en `true`.
+        // Congela `obtenerMetadatos` para inspeccionar el botón durante la
+        // SEGUNDA etapa (fallback externo), una vez que Babel ya respondió
+        // sin coincidencias.
         let resolverMetadatos: (() => void) | undefined;
         obtenerMetadatosMock.mockReturnValue(
           new Promise((resolve) => {
@@ -1113,32 +1217,25 @@ describe('CatalogarLibroComponent', () => {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const componente = fixture.componentInstance as any;
-        expect(componente.buscandoMetadatos()).toBe(true);
-        expect(botonGuardar.disabled).toBe(true);
-
-        resolverMetadatos?.();
-        // Varios ticks de microtareas: `buscarYPrecargarMetadatos` debe
-        // terminar Y `buscarDuplicadosPorIsbn` debe avanzar hasta fijar
-        // `buscandoDuplicados(true)` (justo antes de quedar suspendida en el
-        // `await this.http.get(...)`) — mismo criterio que
-        // `dejarPasarMicrotareas`/`flushBusquedaDuplicados` usan en otras
-        // pruebas de este archivo. `detectChanges()` se llama DESPUÉS de
-        // estos ticks (no antes) para que el DOM ya refleje el nuevo valor
-        // del signal cuando se lee `botonGuardar.disabled`.
-        await dejarPasarMicrotareas();
-        fixture.detectChanges();
-
-        // `buscarYPrecargarMetadatos` ya terminó, pero `buscarDuplicadosPorIsbn`
-        // (la siguiente etapa de `dispararBusquedaPorIsbn`) sigue en curso —
-        // el botón debe seguir deshabilitado mientras `buscandoDuplicados()` sea `true`.
-        expect(componente.buscandoMetadatos()).toBe(false);
+        // PRIMERA etapa: buscando en Babel (GET /api/libros/por-isbn/:isbn).
         expect(componente.buscandoDuplicados()).toBe(true);
         expect(botonGuardar.disabled).toBe(true);
 
         await flushBusquedaDuplicados(httpMock, '9780000000001', []);
+        await dejarPasarMicrotareas();
         fixture.detectChanges();
 
+        // Babel ya respondió sin coincidencias — ahora está en curso el
+        // fallback externo (congelado arriba) — el botón sigue deshabilitado.
         expect(componente.buscandoDuplicados()).toBe(false);
+        expect(componente.buscandoMetadatos()).toBe(true);
+        expect(botonGuardar.disabled).toBe(true);
+
+        resolverMetadatos?.();
+        await dejarPasarMicrotareas();
+        fixture.detectChanges();
+
+        expect(componente.buscandoMetadatos()).toBe(false);
         expect(botonGuardar.disabled).toBe(false);
       },
     );
