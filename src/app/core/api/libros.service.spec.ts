@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { AuthService } from '../auth/auth.service';
 import type { Libro, LibroConUbicacion } from '../models/libro.model';
-import { LibrosService } from './libros.service';
+import { LibrosService, type LibroIndice } from './libros.service';
 
 // `auth.service.ts` (importado arriba solo como token de DI, requerido por
 // `editarLibro`/`eliminarLibro`/`cargarInventario`) importa el SDK real de
@@ -168,6 +168,67 @@ describe('LibrosService', () => {
 
       expect(servicio.inventario()).toEqual([]);
       expect(servicio.errorInventario()).toBe(true);
+    });
+  });
+
+  describe('cargarIndice (Tarea 3 del lote de duplicados)', () => {
+    const libroIndiceFalso: LibroIndice = {
+      bookId: 'book-1',
+      isbn: '9780000000000',
+      titulo: 'Cien años de soledad',
+      autor: 'Gabriel García Márquez',
+      ubicacionId: 'ubicacion-1',
+      pvp: 45000,
+      portadaUrl: null,
+      cantidadDisponible: 1,
+    };
+
+    it('deja indice en [] sin llamar a la API cuando no hay sesión', async () => {
+      const servicio = configurarPrueba(null);
+
+      await servicio.cargarIndice();
+
+      expect(servicio.indice()).toEqual([]);
+    });
+
+    it('resuelve el índice con el ID Token real', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const promesa = servicio.cargarIndice();
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/libros/indice');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-falso');
+      peticion.flush([libroIndiceFalso]);
+      await promesa;
+
+      expect(servicio.indice()).toEqual([libroIndiceFalso]);
+    });
+
+    it('deja indice en [] cuando la API falla, sin lanzar', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const promesa = servicio.cargarIndice();
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/libros/indice')
+        .flush({ error: 'Error interno del servidor.' }, { status: 500, statusText: 'Internal Server Error' });
+      await promesa;
+
+      expect(servicio.indice()).toEqual([]);
+    });
+
+    it('solo pide el índice una vez por sesión — una segunda llamada no vuelve a golpear la API', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const primeraPromesa = servicio.cargarIndice();
+      await Promise.resolve();
+      httpMock.expectOne('/api/libros/indice').flush([libroIndiceFalso]);
+      await primeraPromesa;
+
+      await servicio.cargarIndice();
+
+      httpMock.expectNone('/api/libros/indice');
+      expect(servicio.indice()).toEqual([libroIndiceFalso]);
     });
   });
 

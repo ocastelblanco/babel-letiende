@@ -6,6 +6,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { EditorialesDescuentosService } from '../../core/api/editoriales-descuentos.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { MetadatosService } from '../../core/api/metadatos.service';
+import { LibrosService, type LibroIndice } from '../../core/api/libros.service';
 import type { DescuentoEditorial } from '../../core/models/descuento-editorial.model';
 import type { Espacio } from '../../core/models/espacio.model';
 import type { Mueble } from '../../core/models/mueble.model';
@@ -87,6 +88,14 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
   // Por defecto no encuentra portadas — las pruebas del selector manual de
   // portada sobrescriben esta resolución.
   const buscarPortadasMock = vi.fn().mockResolvedValue([]);
+  // `LibrosService` mockeado por completo (Tarea 3 del lote de duplicados) —
+  // igual que `MetadatosService`/`UbicacionFisicaService`, ningún test de
+  // este archivo necesita golpear `GET /api/libros/indice` de verdad; el
+  // `indiceSignalDePrueba` expuesto en el retorno permite a las pruebas de
+  // búsqueda en Babel poblar el índice antes de llamar `buscarCandidatos()`.
+  const cargarIndiceMock = vi.fn().mockResolvedValue(undefined);
+  const indiceSignalDePrueba = signal<LibroIndice[]>([]);
+  const obtenerDetalleMock = vi.fn().mockResolvedValue(null);
 
   TestBed.configureTestingModule({
     providers: [
@@ -122,6 +131,14 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
           cargarDescuentos: cargarDescuentosMock,
         },
       },
+      {
+        provide: LibrosService,
+        useValue: {
+          cargarIndice: cargarIndiceMock,
+          indice: indiceSignalDePrueba.asReadonly(),
+          obtenerDetalle: obtenerDetalleMock,
+        },
+      },
     ],
   });
 
@@ -141,6 +158,9 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
     buscarCandidatosMock,
     buscarPvpMock,
     buscarPortadasMock,
+    cargarIndiceMock,
+    indiceSignalDePrueba,
+    obtenerDetalleMock,
   };
 }
 
@@ -839,6 +859,169 @@ describe('CatalogarLibroComponent', () => {
       expect(componente.formulario.value.editorial).toBe('Sudamericana');
 
       await flushBusquedaDuplicados(httpMock, '9780307474728');
+    });
+  });
+
+  describe('Tarea 3 del lote de duplicados — Babel primero al buscar por título/autor (docs/plan-duplicados-catalogacion.md §6)', () => {
+    const libroIndiceFalso: LibroIndice = {
+      bookId: 'libro-indice-1',
+      isbn: '9780000000002',
+      titulo: 'Cien años de soledad',
+      autor: 'Gabriel García Márquez',
+      ubicacionId: 'ubicacion-1',
+      pvp: 65000,
+      portadaUrl: 'https://books.google.com/portada-indice.jpg',
+      cantidadDisponible: 3,
+    };
+
+    /** `LibroConUbicacion` completo que resuelve `LibrosService.obtenerDetalle(libroIndiceFalso.bookId)` — mismos campos base que `libroIndiceFalso`, más los que el índice no trae. */
+    const libroCompletoFalso: LibroConUbicacion = {
+      bookId: 'libro-indice-1',
+      isbn: '9780000000002',
+      titulo: 'Cien años de soledad',
+      autor: 'Gabriel García Márquez',
+      editorial: 'Sudamericana',
+      portadaUrl: 'https://books.google.com/portada-indice.jpg',
+      pvp: 65000,
+      porcentajeDescuentoEditorial: 30,
+      costo: 45500,
+      utilidadCatalogo: 19500,
+      cantidadTotal: 3,
+      cantidadDisponible: 3,
+      ubicacionId: 'ubicacion-1',
+      creadoPor: 'vendedor@letiende.co',
+      creadoEn: '2026-01-01T00:00:00.000Z',
+      actualizadoEn: '2026-01-01T00:00:00.000Z',
+      ubicacion: { espacio: espacioFalso.nombre, mueble: muebleFalso.nombre, ubicacion: ubicacionFalsa.nombre },
+    };
+
+    function botonBuscarCandidatos(fixture: ComponentFixture<CatalogarLibroComponent>): HTMLButtonElement {
+      return Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+        (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Buscar por título y autor',
+      ) as HTMLButtonElement;
+    }
+
+    function escribirCampo(fixture: ComponentFixture<CatalogarLibroComponent>, id: string, valor: string): void {
+      const campo = fixture.nativeElement.querySelector(`#${id}`) as HTMLInputElement;
+      campo.value = valor;
+      campo.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('al inicializar, carga el índice de Babel una sola vez', () => {
+      const { cargarIndiceMock } = configurarPrueba();
+
+      expect(cargarIndiceMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('encuentra primero en el índice de Babel, sin llamar a la búsqueda externa, y lo marca "Ya en el catálogo"', async () => {
+      const { fixture, indiceSignalDePrueba, buscarCandidatosMock } = configurarPrueba();
+      indiceSignalDePrueba.set([libroIndiceFalso]);
+
+      escribirCampo(fixture, 'titulo', 'cien años');
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(buscarCandidatosMock).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
+      expect(fixture.nativeElement.textContent).toContain('Ya en el catálogo');
+    });
+
+    it('sin ninguna coincidencia en el índice, cae a la búsqueda externa (sin la etiqueta "Ya en el catálogo")', async () => {
+      const { fixture, indiceSignalDePrueba, buscarCandidatosMock } = configurarPrueba();
+      indiceSignalDePrueba.set([]); // índice vacío, o sin coincidencias para esta búsqueda
+      buscarCandidatosMock.mockResolvedValue([
+        {
+          titulo: 'Libro externo',
+          autor: 'Autor externo',
+          editorial: 'Editorial externa',
+          portadaUrl: null,
+          isbn: null,
+        },
+      ]);
+
+      escribirCampo(fixture, 'titulo', 'libro que no está en babel');
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(buscarCandidatosMock).toHaveBeenCalledWith('libro que no está en babel', '');
+      expect(fixture.nativeElement.textContent).toContain('Libro externo');
+      expect(fixture.nativeElement.textContent).not.toContain('Ya en el catálogo');
+    });
+
+    it('si se escriben título Y autor, exige que ambos coincidan (no basta con uno solo)', async () => {
+      const { fixture, indiceSignalDePrueba, buscarCandidatosMock } = configurarPrueba();
+      // Mismo título, pero el autor buscado no coincide con el del índice.
+      indiceSignalDePrueba.set([libroIndiceFalso]);
+      buscarCandidatosMock.mockResolvedValue([]);
+
+      escribirCampo(fixture, 'titulo', 'cien años');
+      escribirCampo(fixture, 'autor', 'autor que no coincide');
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // No hay coincidencia razonable en el índice (autor no coincide) — cae a la búsqueda externa.
+      expect(buscarCandidatosMock).toHaveBeenCalledWith('cien años', 'autor que no coincide');
+    });
+
+    it('seleccionar un candidato de Babel en la MISMA ubicación resuelve la ficha completa y entra por el flujo bloqueante de la Tarea 1', async () => {
+      const { fixture, indiceSignalDePrueba, obtenerDetalleMock } = configurarPrueba();
+      indiceSignalDePrueba.set([libroIndiceFalso]);
+      obtenerDetalleMock.mockResolvedValue(libroCompletoFalso);
+      seleccionarUbicacionPanel(fixture, 'ubicacion-1'); // misma ubicación de libroCompletoFalso
+
+      escribirCampo(fixture, 'titulo', 'cien años');
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(obtenerDetalleMock).toHaveBeenCalledWith('libro-indice-1');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.duplicadoEnMismaUbicacion()).toBe(true);
+      expect(componente.formulario.controls.titulo.disabled).toBe(true);
+      expect(componente.formulario.getRawValue().isbn).toBe('9780000000002');
+      // La lista de candidatos se cierra tras seleccionar uno.
+      expect(fixture.nativeElement.querySelectorAll('ul button').length).toBe(0);
+    });
+
+    it('seleccionar un candidato de Babel en OTRA ubicación entra por el flujo informativo, sin sobrescribir el panel', async () => {
+      const { fixture, indiceSignalDePrueba, obtenerDetalleMock } = configurarPrueba();
+      indiceSignalDePrueba.set([libroIndiceFalso]);
+      obtenerDetalleMock.mockResolvedValue(libroCompletoFalso); // su ubicación real es 'ubicacion-1'
+      seleccionarUbicacionPanel(fixture, 'ubicacion-2'); // el vendedor ya eligió una ubicación DISTINTA
+
+      escribirCampo(fixture, 'titulo', 'cien años');
+      botonBuscarCandidatos(fixture).click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonCandidato = fixture.nativeElement.querySelector('ul button') as HTMLButtonElement;
+      botonCandidato.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.duplicadoEnMismaUbicacion()).toBe(false);
+      expect(componente.panelUbicacionId()).toBe('ubicacion-2');
+      expect(componente.formulario.controls.titulo.disabled).toBe(false);
+      expect(componente.formulario.value.titulo).toBe(libroCompletoFalso.titulo);
     });
   });
 

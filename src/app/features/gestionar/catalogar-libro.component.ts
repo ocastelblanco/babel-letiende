@@ -9,10 +9,14 @@ import { AuthService } from '../../core/auth/auth.service';
 import { EditorialesDescuentosService } from '../../core/api/editoriales-descuentos.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.service';
+import { LibrosService, type LibroIndice } from '../../core/api/libros.service';
 import type { LibroConUbicacion } from '../../core/models/libro.model';
 import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
 
 const PVP_MAXIMO = 5_000_000;
+
+/** Tope de candidatos de Babel mostrados por búsqueda — mismo criterio que `LIMITE_CANDIDATOS` del backend (`metadatos.ts`, búsqueda externa). */
+const LIMITE_CANDIDATOS_BABEL = 20;
 
 /** Quita tildes y normaliza mayúsculas para comparar nombres de editorial sin distinguir acentos/mayúsculas — mismo criterio que `catalogo-publico.component.ts`. */
 function normalizarTexto(valor: string): string {
@@ -22,6 +26,20 @@ function normalizarTexto(valor: string): string {
     .toLowerCase()
     .trim();
 }
+
+/**
+ * Candidato de la lista de "Buscar por título y autor" con su origen
+ * marcado (Tarea 3 del lote de duplicados, `docs/plan-duplicados-catalogacion.md`
+ * §6): `'babel'` cuando viene del índice ligero del propio catálogo
+ * (`LibrosService.indice`, ya en Babel — se muestra con una etiqueta "Ya en
+ * el catálogo") o `'externo'` cuando viene de `MetadatosService.buscarCandidatos`
+ * (APIs de terceros). Un candidato de Babel siempre trae `bookId` — es lo
+ * que permite resolver la ficha completa y entrar por el mismo camino de
+ * duplicados de la Tarea 1 al elegirlo (`seleccionarCandidato`).
+ */
+type CandidatoConOrigen =
+  | (CandidatoLibro & { origen: 'externo' })
+  | (CandidatoLibro & { origen: 'babel'; bookId: string });
 
 /**
  * Pestaña "Catalogar" del área "Gestionar" (`/catalogar`, `TODO.md`) —
@@ -80,6 +98,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   private readonly ubicacionFisicaService = inject(UbicacionFisicaService);
   private readonly metadatosService = inject(MetadatosService);
   private readonly editorialesDescuentosService = inject(EditorialesDescuentosService);
+  private readonly librosService = inject(LibrosService);
 
   protected readonly espacios = this.ubicacionFisicaService.espacios;
   protected readonly errorEspacios = this.ubicacionFisicaService.errorEspacios;
@@ -116,8 +135,14 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   /** Visibilidad del diálogo de selección manual de portada (`SelectorPortadaComponent`) — para placeholders genéricos sin palabra clave detectable. */
   protected readonly selectorPortadaVisible = signal(false);
 
-  /** Candidatos de la última búsqueda por título/autor (`GET /api/metadatos/buscar`) — para cuando el vendedor no tiene ISBN a mano. */
-  protected readonly candidatos = signal<CandidatoLibro[]>([]);
+  /**
+   * Candidatos de la última búsqueda por título/autor — para cuando el
+   * vendedor no tiene ISBN a mano. Primero se filtra `LibrosService.indice`
+   * en memoria (`origen: 'babel'`); solo si no hay ninguna coincidencia ahí
+   * se recurre a `GET /api/metadatos/buscar` (`origen: 'externo'`, Tarea 3
+   * del lote de duplicados, `docs/plan-duplicados-catalogacion.md` §6).
+   */
+  protected readonly candidatos = signal<CandidatoConOrigen[]>([]);
   /** `true` mientras se consulta `MetadatosService.buscarCandidatos`. */
   protected readonly buscandoCandidatos = signal(false);
   /** `true` cuando la última búsqueda por título/autor no encontró ningún candidato — mensaje neutral, no bloqueante. */
@@ -217,6 +242,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     void this.ubicacionFisicaService.cargarMuebles();
     void this.ubicacionFisicaService.cargarUbicaciones();
     void this.editorialesDescuentosService.cargarDescuentos();
+    void this.librosService.cargarIndice();
   }
 
   /** Cambiar el Espacio en el panel recalcula las opciones de Mueble y limpia la selección previa (cascada) — mismo patrón que `GestionUbicacionFisicaComponent`. */
@@ -511,6 +537,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     this.coincidenciasIsbn.set([]);
 
     const controles = this.formulario.controls;
+    // Precarga también el isbn — necesario para el flujo de la Tarea 3
+    // (candidato de Babel elegido por título/autor, sin haber tocado el
+    // campo isbn todavía); sin efecto en el flujo por ISBN de la Tarea 1,
+    // donde el campo ya tenía este mismo valor.
+    controles.isbn.setValue(libro.isbn ?? '');
     controles.titulo.setValue(libro.titulo);
     controles.autor.setValue(libro.autor);
     controles.editorial.setValue(libro.editorial ?? '');
@@ -546,10 +577,34 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
 
     this.candidatosNoEncontrados.set(false);
     this.candidatos.set([]);
+
+    // Babel primero (Tarea 3, `docs/plan-duplicados-catalogacion.md` §6):
+    // filtrado instantáneo en memoria contra el índice ya cargado
+    // (`ngOnInit`). Solo si no hay ninguna coincidencia razonable se
+    // recurre a la búsqueda externa — nunca en paralelo, para no mostrar
+    // resultados de terceros cuando el libro ya está en el propio catálogo.
+    const coincidenciasBabel = this.filtrarIndice(titulo, autor);
+    if (coincidenciasBabel.length > 0) {
+      this.candidatos.set(
+        coincidenciasBabel.slice(0, LIMITE_CANDIDATOS_BABEL).map(
+          (libro): CandidatoConOrigen => ({
+            origen: 'babel',
+            bookId: libro.bookId,
+            titulo: libro.titulo,
+            autor: libro.autor,
+            editorial: null,
+            portadaUrl: libro.portadaUrl,
+            isbn: libro.isbn,
+          }),
+        ),
+      );
+      return;
+    }
+
     this.buscandoCandidatos.set(true);
     try {
       const resultado = await this.metadatosService.buscarCandidatos(titulo, autor);
-      this.candidatos.set(resultado);
+      this.candidatos.set(resultado.map((candidato): CandidatoConOrigen => ({ ...candidato, origen: 'externo' })));
       if (resultado.length === 0) {
         this.candidatosNoEncontrados.set(true);
       }
@@ -559,22 +614,58 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Pre-carga el candidato elegido en el formulario — a diferencia del
-   * escaneo/entrada manual de ISBN, aquí el vendedor ya confirmó
-   * explícitamente ESTE libro exacto de una lista, así que se SOBRESCRIBEN
-   * todos los campos (título/autor/editorial/portada), incluso los que ya
-   * tenían un valor (ej. lo que el vendedor haya escrito para buscar). Si el
-   * candidato trae `isbn`, además lo completa y reutiliza
-   * `buscarYPrecargarMetadatos` con `sobrescribir: true` (ya existente) para
-   * refinar esos mismos campos y resolver el PVP con la ficha confirmada por
-   * ISBN — más precisa que los datos de la búsqueda de texto libre (ver
-   * ejemplo real: título/autor en mayúsculas correctas, editorial exacta).
-   * Si NO trae `isbn`, busca el PVP directamente por título/autor
-   * (`buscarPvpCandidatoSinIsbn`, abajo) — Lerner y Nacional primero,
-   * Tornamesa como último recurso; si ninguno encuentra precio, el PVP
-   * queda como estaba. Cierra la lista de candidatos tras seleccionar uno.
+   * Filtra `LibrosService.indice` en memoria por título/autor (insensible a
+   * mayúsculas/tildes, `normalizarTexto` — mismo criterio que el resto del
+   * proyecto). Si el vendedor escribió ambos campos, exige que AMBOS
+   * coincidan (no basta con uno); si solo escribió uno, ese es el único
+   * criterio (`docs/plan-duplicados-catalogacion.md` §6, "coincidencias
+   * razonables").
    */
-  protected async seleccionarCandidato(candidato: CandidatoLibro): Promise<void> {
+  private filtrarIndice(titulo: string, autor: string): LibroIndice[] {
+    const tituloNormalizado = normalizarTexto(titulo);
+    const autorNormalizado = normalizarTexto(autor);
+    return this.librosService.indice().filter((libro) => {
+      const coincideTitulo = tituloNormalizado === '' || normalizarTexto(libro.titulo).includes(tituloNormalizado);
+      const coincideAutor = autorNormalizado === '' || normalizarTexto(libro.autor).includes(autorNormalizado);
+      return coincideTitulo && coincideAutor;
+    });
+  }
+
+  /**
+   * Pre-carga el candidato elegido en el formulario. Un candidato de Babel
+   * (`origen: 'babel'`, Tarea 3 del lote de duplicados,
+   * `docs/plan-duplicados-catalogacion.md` §6) entra por el MISMO camino de
+   * duplicados que la Tarea 1: se resuelve la ficha completa por `bookId`
+   * (`LibrosService.obtenerDetalle`, el índice ligero no trae editorial ni
+   * descuento) y se delega a `seleccionarDuplicado` — que a su vez decide,
+   * comparando contra el panel, si esto es un caso bloqueante (misma
+   * ubicación) o informativo (otra ubicación), igual que un duplicado
+   * detectado por ISBN.
+   *
+   * Un candidato externo (`origen: 'externo'`) sigue el flujo ya existente:
+   * a diferencia del escaneo/entrada manual de ISBN, aquí el vendedor ya
+   * confirmó explícitamente ESTE libro exacto de una lista, así que se
+   * SOBRESCRIBEN todos los campos (título/autor/editorial/portada), incluso
+   * los que ya tenían un valor. Si el candidato trae `isbn`, además lo
+   * completa y reutiliza `buscarYPrecargarMetadatos` con `sobrescribir:
+   * true` (ya existente) para refinar esos mismos campos y resolver el PVP
+   * con la ficha confirmada por ISBN — más precisa que los datos de la
+   * búsqueda de texto libre. Si NO trae `isbn`, busca el PVP directamente
+   * por título/autor (`buscarPvpCandidatoSinIsbn`, abajo). Cierra la lista
+   * de candidatos tras seleccionar uno, en ambos casos.
+   */
+  protected async seleccionarCandidato(candidato: CandidatoConOrigen): Promise<void> {
+    this.candidatos.set([]);
+    this.candidatosNoEncontrados.set(false);
+
+    if (candidato.origen === 'babel') {
+      const libro = await this.librosService.obtenerDetalle(candidato.bookId);
+      if (libro) {
+        this.seleccionarDuplicado(libro);
+      }
+      return;
+    }
+
     const controles = this.formulario.controls;
 
     controles.titulo.setValue(candidato.titulo);
@@ -588,9 +679,6 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     if (candidato.portadaUrl) {
       controles.portadaUrl.setValue(candidato.portadaUrl);
     }
-
-    this.candidatos.set([]);
-    this.candidatosNoEncontrados.set(false);
 
     if (candidato.isbn) {
       controles.isbn.setValue(candidato.isbn);

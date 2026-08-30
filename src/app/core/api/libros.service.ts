@@ -33,6 +33,24 @@ export type ResultadoOperacionLibro = { exito: true } | { exito: false; error: s
 export type ResultadoExportarInventario = { exito: true } | { exito: false; error: string };
 
 /**
+ * Campos mínimos de `GET /api/libros/indice` (Tarea 3 del lote de
+ * duplicados, `docs/plan-duplicados-catalogacion.md` §6) — deliberadamente
+ * NO es un `Libro` completo (sin `editorial`/`porcentajeDescuentoEditorial`/
+ * `cantidadTotal`/etc.): es un índice liviano para filtrar en memoria al
+ * buscar por título/autor, no la ficha completa del libro.
+ */
+export interface LibroIndice {
+  bookId: string;
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  ubicacionId: string;
+  pvp: number;
+  portadaUrl: string | null;
+  cantidadDisponible: number;
+}
+
+/**
  * Cliente de `/api/libros` (tech-specs.md §5). `GET /api/libros` y
  * `GET /api/libros/:bookId` son públicos, sin autenticación. `cargarInventario`
  * (`GET /api/libros/inventario`), `editarLibro` (`PUT /api/libros/:bookId`),
@@ -68,6 +86,12 @@ export class LibrosService {
   private readonly errorInventarioSignal = signal(false);
   /** `true` si la última llamada a `cargarInventario()` falló (sin sesión, `403`, error de red). */
   readonly errorInventario = this.errorInventarioSignal.asReadonly();
+
+  private readonly indiceSignal = signal<LibroIndice[]>([]);
+  /** Índice ligero de todo el catálogo (Tarea 3 del lote de duplicados) — resuelto por `cargarIndice()`, cacheado una sola vez por sesión. */
+  readonly indice = this.indiceSignal.asReadonly();
+  /** `true` mientras ya hay una carga del índice en curso o completada — evita pedirlo dos veces en la misma sesión. */
+  private indiceSolicitado = false;
 
   /**
    * Llama `GET /api/libros`. Nunca lanza: ante un error de red o del
@@ -142,6 +166,41 @@ export class LibrosService {
       this.errorInventarioSignal.set(true);
     } finally {
       this.cargandoInventarioSignal.set(false);
+    }
+  }
+
+  /**
+   * Llama `GET /api/libros/indice` con el ID Token actual (Tarea 3 del lote
+   * de duplicados, `docs/plan-duplicados-catalogacion.md` §6) — índice
+   * ligero de TODO el catálogo, para que `CatalogarLibroComponent` pueda
+   * filtrar por título/autor en memoria antes de recurrir a la búsqueda
+   * externa. Se pide UNA sola vez por sesión (`indiceSolicitado`): llamadas
+   * posteriores son no-op, incluso si la primera falló — mismo criterio
+   * "nunca lanza" que el resto del servicio, degradando en silencio a
+   * "el índice queda vacío, todo pasa por la búsqueda externa" ante
+   * cualquier error (sesión ausente, `403`, red).
+   */
+  async cargarIndice(): Promise<void> {
+    if (this.indiceSolicitado) {
+      return;
+    }
+    this.indiceSolicitado = true;
+
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return;
+    }
+
+    try {
+      const indice = await firstValueFrom(
+        this.http.get<LibroIndice[]>('/api/libros/indice', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+      );
+      this.indiceSignal.set(indice);
+    } catch {
+      // Ante cualquier error, el índice queda vacío — `buscarCandidatos()`
+      // cae siempre a la búsqueda externa como si Babel no tuviera nada.
     }
   }
 
