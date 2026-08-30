@@ -2041,7 +2041,11 @@ resources:
           # consulta, sin necesidad de escribir ni leer ninguna otra tabla
           # (CLAUDE.md A05). A diferencia de LibrosLambdaRole (el listado,
           # que hace un Scan completo), acá basta GetItem porque se resuelve
-          # un bookId puntual.
+          # un bookId puntual. Además, `dynamodb:Query` sobre el GSI
+          # isbn-index (Tarea 4 del lote de duplicados,
+          # docs/plan-duplicados-catalogacion.md §7): `resolverEjemplares`
+          # resuelve los demás ejemplares del mismo ISBN — mismo permiso
+          # exacto que LibrosPorIsbnLambdaRole.
           - PolicyName: babel-libros-detalle-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
@@ -2054,6 +2058,11 @@ resources:
                     - !GetAtt TablaUbicaciones.Arn
                     - !GetAtt TablaMuebles.Arn
                     - !GetAtt TablaEspacios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                  Resource:
+                    - !Sub '${TablaLibros.Arn}/index/isbn-index'
 
     CatalogarLibroLambdaRole:
       Type: AWS::IAM::Role

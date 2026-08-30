@@ -44,3 +44,30 @@ export interface Libro {
 export interface LibroConUbicacion extends Libro {
   ubicacion: { espacio: string; mueble: string; ubicacion: string } | null;
 }
+
+/**
+ * Un ejemplar del mismo libro por ISBN — un `bookId` propio con su PVP y su
+ * ubicación física ya resueltos (Tarea 4 del lote de duplicados,
+ * `docs/plan-duplicados-catalogacion.md` §7). Solo incluye ejemplares con
+ * `cantidadDisponible > 0` (S6): un arreglo vacío significa "agotado en
+ * todas las ubicaciones", no que la búsqueda falló.
+ */
+export interface EjemplarConUbicacion {
+  bookId: string;
+  pvp: number;
+  cantidadDisponible: number;
+  ubicacion: { espacio: string; mueble: string; ubicacion: string } | null;
+}
+
+/**
+ * Contrato de `GET /api/libros/:bookId` (ficha pública) — extiende
+ * `LibroConUbicacion` de forma ADITIVA con todos los ejemplares del mismo
+ * ISBN (Tarea 4, `docs/plan-duplicados-catalogacion.md` §7): un libro sin
+ * ISBN solo tiene un ejemplar posible, él mismo (decisión **D2** — el
+ * apilamiento es SOLO por ISBN, nunca por título). Los campos heredados
+ * (`titulo`/`autor`/`portadaUrl`/etc.) describen el `bookId` puntual que
+ * pidió la ruta, no un agregado de todos los ejemplares.
+ */
+export interface LibroConEjemplares extends LibroConUbicacion {
+  ejemplares: EjemplarConUbicacion[];
+}

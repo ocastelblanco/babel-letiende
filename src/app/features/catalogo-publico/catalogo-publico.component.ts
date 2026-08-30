@@ -3,11 +3,49 @@ import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
+import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 
 export type VistaCatalogo = 'tarjetas' | 'lista';
 export type CriterioOrden = 'titulo' | 'autor' | 'pvp';
 export type DireccionOrden = 'asc' | 'desc';
+
+/**
+ * Un grupo de libros del mismo ISBN, apilados en una sola tarjeta/fila del
+ * listado (Tarea 4 del lote de duplicados, `docs/plan-duplicados-catalogacion.md`
+ * §7, decisión **D2**: el apilamiento es SOLO por ISBN — un libro sin ISBN
+ * siempre forma su propio grupo de 1). `bookId` es el del PRIMER libro del
+ * grupo (en el orden en que aparece en `librosFiltrados`) — sirve solo para
+ * el `routerLink` a la ficha; una vez ahí, `GET /api/libros/:bookId`
+ * resuelve TODOS los ejemplares reales por ISBN, sin depender de cuál
+ * `bookId` puntual haya elegido el listado.
+ */
+export interface LibroAgrupado {
+  bookId: string;
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  portadaUrl: string | null;
+  pvpMinimo: number;
+  pvpMaximo: number;
+  cantidadDisponibleTotal: number;
+}
+
+/** Agrupa un conjunto de libros que comparten ISBN en un único `LibroAgrupado` — PVP mínimo/máximo (D4) y `cantidadDisponible` sumada entre todos. */
+function agruparLibros(libros: Libro[]): LibroAgrupado {
+  const primero = libros[0] as Libro;
+  const precios = libros.map((libro) => libro.pvp);
+  return {
+    bookId: primero.bookId,
+    isbn: primero.isbn,
+    titulo: primero.titulo,
+    autor: primero.autor,
+    portadaUrl: primero.portadaUrl,
+    pvpMinimo: Math.min(...precios),
+    pvpMaximo: Math.max(...precios),
+    cantidadDisponibleTotal: libros.reduce((suma, libro) => suma + libro.cantidadDisponible, 0),
+  };
+}
 
 /** Título de pestaña del catálogo público — mismo texto en todo momento (ver `ngOnInit`). */
 export const TITULO_CATALOGO_PUBLICO = 'Catálogo librería - Le Tiende';
@@ -54,11 +92,20 @@ function normalizarTexto(valor: string): string {
  *
  * Vista Tarjetas/Lista y orden (`ajustes-2026-07-27.md` Tarea 1): `vista`
  * alterna el layout sin recalcular nada; `librosOrdenados` aplica
- * `criterioOrden`/`direccionOrden` sobre `librosFiltrados` ya filtrado (3
- * criterios — Título/Autor/PVP — con un botón aparte para invertir la
- * dirección, decisión confirmada con el usuario en vez de 6 opciones con
- * dirección explícita en el propio `<select>`). Ninguno de los dos persiste
- * entre visitas — no lo pidió el documento.
+ * `criterioOrden`/`direccionOrden` sobre `librosAgrupados` (3 criterios —
+ * Título/Autor/PVP — con un botón aparte para invertir la dirección,
+ * decisión confirmada con el usuario en vez de 6 opciones con dirección
+ * explícita en el propio `<select>`). Ninguno de los dos persiste entre
+ * visitas — no lo pidió el documento.
+ *
+ * Apilamiento por ISBN (Tarea 4 del lote de duplicados,
+ * `docs/plan-duplicados-catalogacion.md` §7): `librosAgrupados` agrupa
+ * `librosFiltrados` por ISBN antes de ordenar — libros catalogados por
+ * separado que en realidad son el mismo título aparecen como una sola
+ * tarjeta/fila, con el PVP mínimo/máximo (D4) y la `cantidadDisponible`
+ * sumada entre todos los ejemplares. Un libro sin ISBN nunca se apila
+ * (decisión **D2**). El `bookId` del grupo lleva a la ficha
+ * (`LibroDetalleComponent`), que resuelve ahí los ejemplares reales.
  */
 @Component({
   selector: 'app-catalogo-publico',
@@ -137,14 +184,44 @@ export class CatalogoPublicoComponent implements OnInit {
     });
   });
 
-  /** Aplica `criterioOrden`/`direccionOrden` sobre el resultado ya filtrado — Título/Autor comparan con `normalizarTexto` (mismo criterio que la búsqueda), PVP compara numéricamente. */
+  /**
+   * Agrupa `librosFiltrados` por ISBN (Tarea 4 del lote de duplicados,
+   * `docs/plan-duplicados-catalogacion.md` §7) — todo en memoria, sin tocar
+   * `GET /api/libros`: el catálogo completo ya está cargado. Un libro sin
+   * ISBN nunca se apila (decisión **D2**), siempre queda como grupo de 1.
+   */
+  protected readonly librosAgrupados = computed(() => {
+    const porIsbn = new Map<string, Libro[]>();
+    const grupos: LibroAgrupado[] = [];
+
+    for (const libro of this.librosFiltrados()) {
+      if (libro.isbn === null) {
+        grupos.push(agruparLibros([libro]));
+        continue;
+      }
+      const existente = porIsbn.get(libro.isbn);
+      if (existente) {
+        existente.push(libro);
+      } else {
+        porIsbn.set(libro.isbn, [libro]);
+      }
+    }
+
+    for (const librosDelGrupo of porIsbn.values()) {
+      grupos.push(agruparLibros(librosDelGrupo));
+    }
+
+    return grupos;
+  });
+
+  /** Aplica `criterioOrden`/`direccionOrden` sobre los grupos ya armados — Título/Autor comparan con `normalizarTexto` (mismo criterio que la búsqueda), PVP compara por `pvpMinimo` (mismo criterio de rango que la ficha, D4). */
   protected readonly librosOrdenados = computed(() => {
     const criterio = this.criterioOrden();
     const factor = this.direccionOrden() === 'asc' ? 1 : -1;
 
-    return [...this.librosFiltrados()].sort((a, b) => {
+    return [...this.librosAgrupados()].sort((a, b) => {
       if (criterio === 'pvp') {
-        return (a.pvp - b.pvp) * factor;
+        return (a.pvpMinimo - b.pvpMinimo) * factor;
       }
       const campoA = normalizarTexto(criterio === 'titulo' ? a.titulo : a.autor);
       const campoB = normalizarTexto(criterio === 'titulo' ? b.titulo : b.autor);

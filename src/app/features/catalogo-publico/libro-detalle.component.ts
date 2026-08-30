@@ -6,7 +6,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { UsuariosService } from '../../core/api/usuarios.service';
 import { LibrosService } from '../../core/api/libros.service';
 import { VentaService } from '../../core/api/venta.service';
-import type { LibroConUbicacion } from '../../core/models/libro.model';
+import type { EjemplarConUbicacion, LibroConEjemplares } from '../../core/models/libro.model';
 import { FormaDePago } from '../../core/models/venta.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 
@@ -36,6 +36,20 @@ const FORMAS_DE_PAGO: readonly FormaDePago[] = ['efectivo', 'tarjeta', 'transfer
  * autorización real siempre la vuelve a verificar el backend (`CLAUDE.md`
  * A01) — este componente nunca decide por sí mismo si el usuario puede
  * vender.
+ *
+ * Apilamiento por ISBN (Tarea 4 del lote de duplicados,
+ * `docs/plan-duplicados-catalogacion.md` §7): `libro.ejemplares` (aditivo
+ * en `GET /api/libros/:bookId`, ya resuelto y filtrado a solo disponibles
+ * por el backend) puede traer varios `bookId` — libros catalogados por
+ * separado que comparten ISBN. Un panel "Ubicación en la librería" por
+ * ejemplar, cada uno con su propio PVP y su propio botón VENDER — el
+ * diálogo de venta actúa siempre sobre el `bookId` DEL PANEL que lo abrió
+ * (`ejemplarSeleccionadoVenta`), nunca sobre `libro().bookId` (que solo
+ * describe el ejemplar puntual que resolvió la URL, no un agregado). Un
+ * arreglo `ejemplares` vacío significa agotado en TODAS las ubicaciones
+ * (S6) — la ficha se sigue mostrando (un enlace directo debe funcionar
+ * aunque esté agotado), con una nota y sin ningún botón VENDER. La URL
+ * sigue siendo `/libro/:bookId` sin cambios (S7).
  */
 @Component({
   selector: 'app-libro-detalle',
@@ -54,12 +68,34 @@ export class LibroDetalleComponent implements OnInit {
 
   private readonly bookId = this.route.snapshot.paramMap.get('bookId') ?? '';
 
-  protected readonly libro = signal<LibroConUbicacion | null>(null);
+  protected readonly libro = signal<LibroConEjemplares | null>(null);
   protected readonly cargando = signal(true);
   /** `true` cuando el libro no existe o la petición falló — mismo mensaje para ambos casos ante el visitante (`LibrosService.obtenerDetalle` nunca lanza). */
   protected readonly noEncontrado = signal(false);
 
   protected readonly formasDePago = FORMAS_DE_PAGO;
+
+  /** `true` si `ejemplares` llegó vacío — agotado en TODAS las ubicaciones (S6), no un error de carga. */
+  protected readonly agotadoEnTodasLasUbicaciones = computed(() => this.libro()?.ejemplares.length === 0);
+
+  /**
+   * PVP para la cabecera (D4): el valor único si todos los ejemplares
+   * disponibles cuestan lo mismo, o el rango mínimo/máximo si difieren —
+   * ejemplares catalogados por separado pueden llevar precios distintos. Si
+   * no hay ningún ejemplar disponible, cae al PVP del propio libro pedido
+   * (sigue siendo un dato real y útil de referencia, aunque esté agotado).
+   */
+  protected readonly rangoPvp = computed<{ minimo: number; maximo: number } | null>(() => {
+    const libro = this.libro();
+    if (!libro) {
+      return null;
+    }
+    if (libro.ejemplares.length === 0) {
+      return { minimo: libro.pvp, maximo: libro.pvp };
+    }
+    const precios = libro.ejemplares.map((ejemplar) => ejemplar.pvp);
+    return { minimo: Math.min(...precios), maximo: Math.max(...precios) };
+  });
 
   /**
    * `true` con sesión activa y rol `vendedor`/`administrador` en
@@ -71,6 +107,8 @@ export class LibroDetalleComponent implements OnInit {
   });
 
   protected readonly dialogoVentaVisible = signal(false);
+  /** El ejemplar (panel) sobre el que actúa el diálogo de venta abierto — `null` mientras el diálogo está cerrado. `confirmarVenta` usa SIEMPRE `.bookId` de acá, nunca `libro().bookId` (Tarea 4, apilamiento). */
+  protected readonly ejemplarSeleccionadoVenta = signal<EjemplarConUbicacion | null>(null);
   protected readonly vendiendo = signal(false);
   protected readonly mensajeExitoVenta = signal<string | null>(null);
   protected readonly mensajeErrorVenta = signal<string | null>(null);
@@ -129,19 +167,22 @@ export class LibroDetalleComponent implements OnInit {
     }
   }
 
-  /** Abre el diálogo de venta con los valores por defecto y el máximo permitido según la disponibilidad actual. */
-  protected abrirDialogoVenta(): void {
-    const libro = this.libro();
-    if (!libro) {
-      return;
-    }
+  /**
+   * Abre el diálogo de venta para UN ejemplar puntual (panel de ubicación,
+   * Tarea 4) con los valores por defecto y el máximo permitido según la
+   * disponibilidad de ESE ejemplar — nunca la del `libro()` de nivel
+   * superior, que puede ser un `bookId` distinto o estar agotado mientras
+   * otro ejemplar del mismo ISBN sigue disponible.
+   */
+  protected abrirDialogoVenta(ejemplar: EjemplarConUbicacion): void {
+    this.ejemplarSeleccionadoVenta.set(ejemplar);
     this.mensajeExitoVenta.set(null);
     this.mensajeErrorVenta.set(null);
     this.formularioVenta.reset({ cantidad: 1, porcentajeDescuentoVenta: 0, formaDePago: '' });
     this.formularioVenta.controls.cantidad.setValidators([
       Validators.required,
       Validators.min(1),
-      Validators.max(libro.cantidadDisponible),
+      Validators.max(ejemplar.cantidadDisponible),
     ]);
     this.formularioVenta.controls.cantidad.updateValueAndValidity();
     this.dialogoVentaVisible.set(true);
@@ -150,6 +191,7 @@ export class LibroDetalleComponent implements OnInit {
   /** Cierra el diálogo sin guardar cambios. */
   protected cerrarDialogoVenta(): void {
     this.dialogoVentaVisible.set(false);
+    this.ejemplarSeleccionadoVenta.set(null);
   }
 
   protected async confirmarVenta(): Promise<void> {
@@ -157,8 +199,8 @@ export class LibroDetalleComponent implements OnInit {
       this.formularioVenta.markAllAsTouched();
       return;
     }
-    const libro = this.libro();
-    if (!libro) {
+    const ejemplar = this.ejemplarSeleccionadoVenta();
+    if (!ejemplar) {
       return;
     }
 
@@ -167,7 +209,7 @@ export class LibroDetalleComponent implements OnInit {
     this.mensajeErrorVenta.set(null);
     try {
       const resultado = await this.ventaService.registrarVenta({
-        bookId: libro.bookId,
+        bookId: ejemplar.bookId,
         cantidad: valores.cantidad,
         porcentajeDescuentoVenta: valores.porcentajeDescuentoVenta,
         formaDePago: valores.formaDePago as FormaDePago,
@@ -175,6 +217,7 @@ export class LibroDetalleComponent implements OnInit {
 
       if (resultado.exito) {
         this.dialogoVentaVisible.set(false);
+        this.ejemplarSeleccionadoVenta.set(null);
         this.mensajeExitoVenta.set('Venta registrada correctamente.');
         await this.refrescarLibro();
       } else {

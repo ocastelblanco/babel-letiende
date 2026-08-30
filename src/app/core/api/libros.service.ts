@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { Libro, LibroConUbicacion } from '../models/libro.model';
+import { Libro, LibroConEjemplares } from '../models/libro.model';
 
 /**
  * Datos editables de un libro ya catalogado — mismo contrato que
@@ -119,10 +119,16 @@ export class LibrosService {
    * error HTTP o de red, devuelve `null` — el componente lo trata como
    * "libro no encontrado" (mismo criterio "nunca lanza" que
    * `cargarCatalogo`), sin distinguir la causa exacta ante el visitante.
+   *
+   * Devuelve `LibroConEjemplares` (Tarea 4 del lote de duplicados,
+   * `docs/plan-duplicados-catalogacion.md` §7) — extiende `LibroConUbicacion`
+   * de forma aditiva con `ejemplares`, así que sigue siendo válido pasar el
+   * resultado a cualquier función que espere `LibroConUbicacion` (ej.
+   * `CatalogarLibroComponent.seleccionarDuplicado`, Tarea 3).
    */
-  async obtenerDetalle(bookId: string): Promise<LibroConUbicacion | null> {
+  async obtenerDetalle(bookId: string): Promise<LibroConEjemplares | null> {
     try {
-      return await firstValueFrom(this.http.get<LibroConUbicacion>(`/api/libros/${bookId}`));
+      return await firstValueFrom(this.http.get<LibroConEjemplares>(`/api/libros/${bookId}`));
     } catch {
       return null;
     }

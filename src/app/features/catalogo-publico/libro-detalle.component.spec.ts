@@ -8,11 +8,19 @@ import { AuthService } from '../../core/auth/auth.service';
 import { LibrosService } from '../../core/api/libros.service';
 import { UsuariosService } from '../../core/api/usuarios.service';
 import { VentaService } from '../../core/api/venta.service';
-import type { LibroConUbicacion } from '../../core/models/libro.model';
+import type { EjemplarConUbicacion, LibroConEjemplares } from '../../core/models/libro.model';
 import type { Usuario } from '../../core/models/usuario.model';
 import { LibroDetalleComponent } from './libro-detalle.component';
 
-const libroFalso: LibroConUbicacion = {
+/** El propio libro es su único ejemplar disponible (Tarea 4 del lote de duplicados, `docs/plan-duplicados-catalogacion.md` §7). */
+const ejemplarFalso: EjemplarConUbicacion = {
+  bookId: 'book-1',
+  pvp: 45000,
+  cantidadDisponible: 1,
+  ubicacion: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
+};
+
+const libroFalso: LibroConEjemplares = {
   isbn: '9780000000000',
   bookId: 'book-1',
   titulo: 'Cien años de soledad',
@@ -30,6 +38,7 @@ const libroFalso: LibroConUbicacion = {
   creadoEn: '2026-07-19T00:00:00.000Z',
   actualizadoEn: '2026-07-19T00:00:00.000Z',
   ubicacion: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
+  ejemplares: [ejemplarFalso],
 };
 
 const usuarioFirebaseFalso = { uid: 'uid-1' } as unknown as import('firebase/auth').User;
@@ -118,13 +127,16 @@ describe('LibroDetalleComponent', () => {
     expect(texto).toContain('Estante 2');
   });
 
-  it('no muestra la sección de ubicación cuando la ubicación es null', async () => {
-    const obtenerDetalleMock = vi.fn().mockResolvedValue({ ...libroFalso, ubicacion: null });
+  it('no muestra "Ubicación en la librería" en el panel cuando la ubicación de ese ejemplar es null', async () => {
+    const obtenerDetalleMock = vi
+      .fn()
+      .mockResolvedValue({ ...libroFalso, ejemplares: [{ ...ejemplarFalso, ubicacion: null }] });
     const { fixture } = configurarPrueba({ obtenerDetalleMock });
     await Promise.resolve();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).not.toContain('Ubicación en la librería');
+    expect(fixture.nativeElement.textContent).toContain('Ubicación no disponible');
   });
 
   it('muestra un mensaje manejado (no un error crudo) cuando el libro no existe', async () => {
@@ -161,8 +173,8 @@ describe('LibroDetalleComponent', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Vender');
     });
 
-    it('no aparece si no quedan ejemplares disponibles, aunque el rol sea válido', async () => {
-      const obtenerDetalleMock = vi.fn().mockResolvedValue({ ...libroFalso, cantidadDisponible: 0 });
+    it('no aparece si no queda ningún ejemplar disponible (agotado en todas las ubicaciones), aunque el rol sea válido', async () => {
+      const obtenerDetalleMock = vi.fn().mockResolvedValue({ ...libroFalso, ejemplares: [] });
       const { fixture } = configurarPrueba({
         obtenerDetalleMock,
         usuario: usuarioFirebaseFalso,
@@ -172,6 +184,7 @@ describe('LibroDetalleComponent', () => {
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).not.toContain('Vender');
+      expect(fixture.nativeElement.textContent).toContain('Agotado');
     });
 
     it('aparece con sesión activa y rol vendedor, con ejemplares disponibles', async () => {
@@ -219,7 +232,7 @@ describe('LibroDetalleComponent', () => {
       const obtenerDetalleMock = vi
         .fn()
         .mockResolvedValueOnce(libroFalso)
-        .mockResolvedValueOnce({ ...libroFalso, cantidadDisponible: 0 });
+        .mockResolvedValueOnce({ ...libroFalso, ejemplares: [] });
       const registrarVentaMock = vi.fn().mockResolvedValue({ exito: true, venta: {} });
       const { fixture } = abrirFicha({ obtenerDetalleMock, registrarVentaMock });
       await abrirDialogo(fixture);
@@ -259,6 +272,114 @@ describe('LibroDetalleComponent', () => {
 
       expect(fixture.nativeElement.textContent).toContain('No quedan suficientes ejemplares');
       expect(fixture.nativeElement.textContent).toContain('Confirmar');
+    });
+  });
+
+  describe('apilamiento por ISBN — varios paneles de ubicación (Tarea 4, docs/plan-duplicados-catalogacion.md §7)', () => {
+    const segundoEjemplar: EjemplarConUbicacion = {
+      bookId: 'book-2',
+      pvp: 52000,
+      cantidadDisponible: 3,
+      ubicacion: { espacio: 'Sala VIP', mueble: 'Biblioteca 2', ubicacion: 'Estante 5' },
+    };
+    const libroConDosEjemplares: LibroConEjemplares = {
+      ...libroFalso,
+      ejemplares: [ejemplarFalso, segundoEjemplar],
+    };
+
+    it('muestra un panel "Ubicación en la librería" por cada ejemplar disponible', async () => {
+      const obtenerDetalleMock = vi.fn().mockResolvedValue(libroConDosEjemplares);
+      const { fixture } = configurarPrueba({ obtenerDetalleMock });
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Sala principal');
+      expect(texto).toContain('Biblioteca 1');
+      expect(texto).toContain('Estante 2');
+      expect(texto).toContain('Sala VIP');
+      expect(texto).toContain('Biblioteca 2');
+      expect(texto).toContain('Estante 5');
+      expect((fixture.nativeElement.textContent.match(/Ubicación en la librería/g) ?? []).length).toBe(2);
+    });
+
+    it('muestra el PVP como rango en la cabecera cuando los ejemplares tienen precios distintos (D4)', async () => {
+      const obtenerDetalleMock = vi.fn().mockResolvedValue(libroConDosEjemplares);
+      const { fixture } = configurarPrueba({ obtenerDetalleMock });
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('$45.000 – $52.000');
+    });
+
+    it('muestra un único PVP en la cabecera cuando todos los ejemplares cuestan lo mismo', async () => {
+      const obtenerDetalleMock = vi.fn().mockResolvedValue(libroFalso); // un solo ejemplar
+      const { fixture } = configurarPrueba({ obtenerDetalleMock });
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('$45.000');
+      expect(texto).not.toContain('–');
+    });
+
+    it('cada panel tiene su propio botón VENDER, que actúa sobre el bookId DE ESE panel (no del libro de nivel superior)', async () => {
+      const obtenerDetalleMock = vi.fn().mockResolvedValue(libroConDosEjemplares);
+      const registrarVentaMock = vi.fn().mockResolvedValue({ exito: true, venta: {} });
+      const { fixture } = configurarPrueba({
+        obtenerDetalleMock,
+        registrarVentaMock,
+        usuario: usuarioFirebaseFalso,
+        usuarioActual: vendedorFalso,
+      });
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      const botonesVender = Array.from(fixture.nativeElement.querySelectorAll('button')).filter(
+        (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Vender',
+      ) as HTMLButtonElement[];
+      expect(botonesVender).toHaveLength(2);
+
+      // Abre el diálogo desde el SEGUNDO panel (segundoEjemplar, bookId 'book-2').
+      botonesVender[1]?.click();
+      fixture.detectChanges();
+
+      const componente = fixture.componentInstance;
+      componente['formularioVenta'].setValue({ cantidad: 1, porcentajeDescuentoVenta: 0, formaDePago: 'efectivo' });
+      const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+      form.dispatchEvent(new Event('submit'));
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(registrarVentaMock).toHaveBeenCalledWith(
+        expect.objectContaining({ bookId: 'book-2' }),
+      );
+    });
+
+    it('con ejemplares: [] (agotado en todas las ubicaciones), muestra la nota y ningún panel/botón VENDER', async () => {
+      const obtenerDetalleMock = vi.fn().mockResolvedValue({ ...libroFalso, ejemplares: [] });
+      const { fixture } = configurarPrueba({
+        obtenerDetalleMock,
+        usuario: usuarioFirebaseFalso,
+        usuarioActual: vendedorFalso,
+      });
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Agotado');
+      expect(fixture.nativeElement.textContent).not.toContain('Ubicación en la librería');
+      expect(fixture.nativeElement.querySelectorAll('button').length).toBe(0);
+    });
+
+    it('un libro sin ISBN solo tiene el propio libro como ejemplar posible (decisión D2)', async () => {
+      const obtenerDetalleMock = vi.fn().mockResolvedValue({ ...libroFalso, isbn: null });
+      const { fixture } = configurarPrueba({ obtenerDetalleMock });
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      // El fixture ya trae `ejemplares: [ejemplarFalso]` — un solo panel, sin necesidad de ISBN para mostrarse.
+      expect((fixture.nativeElement.textContent.match(/Ubicación en la librería/g) ?? []).length).toBe(1);
     });
   });
 });

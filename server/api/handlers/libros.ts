@@ -199,6 +199,55 @@ async function resolverUbicacion(
 }
 
 /**
+ * Un ejemplar del mismo libro por ISBN, con su propia ubicación ya resuelta
+ * (Tarea 4 del lote de duplicados, `docs/plan-duplicados-catalogacion.md`
+ * §7) — cada uno es el `bookId` de un panel "Ubicación en la librería" en
+ * la ficha pública.
+ */
+interface EjemplarConUbicacion {
+  bookId: string;
+  pvp: number;
+  cantidadDisponible: number;
+  ubicacion: { espacio: string; mueble: string; ubicacion: string } | null;
+}
+
+/** Respuesta de `handlerDetalle` — extiende `LibroConUbicacion` de forma ADITIVA con `ejemplares`, sin tocar el contrato que también usa `handlerBuscarPorIsbn` (mismo `LibroConUbicacion`, con un significado distinto ahí: duplicados detectados al catalogar). */
+interface LibroConEjemplares extends LibroConUbicacion {
+  ejemplares: EjemplarConUbicacion[];
+}
+
+/**
+ * Resuelve los ejemplares del mismo libro por ISBN (Tarea 4, apilamiento en
+ * el catálogo público) — `Query` al GSI disperso `isbn-index` (nunca un
+ * `Scan`), mismo índice que ya usa `handlerBuscarPorIsbn`. Sin ISBN, el
+ * propio libro es su único ejemplar posible (decisión **D2**: el
+ * apilamiento es SOLO por ISBN, nunca por título — cero riesgo de fusionar
+ * dos libros sin relación en la cara pública). Solo incluye ejemplares con
+ * `cantidadDisponible > 0` (**S6**): un arreglo vacío de vuelta significa
+ * "agotado en todas las ubicaciones", la señal que usa el frontend para
+ * mostrar la nota de agotado sin ningún botón VENDER — incluso si el libro
+ * puntual pedido por `bookId` está agotado, sigue describiéndose en los
+ * campos de nivel superior de la respuesta (comportamiento ya existente,
+ * sin cambios: un enlace directo debe funcionar aunque esté agotado).
+ */
+async function resolverEjemplares(libro: Libro): Promise<EjemplarConUbicacion[]> {
+  const candidatos =
+    libro.isbn !== null
+      ? await consultarPorIndice<Libro>(nombreTablaLibros(), 'isbn-index', 'isbn', libro.isbn)
+      : [libro];
+
+  const disponibles = candidatos.filter((candidato) => candidato.cantidadDisponible > 0);
+  return Promise.all(
+    disponibles.map(async (candidato) => ({
+      bookId: candidato.bookId,
+      pvp: candidato.pvp,
+      cantidadDisponible: candidato.cantidadDisponible,
+      ubicacion: await resolverUbicacion(candidato.ubicacionId),
+    })),
+  );
+}
+
+/**
  * `GET /api/libros/:bookId` — ficha pública de un libro puntual
  * (`tech-specs.md`, módulo `catalogo-publico/`; `TODO.md`, ficha de libro).
  * Sin autenticación, mismo criterio que `GET /api/libros`: es de solo
@@ -212,6 +261,15 @@ async function resolverUbicacion(
  * Ubicación, `TODO.md` Tarea 1) — 3 `GetItem` puntuales, no un `Scan`. Si
  * algún eslabón ya no existe (dato inconsistente), `ubicacion` queda en
  * `null` en vez de romper la respuesta.
+ *
+ * Extendido de forma ADITIVA con `ejemplares` (Tarea 4 del lote de
+ * duplicados, `docs/plan-duplicados-catalogacion.md` §7): todos los demás
+ * ejemplares del mismo ISBN, cada uno con su propia ubicación y PVP —
+ * apila en el catálogo público libros catalogados por separado que en
+ * realidad son el mismo título. Los campos heredados de `Libro` siguen
+ * describiendo el `bookId` puntual pedido por la ruta, sin cambios; solo se
+ * agrega el arreglo. Único consumidor hoy (`LibroDetalleComponent`), riesgo
+ * de romper algo mínimo.
  */
 export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -225,11 +283,14 @@ export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<A
       return respuestaJson(404, { error: 'El libro no existe.' });
     }
 
-    const ubicacion = await resolverUbicacion(libro.ubicacionId);
+    const [ubicacion, ejemplares] = await Promise.all([
+      resolverUbicacion(libro.ubicacionId),
+      resolverEjemplares(libro),
+    ]);
 
-    const libroConUbicacion: LibroConUbicacion = { ...normalizarLibro(libro), ubicacion };
+    const libroConEjemplares: LibroConEjemplares = { ...normalizarLibro(libro), ubicacion, ejemplares };
 
-    return respuestaJson(200, libroConUbicacion);
+    return respuestaJson(200, libroConEjemplares);
   } catch {
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }

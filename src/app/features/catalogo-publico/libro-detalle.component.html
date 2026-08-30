@@ -26,27 +26,46 @@
             @if (libro.editorial) {
               <p class="text-xs text-primary/60">{{ libro.editorial }}</p>
             }
-            <p class="mt-2 text-lg font-bold text-secondary">{{ libro.pvp | pvp }}</p>
+            @if (rangoPvp(); as rango) {
+              <p class="mt-2 text-lg font-bold text-secondary">
+                @if (rango.minimo === rango.maximo) {
+                  {{ rango.minimo | pvp }}
+                } @else {
+                  {{ rango.minimo | pvp }} – {{ rango.maximo | pvp }}
+                }
+              </p>
+            }
           </div>
         </div>
 
-        @if (libro.ubicacion) {
-          <div class="mt-6 rounded-xl border border-primary/10 px-3 py-2">
-            <p class="mb-1 text-sm font-semibold text-primary">Ubicación en la librería</p>
-            <p class="text-sm text-primary/70">Espacio: {{ libro.ubicacion.espacio }}</p>
-            <p class="text-sm text-primary/70">Mueble: {{ libro.ubicacion.mueble }}</p>
-            <p class="text-sm text-primary/70">Ubicación: {{ libro.ubicacion.ubicacion }}</p>
-          </div>
-        }
+        @if (agotadoEnTodasLasUbicaciones()) {
+          <p class="mt-6 rounded-xl border border-primary/10 bg-neutral/40 px-3 py-2 text-sm text-primary/70">
+            Agotado por ahora en todas las ubicaciones.
+          </p>
+        } @else {
+          @for (ejemplar of libro.ejemplares; track ejemplar.bookId) {
+            <div class="mt-4 rounded-xl border border-primary/10 px-3 py-2">
+              @if (ejemplar.ubicacion) {
+                <p class="mb-1 text-sm font-semibold text-primary">Ubicación en la librería</p>
+                <p class="text-sm text-primary/70">Espacio: {{ ejemplar.ubicacion.espacio }}</p>
+                <p class="text-sm text-primary/70">Mueble: {{ ejemplar.ubicacion.mueble }}</p>
+                <p class="text-sm text-primary/70">Ubicación: {{ ejemplar.ubicacion.ubicacion }}</p>
+              } @else {
+                <p class="text-sm text-primary/70">Ubicación no disponible.</p>
+              }
+              <p class="mt-1 text-sm font-semibold text-secondary">{{ ejemplar.pvp | pvp }}</p>
 
-        @if (puedeVender() && libro.cantidadDisponible > 0) {
-          <button
-            type="button"
-            (click)="abrirDialogoVenta()"
-            class="mt-6 flex h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90"
-          >
-            Vender
-          </button>
+              @if (puedeVender()) {
+                <button
+                  type="button"
+                  (click)="abrirDialogoVenta(ejemplar)"
+                  class="mt-3 flex h-12 w-full items-center justify-center rounded-2xl bg-primary px-4 text-sm font-semibold tracking-wider text-neutral uppercase transition-opacity hover:opacity-90"
+                >
+                  Vender
+                </button>
+              }
+            </div>
+          }
         }
 
         @if (mensajeExitoVenta()) {
@@ -54,7 +73,7 @@
         }
       </div>
 
-      @if (dialogoVentaVisible()) {
+      @if (dialogoVentaVisible() && ejemplarSeleccionadoVenta(); as ejemplar) {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-primary/40 px-4">
           <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
             <h2 class="mb-4 text-lg font-bold text-primary">Vender «{{ libro.titulo }}»</h2>
@@ -67,12 +86,12 @@
                   type="number"
                   formControlName="cantidad"
                   min="1"
-                  [attr.max]="libro.cantidadDisponible"
+                  [attr.max]="ejemplar.cantidadDisponible"
                   class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"
                 />
                 @if (formularioVenta.controls.cantidad.invalid && formularioVenta.controls.cantidad.touched) {
                   <p class="mt-1 text-xs text-danger">
-                    La cantidad debe ser un entero entre 1 y {{ libro.cantidadDisponible }}.
+                    La cantidad debe ser un entero entre 1 y {{ ejemplar.cantidadDisponible }}.
                   </p>
                 }
               </div>
