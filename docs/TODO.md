@@ -196,6 +196,6 @@ Se promueve la Tarea 4 al segundo slot activo (con la Tarea 3, que sigue activa 
 - [x] Cabecera con PVP único o rango (D4); `<title>`/`<meta>` de SSR y la URL `/libro/:bookId` sin cambios (S7).
 - [x] 4 tests backend + 11 frontend nuevos (370 backend / 397 frontend en total). `build`/`build:api`/`serverless print`/`serverless package --stage dev` verificados. Smoke test parcial: `/catalogar` (guardada) responde 200; `/` y `/libro/:bookId` (públicas, sin guard) cuelgan en este sandbox por falta de backend real alcanzable durante el SSR — limitación preexistente del entorno, no de esta tarea. Verificación visual con datos reales pendiente del usuario en `staging`.
 
-**Con esto se cierra por completo el lote de duplicados/apilamiento/reporte traído por el usuario el 2026-08-29** (`docs/plan-duplicados-catalogacion.md`, Tareas 1-4, PRs #106, #107, #108 y este). Sin tareas activas hasta el próximo lote de ajustes del usuario.
+**Con esto se cierra por completo el lote de duplicados/apilamiento/reporte traído por el usuario el 2026-08-29** (`docs/plan-duplicados-catalogacion.md`, Tareas 1-4, PRs #106, #107, #108 y #109 — los 4 fusionados). Sin tareas activas hasta el próximo lote de ajustes del usuario.
 
 
