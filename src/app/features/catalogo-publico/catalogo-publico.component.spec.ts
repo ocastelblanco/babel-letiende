@@ -234,9 +234,12 @@ describe('CatalogoPublicoComponent', () => {
 
   describe('filtro por ubicación (Espacio/Mueble)', () => {
     // `libroFalso` está en ubicacion-1 (mueble-1, espacio-1); este segundo libro está en ubicacion-2 (mueble-2, espacio-2).
+    // `isbn: null` (en vez de heredar el de `libroFalso`) — son dos libros DISTINTOS sin relación entre sí, no deben
+    // apilarse en un solo grupo (Tarea 4, `docs/plan-duplicados-catalogacion.md` §7, decisión D2).
     const libroEnOtraUbicacion: Libro = {
       ...libroFalso,
       bookId: 'book-2',
+      isbn: null,
       titulo: 'Aniquilación',
       autor: 'Michel Houellebecq',
       ubicacionId: 'ubicacion-2',
@@ -398,11 +401,28 @@ describe('CatalogoPublicoComponent', () => {
   });
 
   describe('vista Tarjetas/Lista y orden (ajustes-2026-07-27.md)', () => {
-    const libroAlfa: Libro = { ...libroFalso, bookId: 'book-alfa', titulo: 'Alfa', autor: 'Alfa', pvp: 10000 };
-    const libroBeta: Libro = { ...libroFalso, bookId: 'book-beta', titulo: 'Beta', autor: 'Bravo', pvp: 30000 };
+    // `isbn: null` en los 3 — son libros DISTINTOS sin relación entre sí, no deben apilarse en un solo grupo
+    // (Tarea 4, `docs/plan-duplicados-catalogacion.md` §7, decisión D2) solo por heredar el isbn de `libroFalso`.
+    const libroAlfa: Libro = {
+      ...libroFalso,
+      bookId: 'book-alfa',
+      isbn: null,
+      titulo: 'Alfa',
+      autor: 'Alfa',
+      pvp: 10000,
+    };
+    const libroBeta: Libro = {
+      ...libroFalso,
+      bookId: 'book-beta',
+      isbn: null,
+      titulo: 'Beta',
+      autor: 'Bravo',
+      pvp: 30000,
+    };
     const libroCharlie: Libro = {
       ...libroFalso,
       bookId: 'book-charlie',
+      isbn: null,
       titulo: 'Charlie',
       autor: 'Charlie',
       pvp: 20000,
@@ -469,6 +489,83 @@ describe('CatalogoPublicoComponent', () => {
       fixture.detectChanges();
 
       expect(titulosEnOrden(fixture)).toEqual(['Charlie', 'Beta', 'Alfa']);
+    });
+  });
+
+  describe('apilamiento por ISBN (Tarea 4 del lote de duplicados, docs/plan-duplicados-catalogacion.md §7)', () => {
+    it('dos libros catalogados por separado con el mismo ISBN aparecen como UNA sola tarjeta, con la cantidad sumada', () => {
+      const segundoEjemplar: Libro = {
+        ...libroFalso,
+        bookId: 'book-2',
+        ubicacionId: 'ubicacion-2',
+        cantidadDisponible: 2,
+      };
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, segundoEjemplar],
+        cargando: false,
+        error: false,
+      });
+
+      const tarjetas = fixture.nativeElement.querySelectorAll('li');
+      expect(tarjetas.length).toBe(1);
+      expect(fixture.nativeElement.textContent).toContain('Cien años de soledad');
+    });
+
+    it('el grupo lleva el bookId del primer ejemplar (la ficha resuelve el resto por ISBN)', () => {
+      const segundoEjemplar: Libro = { ...libroFalso, bookId: 'book-2', ubicacionId: 'ubicacion-2' };
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, segundoEjemplar],
+        cargando: false,
+        error: false,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.librosAgrupados()).toHaveLength(1);
+      expect(componente.librosAgrupados()[0].bookId).toBe('book-1');
+    });
+
+    it('muestra el PVP como rango cuando los ejemplares agrupados tienen precios distintos (D4)', () => {
+      const segundoEjemplar: Libro = {
+        ...libroFalso,
+        bookId: 'book-2',
+        ubicacionId: 'ubicacion-2',
+        pvp: 52000,
+      };
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, segundoEjemplar],
+        cargando: false,
+        error: false,
+      });
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('$45.000 – $52.000');
+    });
+
+    it('muestra un único PVP cuando todos los ejemplares agrupados cuestan lo mismo', () => {
+      const segundoEjemplar: Libro = { ...libroFalso, bookId: 'book-2', ubicacionId: 'ubicacion-2' };
+      const { fixture } = configurarPrueba({
+        libros: [libroFalso, segundoEjemplar],
+        cargando: false,
+        error: false,
+      });
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('$45.000');
+      expect(texto).not.toContain('–');
+    });
+
+    it('un libro sin ISBN nunca se apila, aunque comparta todo lo demás con otro libro también sin ISBN', () => {
+      const libroSinIsbnA: Libro = { ...libroFalso, bookId: 'book-a', isbn: null };
+      const libroSinIsbnB: Libro = { ...libroFalso, bookId: 'book-b', isbn: null };
+      const { fixture } = configurarPrueba({
+        libros: [libroSinIsbnA, libroSinIsbnB],
+        cargando: false,
+        error: false,
+      });
+
+      // Dos tarjetas independientes, no una sola agrupada.
+      expect(fixture.nativeElement.querySelectorAll('li').length).toBe(2);
     });
   });
 });

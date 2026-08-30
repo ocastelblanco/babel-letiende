@@ -1192,6 +1192,10 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
     process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
     process.env['TABLA_MUEBLES'] = 'babel-muebles-test';
     process.env['TABLA_ESPACIOS'] = 'babel-espacios-test';
+    // Sin ejemplares por defecto (Tarea 4 del lote de duplicados) — los
+    // tests que no le importa `ejemplares` no necesitan configurarlo; los
+    // que sí lo prueban lo sobrescriben con `mockResolvedValueOnce`.
+    consultarPorIndiceMock.mockResolvedValue([]);
   });
 
   it('responde 400 sin bookId en la ruta', async () => {
@@ -1294,6 +1298,83 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
     const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 200 });
+  });
+
+  describe('ejemplares (Tarea 4 del lote de duplicados — apilamiento en el catálogo público)', () => {
+    /** Resuelve `obtenerPorClave` por tabla (no por orden de llamada) — necesario porque `resolverUbicacion` corre en paralelo para varios ejemplares a la vez (`Promise.all`), así que el orden real de las llamadas no es determinista. */
+    function mockearUbicacionSiempreIgual(): void {
+      obtenerPorClaveMock.mockImplementation((tabla: unknown) => {
+        if (tabla === 'babel-ubicaciones-test') return Promise.resolve(ubicacionFalsa);
+        if (tabla === 'babel-muebles-test') return Promise.resolve(muebleFalso);
+        if (tabla === 'babel-espacios-test') return Promise.resolve(espacioFalso);
+        return Promise.resolve(undefined);
+      });
+    }
+
+    it('agrupa los ejemplares del mismo ISBN consultando el GSI isbn-index (Query, no Scan)', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      mockearUbicacionSiempreIgual();
+      const segundoEjemplar = { ...libroFalso, bookId: 'libro-2', cantidadDisponible: 1, pvp: 52000 };
+      consultarPorIndiceMock.mockResolvedValue([libroFalso, segundoEjemplar]);
+
+      const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+      expect(consultarPorIndiceMock).toHaveBeenCalledWith(
+        'babel-libros-test',
+        'isbn-index',
+        'isbn',
+        libroFalso.isbn,
+      );
+      const cuerpo = JSON.parse(respuesta.body as string) as { ejemplares: Record<string, unknown>[] };
+      expect(cuerpo.ejemplares).toHaveLength(2);
+      expect(cuerpo.ejemplares.map((ejemplar) => ejemplar['bookId'])).toEqual(
+        expect.arrayContaining(['libro-1', 'libro-2']),
+      );
+      const filaSegundoEjemplar = cuerpo.ejemplares.find((ejemplar) => ejemplar['bookId'] === 'libro-2');
+      expect(filaSegundoEjemplar).toMatchObject({
+        pvp: 52000,
+        cantidadDisponible: 1,
+        ubicacion: { espacio: espacioFalso.nombre, mueble: muebleFalso.nombre, ubicacion: ubicacionFalsa.nombre },
+      });
+    });
+
+    it('excluye del arreglo los ejemplares agotados (cantidadDisponible: 0) — solo cuenta como ejemplar lo disponible', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      mockearUbicacionSiempreIgual();
+      const ejemplarAgotado = { ...libroFalso, bookId: 'libro-agotado', cantidadDisponible: 0 };
+      consultarPorIndiceMock.mockResolvedValue([libroFalso, ejemplarAgotado]);
+
+      const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+      const cuerpo = JSON.parse(respuesta.body as string) as { ejemplares: Record<string, unknown>[] };
+      expect(cuerpo.ejemplares).toHaveLength(1);
+      expect(cuerpo.ejemplares[0]?.['bookId']).toBe('libro-1');
+    });
+
+    it('arreglo ejemplares vacío cuando el libro puntual pedido está agotado en TODAS las ubicaciones', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce({ ...libroFalso, cantidadDisponible: 0 });
+      mockearUbicacionSiempreIgual();
+      consultarPorIndiceMock.mockResolvedValue([{ ...libroFalso, cantidadDisponible: 0 }]);
+
+      const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const cuerpo = JSON.parse(respuesta.body as string) as { ejemplares: unknown[] };
+      expect(cuerpo.ejemplares).toEqual([]);
+    });
+
+    it('sin ISBN, el propio libro es su único ejemplar posible — nunca consulta el GSI (decisión D2: apilamiento SOLO por ISBN)', async () => {
+      const libroSinIsbn = { ...libroFalso, isbn: null };
+      obtenerPorClaveMock.mockResolvedValueOnce(libroSinIsbn);
+      mockearUbicacionSiempreIgual();
+
+      const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+      expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+      const cuerpo = JSON.parse(respuesta.body as string) as { ejemplares: Record<string, unknown>[] };
+      expect(cuerpo.ejemplares).toHaveLength(1);
+      expect(cuerpo.ejemplares[0]?.['bookId']).toBe(libroFalso.bookId);
+    });
   });
 });
 

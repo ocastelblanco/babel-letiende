@@ -104,13 +104,13 @@ Depende de la decisión **D3**. Fue la única parte del lote que necesitó infra
 - [x] Ajuste retroactivo a `seleccionarDuplicado` (Tarea 1): ahora también precarga el campo `isbn` — necesario para este flujo (un candidato de Babel elegido por título/autor puede llegar sin que el campo isbn se haya tocado todavía); sin efecto en el flujo por ISBN de la Tarea 1, donde el campo ya tenía ese mismo valor.
 - [x] 5 tests backend (`handlerIndice`) + 4 (`LibrosService.cargarIndice`, incluida la caché de sesión) + 6 (`CatalogarLibroComponent`, búsqueda en índice/fallback externo/AND de título+autor/selección misma-otra ubicación) nuevos (366 backend / 386 frontend en total). `npm run build`/`build:api`/`serverless print --stage dev`/`serverless package --stage dev` verificados sin errores (zip con `libros.js`/`verificar-token.js`/`dynamodb.js`). Smoke test `ng serve` + `curl /catalogar` (200, sin crash) — verificación visual interactiva con login real queda pendiente del usuario en `staging`.
 
-## 7. Tarea 4 — Apilamiento en el catálogo público *(slot activo)*
+## 7. Tarea 4 — Apilamiento en el catálogo público *(COMPLETA, 2026-08-29)*
 
-- [ ] Backend: extender `GET /api/libros/:bookId` de forma **aditiva** — conserva todos los campos actuales de `LibroConUbicacion` y agrega `ejemplares: EjemplarConUbicacion[]`. Con ISBN, se resuelven con una `Query` al GSI `isbn-index` (sin `Scan`); sin ISBN, `ejemplares` trae solo el propio libro (**D2**). Único consumidor hoy: `LibroDetalleComponent`, así que el riesgo de romper algo es mínimo.
-- [ ] Frontend, listado (`CatalogoPublicoComponent`): agrupar por ISBN dentro del `computed` que ya filtra y ordena — la lista completa ya está en memoria, no hace falta tocar `GET /api/libros`. Una tarjeta por grupo, sumando `cantidadDisponible`.
-- [ ] Frontend, ficha (`LibroDetalleComponent`): un panel "Ubicación en la librería" por ejemplar disponible, cada uno con su PVP y su botón VENDER (**D4**, **S6**). El diálogo de venta actúa sobre el `bookId` **de ese panel**.
-- [ ] La cabecera muestra PVP único o rango (**D4**). Revisar que el `<title>`/`<meta>` de SSR sigan correctos (**S7**).
-- [ ] Tests: agrupación en el listado, varios paneles en la ficha, VENDER por panel, ejemplar agotado sin botón, libro sin ISBN sin apilar.
+- [x] Backend: `GET /api/libros/:bookId` extendido de forma **aditiva** — conserva todos los campos actuales de `LibroConUbicacion` y agrega `ejemplares: EjemplarConUbicacion[]` (`resolverEjemplares`). Con ISBN, se resuelven con una `Query` al GSI `isbn-index` (sin `Scan`); sin ISBN, `ejemplares` trae solo el propio libro (**D2**). Filtra a solo `cantidadDisponible > 0` (**S6**) — un arreglo vacío es la señal de "agotado en todas las ubicaciones". Único consumidor (`LibroDetalleComponent`), riesgo de romper algo mínimo. **Rol IAM `LibrosDetalleLambdaRole` actualizado** con `dynamodb:Query` sobre `isbn-index` — antes solo tenía `GetItem`, verificado acción por acción contra el código real (gotcha recurrente del proyecto, `MEMORY.md` §7).
+- [x] Frontend, listado (`CatalogoPublicoComponent`): `librosAgrupados` agrupa `librosFiltrados` por ISBN — la lista completa ya está en memoria, no hace falta tocar `GET /api/libros`. Una tarjeta por grupo, con `cantidadDisponible` sumada y PVP mínimo/máximo (D4); `librosOrdenados` ahora ordena los grupos, no libros sueltos.
+- [x] Frontend, ficha (`LibroDetalleComponent`): un panel "Ubicación en la librería" por ejemplar disponible, cada uno con su PVP y su botón VENDER — el diálogo de venta actúa sobre el `bookId` **de ese panel** (`ejemplarSeleccionadoVenta`, nunca `libro().bookId`), verificado con un test que abre el diálogo desde el segundo panel y confirma que la venta se registra contra el `bookId` correcto.
+- [x] La cabecera muestra PVP único o rango (`rangoPvp`, D4). `<title>`/`<meta>` de SSR siguen usando los campos de nivel superior del libro puntual pedido, sin cambios (**S7**) — la URL sigue siendo `/libro/:bookId`.
+- [x] Tests: agrupación en el listado (incluida la exclusión de libros sin ISBN), varios paneles en la ficha, VENDER por el panel correcto, `ejemplares: []` sin ningún botón y con la nota de agotado, PVP en rango vs. único en ambas vistas. 4 backend + 11 frontend nuevos (370 backend / 397 frontend en total). `npm run build`/`build:api`/`serverless print --stage dev`/`serverless package --stage dev` verificados — el zip de `librosDetalle` incluye `libros.js`/`verificar-token.js`/`dynamodb.js`. Smoke test: `/catalogar` (protegida por guard) responde 200 — `/` y `/libro/:bookId` (públicas, sin guard) cuelgan en este sandbox porque el SSR llama a `GET /api/libros`/`GET /api/libros/:bookId` sin backend real alcanzable; limitación preexistente del entorno (no introducida por esta tarea), confirmada comparando contra una ruta guardada que sí responde. Verificación visual interactiva con datos reales queda pendiente del usuario en `staging`.
 
 ---
 
@@ -119,9 +119,11 @@ Depende de la decisión **D3**. Fue la única parte del lote que necesitó infra
 1. **Tarea 1** (COMPLETA, 2026-08-29) — era el arreglo directo del problema reportado y no necesitó backend nuevo.
 2. **Tarea 2** (COMPLETA, 2026-08-29) — independiente, permite limpiar los duplicados que ya existen en producción.
 3. **Tarea 3** (COMPLETA, 2026-08-29) — era la única que agregaba infraestructura; el tamaño real del índice se midió contra producción antes de darla por buena (§6).
-4. **Tarea 4** (activa, última del lote) — es cosmética/UX y no depende de ninguna de las anteriores.
+4. **Tarea 4** (COMPLETA, 2026-08-29) — era cosmética/UX y no dependía de ninguna de las anteriores.
 
-Las tareas se implementan **de una en una, un PR por tarea** (`MEMORY.md`: el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation).
+Con esto el lote completo de duplicados/apilamiento/reporte traído por el usuario el 2026-08-29 queda cerrado — las 4 tareas implementadas, verificadas y en PRs separados.
+
+Las tareas se implementaron **de una en una, un PR por tarea** (`MEMORY.md`: el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation).
 
 ## 9. Recordatorios de proceso para la implementación
 

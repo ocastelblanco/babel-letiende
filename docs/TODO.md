@@ -188,10 +188,14 @@ Se promueve la Tarea 4 al segundo slot activo (con la Tarea 3, que sigue activa 
 - [x] Al elegir un candidato de Babel, se resuelve la ficha completa por `bookId` (`LibrosService.obtenerDetalle`) y entra por el mismo camino de duplicados de la Tarea 1 (`seleccionarDuplicado`, misma/otra ubicación) — reutilizado sin duplicar lógica. Ajuste retroactivo menor a `seleccionarDuplicado`: también precarga `isbn`.
 - [x] 15 tests nuevos (5 backend + 4 `LibrosService` + 6 `CatalogarLibroComponent`) — 366 backend / 386 frontend en total. `build`/`build:api`/`serverless print`/`serverless package --stage dev` verificados. Smoke test `ng serve` + `curl /catalogar` (200) — verificación visual con login real pendiente del usuario en `staging`.
 
-## Tarea 4 — Apilamiento en el catálogo público (ACTIVA — única tarea activa, no hay más en cola)
+## Tarea 4 — Apilamiento en el catálogo público — COMPLETA (2026-08-29)
 
-Agrupación por ISBN en el listado (en memoria, sin tocar `GET /api/libros`) y `ejemplares[]` aditivo en `GET /api/libros/:bookId` para los paneles de ubicación con VENDER por panel. Cosmética/UX, sin dependencias. Ver §7 del plan. Con esto se cierra el lote completo de duplicados/apilamiento/reporte traído por el usuario el 2026-08-29.
+- [x] Backend: `GET /api/libros/:bookId` extendido de forma aditiva con `ejemplares: EjemplarConUbicacion[]` (`resolverEjemplares`, `Query` al GSI `isbn-index`, sin ISBN solo el propio libro — D2). Filtra a `cantidadDisponible > 0` (S6). Rol IAM `LibrosDetalleLambdaRole` actualizado con `dynamodb:Query` sobre `isbn-index` (antes solo tenía `GetItem` — gotcha recurrente del proyecto de verificar IAM acción por acción, `MEMORY.md` §7).
+- [x] Frontend, listado (`CatalogoPublicoComponent`): `librosAgrupados` agrupa por ISBN en memoria (sin tocar `GET /api/libros`), una tarjeta/fila por grupo, PVP mínimo/máximo y `cantidadDisponible` sumada.
+- [x] Frontend, ficha (`LibroDetalleComponent`): un panel "Ubicación en la librería" por ejemplar disponible, cada uno con su PVP y su propio botón VENDER — el diálogo actúa sobre el `bookId` del panel que lo abrió, nunca el del libro de nivel superior. `ejemplares: []` muestra la nota de agotado sin ningún botón.
+- [x] Cabecera con PVP único o rango (D4); `<title>`/`<meta>` de SSR y la URL `/libro/:bookId` sin cambios (S7).
+- [x] 4 tests backend + 11 frontend nuevos (370 backend / 397 frontend en total). `build`/`build:api`/`serverless print`/`serverless package --stage dev` verificados. Smoke test parcial: `/catalogar` (guardada) responde 200; `/` y `/libro/:bookId` (públicas, sin guard) cuelgan en este sandbox por falta de backend real alcanzable durante el SSR — limitación preexistente del entorno, no de esta tarea. Verificación visual con datos reales pendiente del usuario en `staging`.
 
-**Orden de implementación:** una tarea, una rama, un PR, de una en una — el stage `staging` es compartido y dos PRs abiertos a la vez se pisan el stack de CloudFormation (`MEMORY.md` §7).
+**Con esto se cierra por completo el lote de duplicados/apilamiento/reporte traído por el usuario el 2026-08-29** (`docs/plan-duplicados-catalogacion.md`, Tareas 1-4, PRs #106, #107, #108 y este). Sin tareas activas hasta el próximo lote de ajustes del usuario.
 
 
