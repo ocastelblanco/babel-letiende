@@ -1,3 +1,63 @@
+@if (embebido) {
+  <header class="sticky top-0 z-50 bg-primary text-neutral">
+    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4" aria-label="Navegación principal">
+      <a href="/" class="shrink-0" aria-label="Le Tiende — inicio">
+        <img src="/logo_blanco_sin_fondo.svg" alt="Le Tiende" class="h-8 w-auto" />
+      </a>
+      <ul class="hidden items-center gap-6 text-sm font-semibold tracking-wider uppercase md:flex">
+        <li><a href="/cartelera" class="hover:text-secondary">Cartelera</a></li>
+        <li><a href="/libros" class="text-secondary">Librería</a></li>
+        <li><a href="/nosotros" class="hover:text-secondary">Nosotros</a></li>
+        <li><a href="/contacto" class="hover:text-secondary">Contacto</a></li>
+        <li><a href="/preguntas-frecuentes" class="hover:text-secondary">Preguntas frecuentes</a></li>
+      </ul>
+      <button
+        #botonMenuEmbebido
+        type="button"
+        class="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary md:hidden"
+        [attr.aria-expanded]="menuEmbebidoAbierto()"
+        aria-controls="panel-menu-movil-embebido"
+        [attr.aria-label]="menuEmbebidoAbierto() ? 'Cerrar menú' : 'Abrir menú'"
+        (click)="alternarMenuEmbebido()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-7 w-7" aria-hidden="true">
+          <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+    </nav>
+
+    @if (menuEmbebidoAbierto()) {
+      <div
+        id="panel-menu-movil-embebido"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menú de navegación"
+        tabindex="-1"
+        class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-primary text-neutral md:hidden"
+        (keydown.escape)="cerrarMenuEmbebido()"
+      >
+        <button
+          #botonCerrarEmbebido
+          type="button"
+          class="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary absolute right-4 top-4"
+          aria-label="Cerrar menú"
+          (click)="cerrarMenuEmbebido()"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-7 w-7" aria-hidden="true">
+            <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+        <ul class="flex flex-col items-center gap-6 text-lg font-semibold tracking-wider uppercase">
+          <li><a href="/cartelera" (click)="cerrarMenuEmbebido()">Cartelera</a></li>
+          <li><a href="/libros" class="text-secondary" (click)="cerrarMenuEmbebido()">Librería</a></li>
+          <li><a href="/nosotros" (click)="cerrarMenuEmbebido()">Nosotros</a></li>
+          <li><a href="/contacto" (click)="cerrarMenuEmbebido()">Contacto</a></li>
+          <li><a href="/preguntas-frecuentes" (click)="cerrarMenuEmbebido()">Preguntas frecuentes</a></li>
+        </ul>
+      </div>
+    }
+  </header>
+} @else {
 <header class="sticky top-0 z-10 bg-white shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
   <div class="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
     <a
@@ -144,3 +204,4 @@
     </div>
   }
 </header>
+}
