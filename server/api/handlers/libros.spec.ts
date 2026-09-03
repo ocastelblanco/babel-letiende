@@ -62,6 +62,7 @@ const {
   handlerDetalle,
   handlerBuscarPorIsbn,
   handlerFusionarDuplicado,
+  handlerSitemap,
   validarDatosNuevoLibro,
   validarDatosEditarLibro,
   validarDatosFusionarDuplicado,
@@ -1505,5 +1506,60 @@ describe('handlerBuscarPorIsbn (GET /api/libros/por-isbn/:isbn)', () => {
       const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>[];
       expect(cuerpo[0]?.['ubicacion']).toBeNull();
     });
+  });
+});
+
+describe('handlerSitemap (GET /sitemap.xml)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+  });
+
+  it('responde 200 con Content-Type application/xml y un urlset válido', async () => {
+    escanearMayorQueMock.mockResolvedValue([libroFalso]);
+
+    const respuesta = await handlerSitemap({} as never, {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 200, headers: { 'Content-Type': 'application/xml' } });
+    const xml = respuesta.body as string;
+    expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+    expect(xml).toContain('</urlset>');
+  });
+
+  it('incluye una URL por libro con la forma https://letiende.co/libros/libro/{bookId}', async () => {
+    escanearMayorQueMock.mockResolvedValue([libroFalso]);
+
+    const respuesta = await handlerSitemap({} as never, {} as never, {} as never);
+
+    const xml = respuesta.body as string;
+    expect(xml).toContain(`<url><loc>https://letiende.co/libros/libro/${libroFalso.bookId}</loc></url>`);
+  });
+
+  it('solo incluye libros con cantidadDisponible > 0 (delega el filtro a escanearMayorQue)', async () => {
+    escanearMayorQueMock.mockResolvedValue([libroFalso]);
+
+    await handlerSitemap({} as never, {} as never, {} as never);
+
+    expect(escanearMayorQueMock).toHaveBeenCalledWith('babel-libros-test', 'cantidadDisponible', 0);
+  });
+
+  it('escapa caracteres especiales del bookId', async () => {
+    const libroConCaracteresEspeciales = { ...libroFalso, bookId: 'libro&<>"\'-1' };
+    escanearMayorQueMock.mockResolvedValue([libroConCaracteresEspeciales]);
+
+    const respuesta = await handlerSitemap({} as never, {} as never, {} as never);
+
+    const xml = respuesta.body as string;
+    expect(xml).toContain('libro&amp;&lt;&gt;&quot;&apos;-1');
+    expect(xml).not.toContain('libro&<>"\'-1');
+  });
+
+  it('responde 500 si escanearMayorQue lanza', async () => {
+    escanearMayorQueMock.mockRejectedValue(new Error('DynamoDB no disponible'));
+
+    const respuesta = await handlerSitemap({} as never, {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 500 });
   });
 });

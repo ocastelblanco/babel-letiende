@@ -4,6 +4,7 @@ import { provideRouter, Router, type Routes } from '@angular/router';
 import type { User } from 'firebase/auth';
 import { UsuariosService } from '../../core/api/usuarios.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { EmbebidoService } from '../../core/embebido/embebido.service';
 import type { Usuario } from '../../core/models/usuario.model';
 import { BarraNavegacionComponent } from './barra-navegacion.component';
 
@@ -177,5 +178,88 @@ describe('BarraNavegacionComponent', () => {
     const drawer = fixture.nativeElement.querySelector('.md\\:hidden nav[aria-label="Navegación principal"]');
     expect(drawer).toBeTruthy();
     expect((drawer as HTMLElement).textContent).toContain('Catalogar');
+  });
+});
+
+/** Configura la barra con `EmbebidoService.embebido` forzado a `true` (override de TestBed), simulando una petición servida a través del proxy de letiende.co. */
+function configurarPruebaEmbebida(usuario: User | null = null, usuarioActual: Usuario | null = null) {
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter([]),
+      {
+        provide: AuthService,
+        useValue: {
+          usuario: signal(usuario),
+          cerrarSesion: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+      {
+        provide: UsuariosService,
+        useValue: {
+          usuarioActual: signal(usuarioActual),
+        },
+      },
+      { provide: EmbebidoService, useValue: { embebido: true } },
+    ],
+  });
+
+  const fixture: ComponentFixture<BarraNavegacionComponent> =
+    TestBed.createComponent(BarraNavegacionComponent);
+  fixture.detectChanges();
+
+  return { fixture };
+}
+
+describe('embebido (letiende.co)', () => {
+  it('renderiza la barra común del contenedor con los 5 enlaces planos (no routerLink), sin "Ingresar" ni contenido del panel autenticado, aunque haya sesión', () => {
+    const usuario = { displayName: 'Ana Admin', email: 'ana@letiende.co', photoURL: null } as User;
+    const usuarioActual: Usuario = {
+      email: 'ana@letiende.co',
+      nombre: 'Ana Admin',
+      fotoUrl: null,
+      rol: 'administrador',
+      creadoEn: '2026-07-19T00:00:00.000Z',
+    };
+    const { fixture } = configurarPruebaEmbebida(usuario, usuarioActual);
+    const texto = fixture.nativeElement.textContent as string;
+
+    const enlaces = Array.from(fixture.nativeElement.querySelectorAll('a') as NodeListOf<HTMLAnchorElement>);
+    const hrefsEsperados = ['/cartelera', '/libros', '/nosotros', '/contacto', '/preguntas-frecuentes'];
+    for (const href of hrefsEsperados) {
+      const enlace = enlaces.find((a) => a.getAttribute('href') === href);
+      expect(enlace).toBeTruthy();
+      expect(enlace?.hasAttribute('routerLink')).toBe(false);
+    }
+
+    expect(texto).not.toContain('Ingresar');
+    expect(texto).not.toContain('Catalogar');
+    expect(texto).not.toContain('Administración');
+    expect(texto).not.toContain('Cerrar sesión');
+    expect(fixture.nativeElement.querySelector('a[aria-label="Ingresar"]')).toBeNull();
+  });
+
+  it('el panel móvil embebido abre y cierra, moviendo el foco al botón de cerrar y de vuelta al botón de menú', () => {
+    const { fixture } = configurarPruebaEmbebida();
+
+    const botonMenu = fixture.nativeElement.querySelector(
+      'button[aria-controls="panel-menu-movil-embebido"]',
+    ) as HTMLButtonElement;
+    expect(botonMenu).toBeTruthy();
+
+    botonMenu.click();
+    fixture.detectChanges();
+
+    const panel = fixture.nativeElement.querySelector('#panel-menu-movil-embebido');
+    expect(panel).toBeTruthy();
+    const botonCerrar = fixture.nativeElement.querySelector(
+      '#panel-menu-movil-embebido button[aria-label="Cerrar menú"]',
+    ) as HTMLButtonElement;
+    expect(document.activeElement).toBe(botonCerrar);
+
+    botonCerrar.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('#panel-menu-movil-embebido')).toBeNull();
+    expect(document.activeElement).toBe(botonMenu);
   });
 });
