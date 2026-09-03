@@ -25,15 +25,62 @@ const angularApp = new AngularNodeAppEngine();
  */
 
 /**
- * Serve static files from /browser
+ * Redirección 301 desde el dominio antiguo (`babel.letiende.co`).
+ *
+ * El build usa `baseHref: /libros/` (para que el proxy de letiende.co
+ * funcione), lo que significa que el Router de Angular del lado cliente
+ * exige que la URL real del navegador ya empiece con `/libros`. Dos ramas,
+ * según el valor SEO de la ruta — mismo patrón ya verificado en Ágora:
+ *
+ * 1. `/` y `/libro/:bookId` (rutas públicas con valor de SEO/contenido) →
+ *    301 CROSS-DOMAIN a `letiende.co/libros/...`. Consolida el SEO.
+ * 2. Cualquier otra ruta (login, catalogar, admin, etc.) que no venga ya
+ *    con el prefijo `/libros` → 301 MISMO DOMINIO a
+ *    `babel.letiende.co/libros/...`. El staff sigue entrando por el
+ *    dominio de siempre; solo se le antepone el prefijo obligatorio.
+ *
+ * La condición `!req.path.startsWith('/libros')` evita el bucle: la
+ * segunda petición (ya con el prefijo) cae al `next()` final.
  */
-app.use(
-  express.static(browserDistFolder, {
-    maxAge: '1y',
-    index: false,
-    redirect: false,
-  }),
-);
+const HOST_ANTIGUO = 'babel.letiende.co';
+const RUTA_DETALLE_LIBRO = /^\/libro\/[^/]+$/;
+const PREFIJO_LIBROS = '/libros';
+
+app.use((req, res, next) => {
+  if (req.hostname !== HOST_ANTIGUO) {
+    next();
+    return;
+  }
+  const esRaiz = req.path === '/';
+  const esDetalleLibro = RUTA_DETALLE_LIBRO.test(req.path);
+  if (esRaiz || esDetalleLibro) {
+    res.redirect(301, `https://letiende.co${PREFIJO_LIBROS}${req.originalUrl}`);
+    return;
+  }
+  if (!req.path.startsWith(PREFIJO_LIBROS)) {
+    res.redirect(301, `https://babel.letiende.co${PREFIJO_LIBROS}${req.originalUrl}`);
+    return;
+  }
+  next();
+});
+
+/**
+ * Serve static files from /browser.
+ *
+ * El build genera los archivos en una carpeta plana (sin subcarpeta
+ * `libros/`), pero con `baseHref: /libros/` el HTML servido le pide al
+ * navegador los assets bajo ese prefijo. Por eso se monta el estático dos
+ * veces: bajo `/libros` (lo que el navegador realmente pide) y en la raíz
+ * (compatibilidad, por si algo pide la ruta sin prefijo) — mismo patrón ya
+ * verificado en Ágora.
+ */
+const opcionesEstatico = {
+  maxAge: '1y',
+  index: false,
+  redirect: false,
+};
+app.use(PREFIJO_LIBROS, express.static(browserDistFolder, opcionesEstatico));
+app.use(express.static(browserDistFolder, opcionesEstatico));
 
 /**
  * Handle all other requests by rendering the Angular application.
