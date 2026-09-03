@@ -278,6 +278,16 @@ functions:
       - httpApi:
           path: /sitemap.xml
           method: get
+      # Ruta adicional bajo el prefijo /libros: CloudFront reenvía la ruta
+      # COMPLETA sin OriginPath (tech-specs.md §7.2 del contenedor, detalle
+      # 3), así que staging.letiende.co/libros/sitemap.xml llega a API
+      # Gateway como literalmente "/libros/sitemap.xml", no "/sitemap.xml".
+      # Sin esta ruta no calzaba con ningún evento — hallazgo real,
+      # verificado en vivo (03/09/2026): daba 302 (Angular redirigiendo a
+      # su raíz por no reconocer la ruta), no el XML esperado.
+      - httpApi:
+          path: /libros/sitemap.xml
+          method: get
 
   librosDetalle:
     handler: dist-server/api/handlers/libros.handlerDetalle
