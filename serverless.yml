@@ -219,6 +219,66 @@ functions:
           path: /api/libros
           method: get
 
+  librosSitemap:
+    handler: dist-server/api/handlers/libros.handlerSitemap
+    role: !GetAtt LibrosLambdaRole.Arn
+    description: >-
+      GET /sitemap.xml — mapa del sitio del catálogo público de Babel
+      (T-0014), sin autenticación. Reutiliza el mismo rol de solo lectura
+      (Scan sobre babel-libros) que la función `libros`, misma consulta que
+      GET /api/libros.
+    timeout: 25
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Mismo motivo que la función `libros` (MEMORY.md §7): `libros.js`
+        # compilado incluye todos los handlers del archivo, así que el
+        # import de nivel superior a `verificar-token` debe resolver aquí
+        # también, o el runtime revienta con `Runtime.ImportModuleError`.
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /sitemap.xml
+          method: get
+
   librosDetalle:
     handler: dist-server/api/handlers/libros.handlerDetalle
     role: !GetAtt LibrosDetalleLambdaRole.Arn

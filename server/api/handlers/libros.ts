@@ -161,6 +161,45 @@ export const handler: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayPro
   }
 };
 
+const BASE_URL_PUBLICA = 'https://letiende.co/libros';
+
+/** Neutraliza los 5 caracteres reservados de XML (mismo criterio que el escape de JSON-LD de CLAUDE.md §5, A03, aplicado aquí a XML). */
+function escaparXml(valor: string): string {
+  return valor
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/**
+ * `GET /sitemap.xml` — Babel no tenía sitemap propio (T-0014, mapa del
+ * sitio del catálogo público, mismo patrón ya validado en el proyecto
+ * hermano Ágora, T-0013). Reutiliza la misma consulta que `handler` (el
+ * catálogo público en sí): solo libros con al menos un ejemplar disponible
+ * — no tiene sentido indexar un libro agotado que ni siquiera aparece en el
+ * catálogo. La URL apunta al dominio del contenedor (`letiende.co/libros`,
+ * no `babel.letiende.co`): es la URL pública real tras el proxy de ruta, la
+ * única que debe llegar a los buscadores.
+ */
+export const handlerSitemap: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const libros = await escanearMayorQue<Libro>(nombreTablaLibros(), 'cantidadDisponible', 0);
+    const urls = libros
+      .map((libro) => `  <url><loc>${BASE_URL_PUBLICA}/libro/${escaparXml(libro.bookId)}</loc></url>`)
+      .join('\n');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/xml' },
+      body: xml,
+    };
+  } catch {
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
 /** Datos del libro que expone `handlerDetalle`, con la ubicación física ya resuelta (`TODO.md`, ficha de libro). */
 interface LibroConUbicacion extends Libro {
   /** `null` si algún eslabón de la cadena Ubicación → Mueble → Espacio ya no existe (dato inconsistente, pero no debe romper la ficha) — CLAUDE.md A08. */
