@@ -10,6 +10,7 @@ import { UsuariosService } from '../../core/api/usuarios.service';
 import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
+import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
 
 const PVP_MAXIMO = 5_000_000;
 
@@ -48,7 +49,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-editar-libro',
-  imports: [ReactiveFormsModule, PvpPipe, SelectorPortadaComponent],
+  imports: [ReactiveFormsModule, PvpPipe, SelectorPortadaComponent, SinPortadaFallbackDirective],
   templateUrl: './editar-libro.component.html',
 })
 export class EditarLibroComponent implements OnInit, OnDestroy {

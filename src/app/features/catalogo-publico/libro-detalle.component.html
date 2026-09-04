@@ -11,6 +11,7 @@
             <img
               [src]="libro.portadaUrl"
               [alt]="libro.titulo"
+              appSinPortadaFallback
               class="aspect-[2/3] w-32 shrink-0 rounded-xl object-cover"
             />
           } @else {

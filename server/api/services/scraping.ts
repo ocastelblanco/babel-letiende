@@ -167,16 +167,27 @@ export async function esUrlSegura(url: string): Promise<boolean> {
  * revalida manualmente cada salto (hasta `MAX_REDIRECCIONES`) en vez de
  * confiar en el `redirect: 'follow'` nativo, que seguiría el `Location` sin
  * pasar por la guardia. Nunca lanza: cualquier fallo (SSRF rechazado, red,
- * timeout, demasiadas redirecciones) devuelve `null`.
+ * timeout, demasiadas redirecciones) devuelve `null`. `opciones.metodo`
+ * (default `'GET'`) y `opciones.timeoutMs` (default `TIMEOUT_MS`) permiten a
+ * `portadaUrlResponde` reusar esta misma guardia con `HEAD` y un timeout más
+ * corto sin afectar a ningún llamador existente (que no pasa `opciones`).
  */
-async function fetchSeguro(url: string, intentosRestantes = MAX_REDIRECCIONES): Promise<Response | null> {
+async function fetchSeguro(
+  url: string,
+  opciones?: { metodo?: string; timeoutMs?: number },
+  intentosRestantes = MAX_REDIRECCIONES,
+): Promise<Response | null> {
   if (!(await esUrlSegura(url))) {
     return null;
   }
 
   let respuesta: Response;
   try {
-    respuesta = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) });
+    respuesta = await fetch(url, {
+      method: opciones?.metodo ?? 'GET',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(opciones?.timeoutMs ?? TIMEOUT_MS),
+    });
   } catch {
     return null;
   }
@@ -192,7 +203,7 @@ async function fetchSeguro(url: string, intentosRestantes = MAX_REDIRECCIONES): 
     } catch {
       return null;
     }
-    return fetchSeguro(urlAbsoluta, intentosRestantes - 1);
+    return fetchSeguro(urlAbsoluta, opciones, intentosRestantes - 1);
   }
 
   if (!respuesta.ok) {
@@ -200,6 +211,27 @@ async function fetchSeguro(url: string, intentosRestantes = MAX_REDIRECCIONES): 
   }
 
   return respuesta;
+}
+
+/** Timeout específico para `portadaUrlResponde`, más corto que `TIMEOUT_MS` (pensado para scraping de páginas HTML completas): esta función se llama una vez por libro en lotes de hasta miles, así que no vale la pena esperar 8s completos por cada portada rota. */
+const TIMEOUT_MS_PORTADA = 5000;
+
+/**
+ * Verifica por HTTP real si `portadaUrl` todavía sirve la imagen —a
+ * diferencia de `portadaEsInvalida`, que solo mira palabras clave en la URL
+ * y nunca detecta un 404/500 real del proveedor. Intenta primero `HEAD`
+ * (más barato) y solo si falla reintenta con `GET`, porque algunos
+ * servidores rechazan `HEAD` pero sí sirven la imagen por `GET`. Nunca
+ * lanza: cualquier fallo en ambos intentos (red, timeout, SSRF rechazado,
+ * no-2xx) se traduce en `false`.
+ */
+export async function portadaUrlResponde(portadaUrl: string): Promise<boolean> {
+  const respuestaHead = await fetchSeguro(portadaUrl, { metodo: 'HEAD', timeoutMs: TIMEOUT_MS_PORTADA });
+  if (respuestaHead !== null) {
+    return true;
+  }
+  const respuestaGet = await fetchSeguro(portadaUrl, { metodo: 'GET', timeoutMs: TIMEOUT_MS_PORTADA });
+  return respuestaGet !== null;
 }
 
 // ---------------------------------------------------------------------------

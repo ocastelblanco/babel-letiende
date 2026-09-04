@@ -12,6 +12,7 @@ import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.
 import { LibrosService, type LibroIndice } from '../../core/api/libros.service';
 import type { LibroConUbicacion } from '../../core/models/libro.model';
 import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
+import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
 
 const PVP_MAXIMO = 5_000_000;
 
@@ -88,7 +89,7 @@ type CandidatoConOrigen =
  */
 @Component({
   selector: 'app-catalogar-libro',
-  imports: [ReactiveFormsModule, SelectorPortadaComponent],
+  imports: [ReactiveFormsModule, SelectorPortadaComponent, SinPortadaFallbackDirective],
   templateUrl: './catalogar-libro.component.html',
 })
 export class CatalogarLibroComponent implements OnInit, OnDestroy {
