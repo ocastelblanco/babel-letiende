@@ -1,4 +1,5 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
@@ -114,12 +115,13 @@ function normalizarTexto(valor: string): string {
   imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective, EscanerCodigoBarrasComponent],
   templateUrl: './catalogo-publico.component.html',
 })
-export class CatalogoPublicoComponent implements OnInit {
+export class CatalogoPublicoComponent implements OnInit, OnDestroy {
   private readonly librosService = inject(LibrosService);
   private readonly ubicacionFisicaService = inject(UbicacionFisicaService);
   private readonly title = inject(Title);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly platformId = inject(PLATFORM_ID);
 
   protected readonly libros = this.librosService.libros;
   protected readonly cargando = this.librosService.cargando;
@@ -231,6 +233,20 @@ export class CatalogoPublicoComponent implements OnInit {
     });
   });
 
+  /**
+   * Botón flotante "Volver arriba" — visible solo tras más de una pantalla
+   * de scroll vertical (`window.scrollY > window.innerHeight`). Actualizado
+   * por un listener de `scroll` en `window` agregado en `ngOnInit` (SSR-safe,
+   * mismo patrón `isPlatformBrowser` que `AuthService`/`EmbebidoService`) y
+   * removido en `ngOnDestroy`.
+   */
+  protected readonly mostrarBotonArriba = signal(false);
+
+  /** Referencia estable para poder remover el listener en `ngOnDestroy`. */
+  private readonly manejarScroll = (): void => {
+    this.mostrarBotonArriba.set(window.scrollY > window.innerHeight);
+  };
+
   /** Visibilidad del modal de escaneo de ISBN — mismo patrón de overlay que `SelectorPortadaComponent`/el diálogo de "Vender" en `libro-detalle.component.ts`. */
   protected readonly escanerVisible = signal(false);
   /** Mensaje cuando el ISBN escaneado no tiene ningún libro coincidente en `libros()` — decisión de producto confirmada: nunca cae a la búsqueda de texto. */
@@ -282,6 +298,23 @@ export class CatalogoPublicoComponent implements OnInit {
     }
     if (muebleInicial) {
       this.muebleSeleccionado.set(muebleInicial);
+    }
+
+    if (isPlatformBrowser(this.platformId)) {
+      window.addEventListener('scroll', this.manejarScroll, { passive: true });
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (isPlatformBrowser(this.platformId)) {
+      window.removeEventListener('scroll', this.manejarScroll);
+    }
+  }
+
+  /** Scroll suave al inicio de la página — acción del botón flotante "Volver arriba". */
+  protected volverArriba(): void {
+    if (isPlatformBrowser(this.platformId)) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 

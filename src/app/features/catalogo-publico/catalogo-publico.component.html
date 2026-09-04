@@ -182,6 +182,19 @@
     }
   </main>
 
+  @if (mostrarBotonArriba()) {
+    <button
+      type="button"
+      (click)="volverArriba()"
+      aria-label="Volver arriba"
+      class="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-neutral shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+    >
+      <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+      </svg>
+    </button>
+  }
+
   @if (escanerVisible()) {
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-primary/40 px-4">
       <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">

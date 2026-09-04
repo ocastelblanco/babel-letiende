@@ -649,4 +649,64 @@ describe('CatalogoPublicoComponent', () => {
       expect(fixture.nativeElement.querySelector('app-escaner-codigo-barras')).toBeFalsy();
     });
   });
+
+  describe('botón flotante "Volver arriba"', () => {
+    function botonVolverArriba(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLButtonElement | null {
+      return fixture.nativeElement.querySelector('button[aria-label="Volver arriba"]');
+    }
+
+    function simularScrollProfundo(): void {
+      vi.spyOn(window, 'scrollY', 'get').mockReturnValue(window.innerHeight + 1);
+      window.dispatchEvent(new Event('scroll'));
+    }
+
+    it('no aparece por defecto (scrollY en 0)', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      expect(botonVolverArriba(fixture)).toBeFalsy();
+    });
+
+    it('aparece al hacer scroll más de una pantalla de alto', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      simularScrollProfundo();
+      fixture.detectChanges();
+
+      expect(botonVolverArriba(fixture)).toBeTruthy();
+    });
+
+    it('se oculta de nuevo si el usuario vuelve a subir por encima del umbral', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      simularScrollProfundo();
+      fixture.detectChanges();
+      expect(botonVolverArriba(fixture)).toBeTruthy();
+
+      vi.spyOn(window, 'scrollY', 'get').mockReturnValue(0);
+      window.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+
+      expect(botonVolverArriba(fixture)).toBeFalsy();
+    });
+
+    it('al hacer click, hace scroll suave al inicio de la página', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+      const scrollToMock = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+      simularScrollProfundo();
+      fixture.detectChanges();
+      botonVolverArriba(fixture)?.click();
+
+      expect(scrollToMock).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    });
+
+    it('remueve el listener de scroll en ngOnDestroy', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+      const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+
+      fixture.destroy();
+
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
+    });
+  });
 });
