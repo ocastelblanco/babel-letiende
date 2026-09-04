@@ -28,19 +28,18 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Reforma del header — validada en `staging` (2026-08-18):** el usuario confirmó que todo funciona bien (PR #88). Se cierra la tarea abajo. En la misma revisión, el usuario recordó que **"Primer despliegue a producción" ya se había realizado** — este documento nunca lo registró porque el proyecto se congeló (pausa por catalogación de 3.000+ libros, ver `MEMORY.md`) justo después de completarlo. Se cierra también retroactivamente esa pieza y se revisó `PRD.md` §6 completo: con ambas cerradas (y "Modo offline" ya cancelado antes), **el roadmap principal queda completo** — no hay siguiente ítem que promover a ninguno de los 2 slots.
 
-**Estado al cierre de sesión (03/09/2026) — Integración con el proxy de `letiende.co`:** pedido
-**externo** al roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co`
-(T-0014 en su `TODO.md`), mismas decisiones de diseño que Ágora (T-0013). No ocupa ninguno de los 2
-slots del motor JIT — el roadmap principal sigue completo (ver arriba). Implementado en la rama
-`feature/proxy-letiende-co`, **PR #111 abierto, sin fusionar (8 commits)**, desplegado y verificado en
-staging: `baseHref: /libros/`, barra de navegación común solo en el estado sin sesión, sitemap
-apuntando a `letiende.co/libros`, y redirección 301 desde `babel.letiende.co` (dos ramas: `/`/
-`libro/:id` cross-domain por SEO, el resto mismo dominio con el prefijo agregado, para no romper el
-acceso directo del staff — mismo patrón que Ágora).
+**Estado al cierre de sesión (03/09/2026, actualizado) — Integración con el proxy de `letiende.co`,
+COMPLETA, todos los PRs fusionados y verificados en producción real:** pedido **externo** al roadmap de
+este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0014 en su `TODO.md`),
+mismas decisiones de diseño que Ágora (T-0013). No ocupó ninguno de los 2 slots del motor JIT — el
+roadmap principal sigue completo (ver arriba). Implementado en la rama `feature/proxy-letiende-co`,
+**PR #111 fusionado (8 commits)**: `baseHref: /libros/`, barra de navegación común solo en el estado
+sin sesión, sitemap apuntando a `letiende.co/libros`, y redirección 301 desde `babel.letiende.co` a
+`babel.letiende.co/libros`.
 
 Tras el primer despliegue real a staging, verificado con curl y con navegador real
 (`claude-in-chrome`), aparecieron dos hallazgos más, ninguno anticipado por la planeación original,
-**ya incorporados a este mismo PR #111**:
+**ya incorporados al PR #111**:
 
 - El sitemap no respondía a través del proxy (`staging.letiende.co/libros/sitemap.xml`) — CloudFront
   reenvía la ruta completa con el prefijo (sin `OriginPath`), pero el API Gateway de esta app solo
@@ -54,11 +53,23 @@ Tras el primer despliegue real a staging, verificado con curl y con navegador re
   las 4 llamadas de API responden 200 con el prefijo correcto, catálogo carga libros reales, sin
   errores de consola.
 
-Detalle técnico completo en `docs/MEMORY.md` §2 de este repositorio, y en `docs/MEMORY.md`/
-`docs/TODO.md` de `letiende.co` y de `agora-letiende` (donde se encontraron primero los mismos dos
-hallazgos). **Pendiente:** que el humano revise y fusione el PR #111 — hasta entonces,
-`babel.letiende.co` sigue funcionando exactamente igual que antes de esta tarea en producción (nada de
-esto se despliega a producción sin fusionar; en staging ya está desplegado y verificado).
+**Un tercer hallazgo más, real incidente de producción, PR #112 (`fix/redirige-mismo-dominio-hasta-cutover`),
+fusionado (03/09/2026), reportado en vivo por el humano — mismo hallazgo y mismo fix ya aplicados
+primero en Ágora (PR #63 de `agora-letiende`):** la redirección de `/`/`libro/:bookId`, diseñada
+CROSS-DOMAIN a `letiende.co/libros/...` para consolidar SEO, se desplegó a producción antes de que el
+cutover real de `letiende.co` (T-14/T-15, todavía pendiente) hiciera que ese destino existiera —
+`letiende.co` en producción sigue sirviendo el sitio estático viejo, sin ninguna ruta `/libros`. Como
+`babel.letiende.co` es hoy el único acceso público real, quedó roto. Corregido colapsando las dos ramas
+en una sola: toda ruta redirige mismo dominio con el prefijo mientras el cutover no ocurra. Verificado
+con `aws lambda invoke` directo contra `babel-letiende-staging-ssr` con un evento simulado (`Host:
+babel.letiende.co`) y, tras la fusión, con `curl` real en producción: `https://babel.letiende.co/` →
+301 → `https://babel.letiende.co/libros/` → 200.
+
+Detalle técnico completo de los 3 hallazgos en `docs/MEMORY.md` §2 de este repositorio, y en
+`docs/MEMORY.md`/`docs/TODO.md` de `letiende.co` y de `agora-letiende`. **Sin pendientes** — la
+integración está completa y en producción. Lo único que falta para que la redirección cross-domain de
+`/`/`libro/:bookId` pueda restaurarse es el cutover real de `letiende.co` (T-14/T-15), que no es una
+tarea de este repositorio.
 
 ---
 
