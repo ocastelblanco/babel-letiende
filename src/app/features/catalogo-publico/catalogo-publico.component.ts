@@ -6,6 +6,7 @@ import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service'
 import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
+import { EscanerCodigoBarrasComponent } from '../../shared/escaner-codigo-barras/escaner-codigo-barras.component';
 
 export type VistaCatalogo = 'tarjetas' | 'lista';
 export type CriterioOrden = 'titulo' | 'autor' | 'pvp';
@@ -110,7 +111,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-catalogo-publico',
-  imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective],
+  imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective, EscanerCodigoBarrasComponent],
   templateUrl: './catalogo-publico.component.html',
 })
 export class CatalogoPublicoComponent implements OnInit {
@@ -229,6 +230,37 @@ export class CatalogoPublicoComponent implements OnInit {
       return campoA.localeCompare(campoB) * factor;
     });
   });
+
+  /** Visibilidad del modal de escaneo de ISBN — mismo patrón de overlay que `SelectorPortadaComponent`/el diálogo de "Vender" en `libro-detalle.component.ts`. */
+  protected readonly escanerVisible = signal(false);
+  /** Mensaje cuando el ISBN escaneado no tiene ningún libro coincidente en `libros()` — decisión de producto confirmada: nunca cae a la búsqueda de texto. */
+  protected readonly errorEscaneoPublico = signal<string | null>(null);
+
+  protected abrirEscaner(): void {
+    this.errorEscaneoPublico.set(null);
+    this.escanerVisible.set(true);
+  }
+
+  protected cerrarEscaner(): void {
+    this.escanerVisible.set(false);
+  }
+
+  /**
+   * Busca en `libros()` (ya cargado por `LibrosService`) el primer libro cuyo
+   * `isbn` coincida exactamente con el código escaneado. Si hay match, cierra
+   * el modal y navega directo a la ficha (`/libro/:bookId`) — sin pasar por
+   * el filtro de texto. Si no hay match, muestra un mensaje de error dentro
+   * del modal, que queda abierto para reintentar.
+   */
+  protected alDetectarCodigo(isbn: string): void {
+    const libroEncontrado = this.libros().find((libro) => libro.isbn === isbn);
+    if (libroEncontrado) {
+      this.escanerVisible.set(false);
+      void this.router.navigate(['/libro', libroEncontrado.bookId]);
+      return;
+    }
+    this.errorEscaneoPublico.set('No se encontró ningún libro con ese código en el catálogo.');
+  }
 
   ngOnInit(): void {
     // `Title` es un servicio singleton — `LibroDetalleComponent` lo
