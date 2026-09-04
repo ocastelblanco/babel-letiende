@@ -1,9 +1,15 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import type { LibroIndice } from '../../core/api/libros.service';
+import { LibrosService } from '../../core/api/libros.service';
+import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import {
   ResultadoIniciarValidacion,
   ValidacionesLibrosService,
 } from '../../core/api/validaciones-libros.service';
+import type { Espacio } from '../../core/models/espacio.model';
+import type { Mueble } from '../../core/models/mueble.model';
+import type { Ubicacion } from '../../core/models/ubicacion.model';
 import type { ResumenValidacionLibros } from '../../core/models/validacion-libros.model';
 import { ValidarLibrosComponent } from './validar-libros.component';
 
@@ -33,8 +39,32 @@ const resumenCompletado: ResumenValidacionLibros = {
   erroresLibro: [{ bookId: 'book-2', mensaje: 'Fallo inesperado al procesar este libro.' }],
 };
 
-function configurarPrueba(opciones: { ultimoValidacionId?: string | null } = {}) {
-  const iniciarValidacionMock = vi.fn<() => Promise<ResultadoIniciarValidacion>>();
+const espacioPrincipal: Espacio = { espacioId: 'espacio-1', nombre: 'Sala principal' };
+const espacioVip: Espacio = { espacioId: 'espacio-2', nombre: 'Sala VIP' };
+const muebleBiblioteca1: Mueble = { muebleId: 'mueble-1', espacioId: 'espacio-1', nombre: 'Biblioteca 1' };
+const muebleBiblioteca2: Mueble = { muebleId: 'mueble-2', espacioId: 'espacio-1', nombre: 'Biblioteca 2' };
+const muebleVip: Mueble = { muebleId: 'mueble-3', espacioId: 'espacio-2', nombre: 'Vitrina VIP' };
+const ubicacion1: Ubicacion = { ubicacionId: 'ubicacion-1', muebleId: 'mueble-1', nombre: 'Estante 1' };
+const ubicacion2: Ubicacion = { ubicacionId: 'ubicacion-2', muebleId: 'mueble-2', nombre: 'Estante 2' };
+const ubicacion3: Ubicacion = { ubicacionId: 'ubicacion-3', muebleId: 'mueble-3', nombre: 'Estante 3' };
+
+const indiceFalso: LibroIndice[] = [
+  { bookId: 'book-1', isbn: '111', titulo: 'Libro 1', autor: 'Autor 1', ubicacionId: 'ubicacion-1', pvp: 10000, portadaUrl: null, cantidadDisponible: 1 },
+  { bookId: 'book-2', isbn: '222', titulo: 'Libro 2', autor: 'Autor 2', ubicacionId: 'ubicacion-1', pvp: 10000, portadaUrl: null, cantidadDisponible: 1 },
+  { bookId: 'book-3', isbn: '333', titulo: 'Libro 3', autor: 'Autor 3', ubicacionId: 'ubicacion-2', pvp: 10000, portadaUrl: null, cantidadDisponible: 1 },
+  { bookId: 'book-4', isbn: '444', titulo: 'Libro 4', autor: 'Autor 4', ubicacionId: 'ubicacion-3', pvp: 10000, portadaUrl: null, cantidadDisponible: 1 },
+];
+
+function configurarPrueba(
+  opciones: {
+    ultimoValidacionId?: string | null;
+    espacios?: Espacio[];
+    muebles?: Mueble[];
+    ubicaciones?: Ubicacion[];
+    indice?: LibroIndice[];
+  } = {},
+) {
+  const iniciarValidacionMock = vi.fn<(muebleIds?: string[]) => Promise<ResultadoIniciarValidacion>>();
   const consultarValidacionMock = vi.fn<(validacionId: string) => Promise<ResumenValidacionLibros | null>>();
 
   TestBed.configureTestingModule({
@@ -47,6 +77,24 @@ function configurarPrueba(opciones: { ultimoValidacionId?: string | null } = {})
           consultarValidacion: consultarValidacionMock,
         },
       },
+      {
+        provide: UbicacionFisicaService,
+        useValue: {
+          espacios: signal(opciones.espacios ?? [espacioPrincipal, espacioVip]),
+          muebles: signal(opciones.muebles ?? [muebleBiblioteca1, muebleBiblioteca2, muebleVip]),
+          ubicaciones: signal(opciones.ubicaciones ?? [ubicacion1, ubicacion2, ubicacion3]),
+          cargarEspacios: vi.fn().mockResolvedValue(undefined),
+          cargarMuebles: vi.fn().mockResolvedValue(undefined),
+          cargarUbicaciones: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+      {
+        provide: LibrosService,
+        useValue: {
+          indice: signal(opciones.indice ?? indiceFalso),
+          cargarIndice: vi.fn().mockResolvedValue(undefined),
+        },
+      },
     ],
   });
 
@@ -57,6 +105,18 @@ function configurarPrueba(opciones: { ultimoValidacionId?: string | null } = {})
 
 function botonIniciar(fixture: ComponentFixture<ValidarLibrosComponent>): HTMLButtonElement {
   return fixture.nativeElement.querySelector('button[type="button"]') as HTMLButtonElement;
+}
+
+function selectEspacio(fixture: ComponentFixture<ValidarLibrosComponent>): HTMLSelectElement {
+  return fixture.nativeElement.querySelector('#espacio-lote') as HTMLSelectElement;
+}
+
+function checkboxesMueble(fixture: ComponentFixture<ValidarLibrosComponent>): HTMLInputElement[] {
+  return Array.from(fixture.nativeElement.querySelectorAll('li input[type="checkbox"]')) as HTMLInputElement[];
+}
+
+function checkboxTodoElEspacio(fixture: ComponentFixture<ValidarLibrosComponent>): HTMLInputElement {
+  return fixture.nativeElement.querySelector('label input[type="checkbox"]') as HTMLInputElement;
 }
 
 beforeEach(() => {
@@ -109,7 +169,7 @@ describe('ValidarLibrosComponent', () => {
     expect(consultarValidacionMock).not.toHaveBeenCalled();
   });
 
-  it('al hacer clic en "Iniciar validación", arranca el polling con el validacionId nuevo', async () => {
+  it('al hacer clic en "Iniciar validación" sin seleccionar mueble, llama iniciarValidacion con array vacío (todo el inventario)', async () => {
     const { fixture, iniciarValidacionMock, consultarValidacionMock } = configurarPrueba();
     iniciarValidacionMock.mockResolvedValue({ iniciada: true, validacionId: 'v-nueva' });
     consultarValidacionMock.mockResolvedValue(resumenEnProgreso);
@@ -117,13 +177,107 @@ describe('ValidarLibrosComponent', () => {
     fixture.detectChanges();
     await vi.advanceTimersByTimeAsync(0);
 
+    expect(fixture.nativeElement.textContent).toContain('Sin selección de mueble, se validará TODO el inventario.');
+
     botonIniciar(fixture).click();
     await vi.advanceTimersByTimeAsync(0);
     fixture.detectChanges();
 
     expect(iniciarValidacionMock).toHaveBeenCalledTimes(1);
+    expect(iniciarValidacionMock).toHaveBeenCalledWith([]);
     expect(consultarValidacionMock).toHaveBeenCalledWith('v-nueva');
     expect(botonIniciar(fixture).disabled).toBe(true);
+  });
+
+  it('seleccionar un Espacio muestra sus muebles con el conteo correcto de libros', async () => {
+    const { fixture } = configurarPrueba();
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+
+    selectEspacio(fixture).value = 'espacio-1';
+    selectEspacio(fixture).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const casillas = checkboxesMueble(fixture);
+    expect(casillas.length).toBe(2);
+    expect(fixture.nativeElement.textContent).toContain('Biblioteca 1 (2 libros)');
+    expect(fixture.nativeElement.textContent).toContain('Biblioteca 2 (1 libros)');
+    // La Vitrina VIP pertenece a otro espacio, no debe aparecer.
+    expect(fixture.nativeElement.textContent).not.toContain('Vitrina VIP');
+  });
+
+  it('marcar 2 muebles e iniciar pasa esos 2 ids a iniciarValidacion', async () => {
+    const { fixture, iniciarValidacionMock, consultarValidacionMock } = configurarPrueba();
+    iniciarValidacionMock.mockResolvedValue({ iniciada: true, validacionId: 'v-nueva' });
+    consultarValidacionMock.mockResolvedValue(resumenEnProgreso);
+
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+
+    selectEspacio(fixture).value = 'espacio-1';
+    selectEspacio(fixture).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const casillas = checkboxesMueble(fixture);
+    casillas[0].click();
+    casillas[1].click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Se validarán 3 libros de 2 mueble(s) seleccionado(s).');
+
+    botonIniciar(fixture).click();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(iniciarValidacionMock).toHaveBeenCalledWith(['mueble-1', 'mueble-2']);
+  });
+
+  it('"Seleccionar todo el Espacio" marca y luego desmarca todos los muebles de ese espacio', async () => {
+    const { fixture } = configurarPrueba();
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+
+    selectEspacio(fixture).value = 'espacio-1';
+    selectEspacio(fixture).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    checkboxTodoElEspacio(fixture).click();
+    fixture.detectChanges();
+
+    let casillas = checkboxesMueble(fixture);
+    expect(casillas.every((casilla) => casilla.checked)).toBe(true);
+    expect(checkboxTodoElEspacio(fixture).checked).toBe(true);
+
+    checkboxTodoElEspacio(fixture).click();
+    fixture.detectChanges();
+
+    casillas = checkboxesMueble(fixture);
+    expect(casillas.every((casilla) => !casilla.checked)).toBe(true);
+  });
+
+  it('cambiar de Espacio limpia la selección de muebles', async () => {
+    const { fixture, iniciarValidacionMock } = configurarPrueba();
+    iniciarValidacionMock.mockResolvedValue({ iniciada: false, validacionIdEnCurso: null, error: 'x' });
+
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+
+    selectEspacio(fixture).value = 'espacio-1';
+    selectEspacio(fixture).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    checkboxesMueble(fixture)[0].click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('mueble(s) seleccionado(s)');
+
+    selectEspacio(fixture).value = 'espacio-2';
+    selectEspacio(fixture).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Sin selección de mueble, se validará TODO el inventario.');
+
+    botonIniciar(fixture).click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(iniciarValidacionMock).toHaveBeenCalledWith([]);
   });
 
   it('retoma automáticamente la corrida en curso cuando iniciarValidacion responde 409', async () => {

@@ -54,8 +54,13 @@ export class ValidacionesLibrosService {
    * Ante `409` (ya hay una corrida activa), devuelve
    * `{ iniciada: false, validacionIdEnCurso, error }` — el llamador debe
    * tratar ese caso como "retomar", no como un fallo real.
+   *
+   * `muebleIds` parceliza la validación por Mueble (validación por lotes):
+   * si se omite o llega vacío, el body es `{}` y el backend valida TODO el
+   * inventario (comportamiento actual, sin cambios). Si trae 1+ ids, solo se
+   * validan los libros cuya ubicación resuelve a alguno de esos muebles.
    */
-  async iniciarValidacion(): Promise<ResultadoIniciarValidacion> {
+  async iniciarValidacion(muebleIds?: string[]): Promise<ResultadoIniciarValidacion> {
     const idToken = await this.authService.obtenerIdToken();
     if (!idToken) {
       return { iniciada: false, validacionIdEnCurso: null, error: 'No se pudo iniciar la validación. Intenta de nuevo.' };
@@ -65,7 +70,7 @@ export class ValidacionesLibrosService {
       const respuesta = await firstValueFrom(
         this.http.post<{ validacionId: string }>(
           '/api/validaciones-libros',
-          {},
+          muebleIds && muebleIds.length > 0 ? { muebleIds } : {},
           { headers: { Authorization: `Bearer ${idToken}` } },
         ),
       );

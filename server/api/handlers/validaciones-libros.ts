@@ -105,6 +105,8 @@ interface ValidacionLibros {
   portadasPendientes: PortadaPendiente[];
   erroresLibro: ErrorLibroValidacion[];
   muebleActualNombre: string | null;
+  /** `muebleIds` recibidos en el body de `POST /api/validaciones-libros` cuando la corrida se acotó a ciertos Muebles (parcelización por Mueble) — ausente si la corrida cubrió todo el inventario. */
+  muebleIdsFiltro?: string[];
 }
 
 /** Tamaño de lote fijo por invocación del worker, independiente del tamaño del mueble que esté cruzando (`plan-validar-libros-async.md` §4.2). */
@@ -297,12 +299,31 @@ async function buscarCorridaEnProgreso(): Promise<ValidacionLibros | undefined> 
 }
 
 /**
+ * Extrae `muebleIds` del body opcional de `POST /api/validaciones-libros`
+ * (parcelización de la validación por Mueble). Cualquier forma que no sea un
+ * array de strings no filtrado (body ausente, `null`, `[]`, tipos
+ * inesperados) se trata como "sin filtro" — mismo comportamiento 100%
+ * retrocompatible que tenía el endpoint antes de esta tarea.
+ */
+function extraerMuebleIdsFiltro(cuerpo: unknown): string[] {
+  if (!cuerpo || typeof cuerpo !== 'object') {
+    return [];
+  }
+  const muebleIds = (cuerpo as Record<string, unknown>)['muebleIds'];
+  if (!Array.isArray(muebleIds)) {
+    return [];
+  }
+  return muebleIds.filter((valor): valor is string => typeof valor === 'string');
+}
+
+/**
  * `POST /api/validaciones-libros` — inicia una corrida asíncrona de
- * validación de PVP/portada sobre el inventario completo. Exige rol
- * `administrador` exclusivamente (mismo criterio que otras operaciones de
- * bulk/config, CLAUDE.md A01, ADR-008). Responde `202` de inmediato — el
- * trabajo real lo hace `handlerWorker`, auto-invocado sin esperar su
- * respuesta.
+ * validación de PVP/portada sobre el inventario completo, o solo sobre los
+ * Muebles indicados en el body opcional `{ muebleIds: string[] }`
+ * (parcelización por Mueble). Exige rol `administrador` exclusivamente
+ * (mismo criterio que otras operaciones de bulk/config, CLAUDE.md A01,
+ * ADR-008). Responde `202` de inmediato — el trabajo real lo hace
+ * `handlerWorker`, auto-invocado sin esperar su respuesta.
  */
 export const handlerIniciar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -321,13 +342,30 @@ export const handlerIniciar: APIGatewayProxyHandlerV2 = async (event): Promise<A
       });
     }
 
+    let cuerpo: unknown;
+    try {
+      cuerpo = event.body ? JSON.parse(event.body) : undefined;
+    } catch {
+      return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
+    }
+    const muebleIdsFiltro = extraerMuebleIdsFiltro(cuerpo);
+
     const [libros, ubicaciones, muebles] = await Promise.all([
       escanearTodo<Libro>(nombreTablaLibros()),
       escanearTodo<Ubicacion>(nombreTablaUbicaciones()),
       escanearTodo<Mueble>(nombreTablaMuebles()),
     ]);
 
-    const { colaBookIds, limitesMueble } = construirColaPorMueble(libros, ubicaciones, muebles);
+    let librosAValidar = libros;
+    if (muebleIdsFiltro.length > 0) {
+      const muebleIdPorUbicacionId = new Map(ubicaciones.map((ubicacion) => [ubicacion.ubicacionId, ubicacion.muebleId]));
+      librosAValidar = libros.filter((libro) => {
+        const muebleId = muebleIdPorUbicacionId.get(libro.ubicacionId);
+        return muebleId !== undefined && muebleIdsFiltro.includes(muebleId);
+      });
+    }
+
+    const { colaBookIds, limitesMueble } = construirColaPorMueble(librosAValidar, ubicaciones, muebles);
 
     const ahora = new Date().toISOString();
     const validacionId = randomUUID();
@@ -348,6 +386,7 @@ export const handlerIniciar: APIGatewayProxyHandlerV2 = async (event): Promise<A
       portadasPendientes: [],
       erroresLibro: [],
       muebleActualNombre: hayLibros ? nombreMuebleDesdeIndice(0, limitesMueble) : null,
+      ...(muebleIdsFiltro.length > 0 ? { muebleIdsFiltro } : {}),
     };
 
     await guardar(nombreTablaValidaciones(), validacion);

@@ -254,12 +254,20 @@ Se promueve la Tarea 4 al segundo slot activo (con la Tarea 3, que sigue activa 
 
 Se promueve la Tarea 2 al segundo slot activo (con la Tarea 3 en backlog, ver abajo).
 
-## Tarea 2 — Validación por lotes: seleccionar Espacio y Mueble(s) — ACTIVA, SIN EMPEZAR
+## Tarea 2 — Validación por lotes: seleccionar Espacio y Mueble(s) — COMPLETA (2026-09-04)
 
-- [ ] Backend: `handlerIniciar` (`validaciones-libros.ts`) acepta `{ muebleIds?: string[] }` opcional (retrocompatible); filtra `libros[]` por `ubicacionId → muebleId` antes de `construirColaPorMueble()`.
-- [ ] Frontend: en `ValidarLibrosComponent`, `<select>` de Espacio → checkboxes de Mueble con conteo de libros (calculado en el cliente, mismo patrón de `catalogo-publico.component.ts`) → atajo "Seleccionar todo el Espacio" → botón "Iniciar validación" pasa los `muebleIds` elegidos.
-- [ ] Tests ampliados de `construirColaPorMueble` (con libros filtrados) y del handler (nueva firma).
+- [x] Backend: `handlerIniciar` (`validaciones-libros.ts`) acepta body opcional `{ muebleIds?: string[] }` (`extraerMuebleIdsFiltro`, trata `undefined`/`null`/`[]`/no-array/elementos no-string como "sin filtro" — 100% retrocompatible). Con 1+ ids, filtra `libros[]` por `ubicacionId → muebleId` (mismo `Map` que usa `construirColaPorMueble`) antes de armar la cola. El filtro aplicado se persiste como `muebleIdsFiltro?: string[]` en el ítem de `babel-validaciones-libros` (ausente, nunca `null`, cuando no se filtró) — trazable en `GET /api/validaciones-libros/:id`, aunque el frontend no lo muestra todavía (no se pidió en esta tarea).
+- [x] Frontend: `ValidacionesLibrosService.iniciarValidacion(muebleIds?: string[])` envía `{ muebleIds }` solo si trae elementos. `ValidarLibrosComponent` gana una tarjeta "Validar por lotes (opcional)" (visible solo sin corrida en curso/terminada): `<select>` de Espacio → checkboxes de Mueble con conteo en vivo (`conteoPorMueble`, cruzando el índice ligero ya cacheado por `LibrosService.cargarIndice()` con `ubicacionId → muebleId → espacioId` en memoria, mismo patrón que `catalogo-publico.component.ts` — sin endpoint nuevo) → checkbox "Seleccionar todo el Espacio" (`todoElEspacioSeleccionado`/`alternarTodoElEspacio`) → texto explicativo (todo el inventario vs. N libros de M muebles). Sin selección, `iniciar()` sigue validando todo el inventario (comportamiento actual sin cambios).
+- [x] Tests nuevos: 6 backend (`construirColaPorMueble` con libros pre-filtrados; `handlerIniciar` sin filtro, 1 mueble, 2+ muebles, `muebleIds: []`, mueble inexistente) + 4 frontend (conteo por mueble, 2 muebles seleccionados, atajo de espacio completo, limpieza al cambiar de espacio) — 388 tests backend (antes 382) / 412 frontend (antes 408).
+- [x] `npm run build`, `build:api`, `npm test -- --watch=false` y `test:api` verificados en verde tras integrar backend y frontend juntos.
 
-**Backlog (Tarea 3, se promueve al cerrar la 1 y la 2):** botón "Escanear" en `CatalogoPublicoComponent` — extraer la cámara/decodificación de `catalogar-libro.component.ts` (líneas ~301-352, hoy duplicada también en `editar-libro.component.ts`) a un componente compartido `EscanerCodigoBarrasComponent`; al detectar ISBN, buscar match en el signal `libros()` ya cargado y navegar a `/libro/:bookId`; sin match, mensaje de error simple. Sin cambios de rutas ni de backend.
+Con esto se cierra el lote de 3 tareas salvo la Tarea 3, que se promueve al único slot activo.
+
+## Tarea 3 — Botón de escaneo en el Catálogo público — ACTIVA, SIN EMPEZAR
+
+- [ ] Extraer la cámara/decodificación EAN-13 de `catalogar-libro.component.ts` (líneas ~301-352, `@zxing/browser`, hoy duplicada también en `editar-libro.component.ts`) a un componente compartido standalone `EscanerCodigoBarrasComponent` (`src/app/shared/`), con un `@Output()` que emite el ISBN detectado.
+- [ ] Botón "Escanear" en `CatalogoPublicoComponent`, junto a la búsqueda, que abre ese componente en un modal.
+- [ ] Al detectar ISBN, buscar coincidencia en el signal `libros()` ya cargado (sin llamada nueva al backend) y navegar a `/libro/:bookId`; sin match, mensaje de error simple (decisión ya tomada con el usuario, ver `MEMORY.md` §2).
+- [ ] Sin cambios de rutas ni de backend — `/libro/:libroId` ya existe.
 
 

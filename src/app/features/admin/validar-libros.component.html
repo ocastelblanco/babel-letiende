@@ -11,6 +11,55 @@
       <p class="mb-4 text-sm text-danger">{{ error() }}</p>
     }
 
+    @if (!enProgreso() && !terminada()) {
+      <div class="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 class="mb-3 text-sm font-semibold text-primary">Validar por lotes (opcional)</h2>
+
+        <label class="mb-1 block text-xs font-medium text-primary/70" for="espacio-lote">Espacio</label>
+        <select
+          id="espacio-lote"
+          class="mb-4 w-full rounded-xl border border-primary/10 px-3 py-2 text-sm text-primary"
+          [value]="espacioSeleccionado()"
+          (change)="seleccionarEspacio($any($event.target).value)"
+        >
+          <option value="">Todo el inventario (todos los espacios)</option>
+          @for (espacio of espacios(); track espacio.espacioId) {
+            <option [value]="espacio.espacioId">{{ espacio.nombre }}</option>
+          }
+        </select>
+
+        @if (espacioSeleccionado() !== '') {
+          <label class="mb-2 flex items-center gap-2 text-sm text-primary">
+            <input type="checkbox" [checked]="todoElEspacioSeleccionado()" (change)="alternarTodoElEspacio()" />
+            Seleccionar todo el Espacio
+          </label>
+
+          <ul class="mb-4 flex flex-col gap-2">
+            @for (mueble of mueblesFiltrados(); track mueble.muebleId) {
+              <li>
+                <label class="flex items-center gap-2 text-sm text-primary">
+                  <input
+                    type="checkbox"
+                    [checked]="mueblesSeleccionados().has(mueble.muebleId)"
+                    (change)="alternarMueble(mueble.muebleId)"
+                  />
+                  {{ mueble.nombre }} ({{ conteoPorMueble().get(mueble.muebleId) ?? 0 }} libros)
+                </label>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (mueblesSeleccionados().size === 0) {
+          <p class="text-xs text-primary/60">Sin selección de mueble, se validará TODO el inventario.</p>
+        } @else {
+          <p class="text-xs text-primary/60">
+            Se validarán {{ totalLibrosSeleccionados() }} libros de {{ mueblesSeleccionados().size }} mueble(s) seleccionado(s).
+          </p>
+        }
+      </div>
+    }
+
     <div class="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
       @if (enProgreso()) {
         <h2 class="mb-3 text-sm font-semibold text-primary">Validación en curso</h2>
