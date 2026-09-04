@@ -451,7 +451,9 @@ describe('CatalogoPublicoComponent', () => {
     }
 
     function botonDireccion(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLButtonElement {
-      return fixture.nativeElement.querySelector('[aria-label]') as HTMLButtonElement;
+      return fixture.nativeElement.querySelector(
+        '[aria-label="Orden ascendente"], [aria-label="Orden descendente"]',
+      ) as HTMLButtonElement;
     }
 
     function titulosEnOrden(fixture: ComponentFixture<CatalogoPublicoComponent>): string[] {
@@ -587,6 +589,10 @@ describe('CatalogoPublicoComponent', () => {
       return botones.find((boton) => boton.textContent?.trim() === texto) as HTMLButtonElement;
     }
 
+    function botonEscanear(fixture: ComponentFixture<CatalogoPublicoComponent>): HTMLButtonElement {
+      return fixture.nativeElement.querySelector('button[aria-label="Escanear código de barras"]');
+    }
+
     function emitirCodigoDetectado(fixture: ComponentFixture<CatalogoPublicoComponent>, isbn: string): void {
       const escaner = fixture.debugElement.query(By.directive(EscanerCodigoBarrasComponent));
       (escaner.componentInstance as EscanerCodigoBarrasComponent).codigoDetectado.emit(isbn);
@@ -601,7 +607,7 @@ describe('CatalogoPublicoComponent', () => {
     it('el botón "Escanear" abre el modal con el escáner', () => {
       const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
 
-      botonPorTexto(fixture, 'Escanear').click();
+      botonEscanear(fixture).click();
       fixture.detectChanges();
 
       expect(fixture.nativeElement.querySelector('app-escaner-codigo-barras')).toBeTruthy();
@@ -610,7 +616,7 @@ describe('CatalogoPublicoComponent', () => {
     it('un ISBN escaneado que coincide con un libro cierra el modal y navega a su ficha', () => {
       const { fixture, navigateMock } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
 
-      botonPorTexto(fixture, 'Escanear').click();
+      botonEscanear(fixture).click();
       fixture.detectChanges();
 
       emitirCodigoDetectado(fixture, libroFalso.isbn as string);
@@ -623,7 +629,7 @@ describe('CatalogoPublicoComponent', () => {
     it('un ISBN escaneado sin coincidencia muestra un mensaje de error, sin navegar, y deja el modal abierto', () => {
       const { fixture, navigateMock } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
 
-      botonPorTexto(fixture, 'Escanear').click();
+      botonEscanear(fixture).click();
       fixture.detectChanges();
 
       emitirCodigoDetectado(fixture, '0000000000000');
@@ -639,7 +645,7 @@ describe('CatalogoPublicoComponent', () => {
     it('el botón "Cerrar" del modal lo cierra sin navegar', () => {
       const { fixture, navigateMock } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
 
-      botonPorTexto(fixture, 'Escanear').click();
+      botonEscanear(fixture).click();
       fixture.detectChanges();
 
       botonPorTexto(fixture, 'Cerrar').click();

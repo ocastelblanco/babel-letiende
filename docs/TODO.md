@@ -286,4 +286,16 @@ Con esto se cierra el lote de 3 tareas salvo la Tarea 3, que se promueve al úni
 
 Sin tareas activas hasta el próximo lote/hotfix del usuario.
 
+---
+
+**Hotfix — ícono en el botón "Escanear" del Catálogo público (2026-09-04):** el usuario pidió reemplazar el texto "Escanear" del botón que abre el modal de escaneo (Tarea 3 del lote anterior, PR #117) por un ícono, específicamente el de Google Symbols `barcode_scanner`. Toma el único slot activo del motor JIT.
+
+## Tarea — Ícono en el botón "Escanear" del Catálogo público — COMPLETA (2026-09-04)
+
+- [x] Fuente de íconos Material Symbols Outlined cargada en `src/index.html` (mismo patrón/dominio de Google Fonts que ya usa Poppins, reutilizando el `preconnect` existente) + clase reutilizable `.material-symbols-outlined` en `src/styles.css` (snippet estándar documentado por Google). Botón "Escanear" (`catalogo-publico.component.html`) ahora es un botón de ícono cuadrado (`h-10 w-10`, mismo criterio visual que el botón "Ingresar" de `BarraNavegacionComponent`) con `<span class="material-symbols-outlined" aria-hidden="true">barcode_scanner</span>` en vez del texto, y `aria-label="Escanear código de barras"` para accesibilidad.
+- [x] Tests ajustados: el helper que ubicaba el botón por el texto "Escanear" pasa a ubicarlo por su `aria-label`; **hallazgo durante la implementación** — otro test (`botonDireccion`) usaba un selector genérico `[aria-label]` que, al aparecer el nuevo `aria-label` del botón de escaneo antes en el DOM, empezó a apuntar al botón equivocado; se corrigió acotando ese selector a los `aria-label` reales del botón de dirección de orden.
+- [x] `npm run build -- --configuration=production` y `npm test -- --watch=false` verificados en verde — 427 tests (mismo conteo, sin tests nuevos, solo ajustados).
+
+Sin tareas activas hasta el próximo lote/hotfix del usuario.
+
 
