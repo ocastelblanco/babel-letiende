@@ -29,39 +29,47 @@ const angularApp = new AngularNodeAppEngine();
  *
  * El build usa `baseHref: /libros/` (para que el proxy de letiende.co
  * funcione), lo que significa que el Router de Angular del lado cliente
- * exige que la URL real del navegador ya empiece con `/libros`. Toda ruta
- * que llegue por este dominio sin ese prefijo recibe un 301 MISMO DOMINIO
- * a `babel.letiende.co/libros/...` — el staff sigue entrando por el
- * dominio de siempre, solo se le antepone el prefijo obligatorio.
+ * exige que la URL real del navegador ya empiece con `/libros`. Dos ramas,
+ * según el valor SEO de la ruta — mismo patrón ya verificado en Ágora:
  *
- * **Incidente real de producción (03/09/2026), reportado en vivo por el
- * humano — mismo hallazgo, mismo fix ya aplicado primero en Ágora:** la
- * primera versión de este archivo (T-0014) redirigía `/` y
- * `/libro/:bookId` en una rama aparte, CROSS-DOMAIN a
- * `letiende.co/libros/...`, para consolidar el SEO en un solo dominio —
- * decisión explícita, correcta como diseño final. Pero el cutover real de
- * producción de `letiende.co` (T-14/T-15, todavía pendiente,
- * `docs/MEMORY.md` §5 de ese repositorio) no había ocurrido: el dominio
- * `letiende.co` en producción sigue sirviendo el sitio estático VIEJO
- * (`E33QAN86FY24JZ`), que no tiene ninguna ruta `/libros`. El resultado:
- * `babel.letiende.co` — el único acceso público real hoy, porque el
- * contenedor nuevo aún no está en el dominio raíz — quedaba roto. Mientras
- * el cutover no ocurra, **todas** las rutas de este dominio redirigen
- * mismo dominio con el prefijo, sin excepción — la rama cross-domain para
- * `/` y `/libro/:bookId` se restaura cuando T-14/T-15 esté hecho, no antes.
+ * 1. `/` y `/libro/:bookId` (rutas públicas con valor de SEO/contenido) →
+ *    301 CROSS-DOMAIN a `letiende.co/libros/...`. Consolida el SEO.
+ * 2. Cualquier otra ruta (login, catalogar, admin, etc.) que no venga ya
+ *    con el prefijo `/libros` → 301 MISMO DOMINIO a
+ *    `babel.letiende.co/libros/...`. El staff sigue entrando por el
+ *    dominio de siempre; solo se le antepone el prefijo obligatorio.
+ *
+ * **Restaurada (04/09/2026) tras el cutover real de `letiende.co`
+ * (T-14/T-15, repo `letiende.co`, `docs/runbook-cutover-t15.md`).** Esta
+ * rama cross-domain había quedado colapsada a "mismo dominio siempre"
+ * (03/09/2026) porque `letiende.co` en producción todavía servía el sitio
+ * estático viejo — verificado en vivo antes de restaurar: `curl -I
+ * https://letiende.co/libros/` responde 200 con el proxy real, confirmando
+ * que el destino cross-domain ya existe.
  *
  * La condición `!req.path.startsWith('/libros')` evita el bucle: la
  * segunda petición (ya con el prefijo) cae al `next()` final.
  */
 const HOST_ANTIGUO = 'babel.letiende.co';
+const RUTA_DETALLE_LIBRO = /^\/libro\/[^/]+$/;
 const PREFIJO_LIBROS = '/libros';
 
 app.use((req, res, next) => {
-  if (req.hostname !== HOST_ANTIGUO || req.path.startsWith(PREFIJO_LIBROS)) {
+  if (req.hostname !== HOST_ANTIGUO) {
     next();
     return;
   }
-  res.redirect(301, `https://babel.letiende.co${PREFIJO_LIBROS}${req.originalUrl}`);
+  const esRaiz = req.path === '/';
+  const esDetalleLibro = RUTA_DETALLE_LIBRO.test(req.path);
+  if (esRaiz || esDetalleLibro) {
+    res.redirect(301, `https://letiende.co${PREFIJO_LIBROS}${req.originalUrl}`);
+    return;
+  }
+  if (!req.path.startsWith(PREFIJO_LIBROS)) {
+    res.redirect(301, `https://babel.letiende.co${PREFIJO_LIBROS}${req.originalUrl}`);
+    return;
+  }
+  next();
 });
 
 /**
