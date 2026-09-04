@@ -20,6 +20,7 @@
               <img
                 [src]="candidato.portadaUrl"
                 [alt]="candidato.nombre"
+                appSinPortadaFallback
                 class="h-32 w-24 rounded-lg object-cover"
               />
               <span class="truncate text-xs text-primary/70">{{ candidato.nombre }}</span>

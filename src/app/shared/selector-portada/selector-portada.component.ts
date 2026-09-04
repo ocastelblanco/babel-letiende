@@ -1,5 +1,6 @@
 import { Component, effect, inject, input, output, signal } from '@angular/core';
 import { MetadatosService, PortadaCandidata } from '../../core/api/metadatos.service';
+import { SinPortadaFallbackDirective } from '../directivas/sin-portada-fallback.directive';
 
 /**
  * Diálogo compartido de selección manual de portada — para cuando la
@@ -23,7 +24,7 @@ import { MetadatosService, PortadaCandidata } from '../../core/api/metadatos.ser
  */
 @Component({
   selector: 'app-selector-portada',
-  imports: [],
+  imports: [SinPortadaFallbackDirective],
   templateUrl: './selector-portada.component.html',
 })
 export class SelectorPortadaComponent {

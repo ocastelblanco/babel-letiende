@@ -110,6 +110,7 @@
                 <img
                   [src]="libro.portadaUrl"
                   [alt]="libro.titulo"
+                  appSinPortadaFallback
                   class="mb-2 aspect-[2/3] w-full rounded-xl object-cover"
                 />
               } @else {
@@ -144,6 +145,7 @@
                 <img
                   [src]="libro.portadaUrl"
                   [alt]="libro.titulo"
+                  appSinPortadaFallback
                   class="h-16 w-12 shrink-0 rounded-lg object-cover"
                 />
               } @else {

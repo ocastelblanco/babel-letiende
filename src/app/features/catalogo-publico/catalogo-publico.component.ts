@@ -5,6 +5,7 @@ import { LibrosService } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
+import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
 
 export type VistaCatalogo = 'tarjetas' | 'lista';
 export type CriterioOrden = 'titulo' | 'autor' | 'pvp';
@@ -109,7 +110,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-catalogo-publico',
-  imports: [PvpPipe, RouterLink],
+  imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective],
   templateUrl: './catalogo-publico.component.html',
 })
 export class CatalogoPublicoComponent implements OnInit {

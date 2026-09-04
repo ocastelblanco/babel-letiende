@@ -138,6 +138,7 @@
                 @if (coincidencia.portadaUrl) {
                 <img [src]="coincidencia.portadaUrl"
                      [alt]="coincidencia.titulo"
+                     appSinPortadaFallback
                      class="h-14 w-10 shrink-0 rounded object-cover" />
                 } @else {
                 <div
@@ -213,6 +214,7 @@
               @if (candidato.portadaUrl) {
               <img [src]="candidato.portadaUrl"
                    [alt]="candidato.titulo"
+                   appSinPortadaFallback
                    class="h-14 w-10 shrink-0 rounded object-cover" />
               } @else {
               <div
@@ -269,6 +271,7 @@
         <div class="mt-2 flex items-end gap-2">
           <img [src]="formulario.controls.portadaUrl.value"
                [alt]="formulario.controls.titulo.value"
+               appSinPortadaFallback
                class="h-32 w-24 rounded-lg object-cover" />
           <button type="button"
                   (click)="selectorPortadaVisible.set(true)"

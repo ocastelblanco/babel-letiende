@@ -13,7 +13,7 @@ import {
   obtenerPorClave,
   omitirCamposNulos,
 } from '../services/dynamodb';
-import { portadaEsInvalida, scrapearSitio, type SitioScraping } from '../services/scraping';
+import { portadaEsInvalida, portadaUrlResponde, scrapearSitio, type SitioScraping } from '../services/scraping';
 
 /**
  * Primer patrón asíncrono del proyecto (`docs/plan-validar-libros-async.md`,
@@ -453,21 +453,27 @@ async function procesarLibro(
       }
     }
 
-    if (
-      libroActualizado.portadaUrl !== null &&
-      portadaEsInvalida(libroActualizado.portadaUrl, palabrasClaveInvalidasGlobales)
-    ) {
-      const isbnActual = libroActualizado.isbn;
-      const portadaNueva =
-        isbnActual !== null ? await buscarPortadaValida(isbnActual, sitiosInfoPorPrioridad, palabrasClaveInvalidasGlobales) : null;
+    if (libroActualizado.portadaUrl !== null) {
+      const portadaInvalidaPorPalabraClave = portadaEsInvalida(libroActualizado.portadaUrl, palabrasClaveInvalidasGlobales);
+      // Corto-circuito: si ya sabemos que es inválida por palabra clave, no
+      // vale la pena gastar una petición HTTP adicional para confirmarlo.
+      const portadaRespondeHttp = portadaInvalidaPorPalabraClave
+        ? true
+        : await portadaUrlResponde(libroActualizado.portadaUrl);
 
-      if (portadaNueva) {
-        libroActualizado = { ...libroActualizado, portadaUrl: portadaNueva };
-        portadaCorregida = true;
-      } else {
-        // Nunca se borra la portada existente (CLAUDE.md A08): mejor una
-        // portada dudosa que ninguna — se señala para revisión manual.
-        portadaPendiente = { bookId, titulo: libroActualizado.titulo, portadaUrl: libroActualizado.portadaUrl };
+      if (portadaInvalidaPorPalabraClave || !portadaRespondeHttp) {
+        const isbnActual = libroActualizado.isbn;
+        const portadaNueva =
+          isbnActual !== null ? await buscarPortadaValida(isbnActual, sitiosInfoPorPrioridad, palabrasClaveInvalidasGlobales) : null;
+
+        if (portadaNueva) {
+          libroActualizado = { ...libroActualizado, portadaUrl: portadaNueva };
+          portadaCorregida = true;
+        } else {
+          // Nunca se borra la portada existente (CLAUDE.md A08): mejor una
+          // portada dudosa que ninguna — se señala para revisión manual.
+          portadaPendiente = { bookId, titulo: libroActualizado.titulo, portadaUrl: libroActualizado.portadaUrl };
+        }
       }
     }
 

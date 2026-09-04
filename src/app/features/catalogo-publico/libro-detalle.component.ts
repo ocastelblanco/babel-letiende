@@ -9,6 +9,7 @@ import { VentaService } from '../../core/api/venta.service';
 import type { EjemplarConUbicacion, LibroConEjemplares } from '../../core/models/libro.model';
 import { FormaDePago } from '../../core/models/venta.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
+import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
 
 /** Mismas 5 formas de pago aceptadas por el backend (`server/api/handlers/ventas.ts`, `FORMAS_DE_PAGO`) — igual que `ReportesVentasComponent`. */
 const FORMAS_DE_PAGO: readonly FormaDePago[] = ['efectivo', 'tarjeta', 'transferencia', 'nequi', 'daviplata'];
@@ -53,7 +54,7 @@ const FORMAS_DE_PAGO: readonly FormaDePago[] = ['efectivo', 'tarjeta', 'transfer
  */
 @Component({
   selector: 'app-libro-detalle',
-  imports: [PvpPipe, ReactiveFormsModule],
+  imports: [PvpPipe, ReactiveFormsModule, SinPortadaFallbackDirective],
   templateUrl: './libro-detalle.component.html',
 })
 export class LibroDetalleComponent implements OnInit {

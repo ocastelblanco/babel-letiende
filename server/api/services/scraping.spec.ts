@@ -22,6 +22,7 @@ import {
   buscarPvpEnTornamesaPorTexto,
   esUrlSegura,
   portadaEsInvalida,
+  portadaUrlResponde,
   scrapearSitio,
   type SitioScraping,
 } from './scraping';
@@ -680,5 +681,65 @@ describe('buscarPvpEnTornamesaPorTexto (fallback de PVP por título/autor)', () 
     const resultado = await buscarPvpEnTornamesaPorTexto(null, null);
     expect(resultado).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('portadaUrlResponde (verificación HTTP real de portadas, TODO.md — fallback de portadas rotas)', () => {
+  const fetchOriginal = global.fetch;
+  const fetchMock = vi.fn();
+  const URL_PORTADA = 'https://sitio.com/portada.jpg';
+
+  beforeEach(() => {
+    dnsLookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    global.fetch = fetchOriginal;
+  });
+
+  function respuesta(opciones: Partial<{ ok: boolean; status: number }> = {}) {
+    return {
+      ok: opciones.ok ?? true,
+      status: opciones.status ?? 200,
+      headers: new Headers(),
+    } as unknown as Response;
+  }
+
+  it('devuelve true con un HEAD exitoso, sin llegar a intentar GET', async () => {
+    fetchMock.mockResolvedValue(respuesta({ ok: true, status: 200 }));
+
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(URL_PORTADA, expect.objectContaining({ method: 'HEAD' }));
+  });
+
+  it('reintenta con GET y devuelve true si el HEAD falla (404) pero el GET responde bien', async () => {
+    fetchMock
+      .mockResolvedValueOnce(respuesta({ ok: false, status: 404 }))
+      .mockResolvedValueOnce(respuesta({ ok: true, status: 200 }));
+
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, URL_PORTADA, expect.objectContaining({ method: 'HEAD' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, URL_PORTADA, expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('devuelve false si tanto HEAD como GET fallan', async () => {
+    fetchMock.mockResolvedValue(respuesta({ ok: false, status: 500 }));
+
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(false);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('devuelve false sin hacer ninguna petición real si la URL es rechazada por la guardia SSRF', async () => {
+    await expect(portadaUrlResponde('http://sitio-inseguro.com/portada.jpg')).resolves.toBe(false);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(dnsLookupMock).not.toHaveBeenCalled();
   });
 });
