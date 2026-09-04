@@ -114,9 +114,10 @@ function sitio(datos: Partial<SitioScraping> & { dominio: string }): SitioScrapi
   };
 }
 
-function eventoPost(authorization?: string): APIGatewayProxyEventV2 {
+function eventoPost(authorization?: string, cuerpo?: unknown): APIGatewayProxyEventV2 {
   return {
     headers: authorization ? { authorization } : {},
+    body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
     requestContext: { http: { method: 'POST' } },
   } as unknown as APIGatewayProxyEventV2;
 }
@@ -197,6 +198,30 @@ describe('construirColaPorMueble', () => {
   it('devuelve cola y límites vacíos sin libros', () => {
     const resultado = construirColaPorMueble([], [], []);
     expect(resultado).toEqual({ colaBookIds: [], limitesMueble: [] });
+  });
+
+  it('acepta una lista de libros ya pre-filtrada por mueble (parcelización) sin cambios de firma', () => {
+    // `handlerIniciar` filtra `libros` por `muebleIds` ANTES de llamar a esta
+    // función — solo debe reflejar el mueble cuyos libros sobrevivieron al
+    // filtro, ignorando por completo el resto de `ubicaciones`/`muebles`.
+    const librosPreFiltrados = [libro({ bookId: 'b-alfa', titulo: 'Alfa', ubicacionId: 'u-biblioteca-1' })];
+    const ubicaciones = [
+      ubicacion({ ubicacionId: 'u-biblioteca-1', muebleId: 'm-1' }),
+      ubicacion({ ubicacionId: 'u-biblioteca-2', muebleId: 'm-2' }),
+    ];
+    const muebles = [
+      mueble({ muebleId: 'm-1', nombre: 'Biblioteca 1' }),
+      mueble({ muebleId: 'm-2', nombre: 'Biblioteca 2' }),
+    ];
+
+    const { colaBookIds, limitesMueble } = construirColaPorMueble(
+      librosPreFiltrados as never,
+      ubicaciones as never,
+      muebles as never,
+    );
+
+    expect(colaBookIds).toEqual(['b-alfa']);
+    expect(limitesMueble).toEqual([{ nombre: 'Biblioteca 1', hasta: 1 }]);
   });
 });
 
@@ -349,6 +374,88 @@ describe('handlerIniciar (POST /api/validaciones-libros)', () => {
     expect(respuesta).toMatchObject({ statusCode: 202 });
     expect(JSON.parse((respuesta as { body: string }).body)).toMatchObject({
       validacionId: validacionGuardada['validacionId'],
+    });
+  });
+
+  describe('parcelización por Mueble (body { muebleIds })', () => {
+    function librosDeDosMuebles(): Record<string, unknown>[] {
+      return [
+        libro({ bookId: 'book-m1', titulo: 'Libro mueble 1', ubicacionId: 'ubicacion-m1' }),
+        libro({ bookId: 'book-m2', titulo: 'Libro mueble 2', ubicacionId: 'ubicacion-m2' }),
+      ];
+    }
+
+    beforeEach(() => {
+      escanearTodoMock.mockImplementation(async (tabla: string) => {
+        if (tabla === 'babel-libros-test') return librosDeDosMuebles();
+        if (tabla === 'babel-ubicaciones-test') {
+          return [
+            ubicacion({ ubicacionId: 'ubicacion-m1', muebleId: 'm-1' }),
+            ubicacion({ ubicacionId: 'ubicacion-m2', muebleId: 'm-2' }),
+          ];
+        }
+        if (tabla === 'babel-muebles-test') {
+          return [mueble({ muebleId: 'm-1', nombre: 'Mueble 1' }), mueble({ muebleId: 'm-2', nombre: 'Mueble 2' })];
+        }
+        return [];
+      });
+    });
+
+    it('sin muebleIds en el body, comportamiento actual sin cambios (todo el inventario)', async () => {
+      const respuesta = await handlerIniciar(eventoPost('Bearer token'), {} as never, {} as never);
+
+      const validacionGuardada = guardarMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(validacionGuardada).toMatchObject({ totalLibros: 2, colaBookIds: ['book-m1', 'book-m2'] });
+      expect(validacionGuardada['muebleIdsFiltro']).toBeUndefined();
+      expect(respuesta).toMatchObject({ statusCode: 202 });
+    });
+
+    it('con muebleIds de 1 mueble, solo esos libros entran a la cola', async () => {
+      await handlerIniciar(eventoPost('Bearer token', { muebleIds: ['m-1'] }), {} as never, {} as never);
+
+      const validacionGuardada = guardarMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(validacionGuardada).toMatchObject({
+        totalLibros: 1,
+        colaBookIds: ['book-m1'],
+        muebleIdsFiltro: ['m-1'],
+      });
+    });
+
+    it('con muebleIds de 2+ muebles, entran los libros de todos ellos', async () => {
+      await handlerIniciar(eventoPost('Bearer token', { muebleIds: ['m-1', 'm-2'] }), {} as never, {} as never);
+
+      const validacionGuardada = guardarMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(validacionGuardada).toMatchObject({
+        totalLibros: 2,
+        colaBookIds: ['book-m1', 'book-m2'],
+        muebleIdsFiltro: ['m-1', 'm-2'],
+      });
+    });
+
+    it('con muebleIds: [], mismo comportamiento que sin filtro', async () => {
+      await handlerIniciar(eventoPost('Bearer token', { muebleIds: [] }), {} as never, {} as never);
+
+      const validacionGuardada = guardarMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(validacionGuardada).toMatchObject({ totalLibros: 2, colaBookIds: ['book-m1', 'book-m2'] });
+      expect(validacionGuardada['muebleIdsFiltro']).toBeUndefined();
+    });
+
+    it('con un muebleId que no existe, la cola queda vacía sin error (corrida "completado")', async () => {
+      const respuesta = await handlerIniciar(
+        eventoPost('Bearer token', { muebleIds: ['mueble-inexistente'] }),
+        {} as never,
+        {} as never,
+      );
+
+      const validacionGuardada = guardarMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(validacionGuardada).toMatchObject({
+        estado: 'completado',
+        totalLibros: 0,
+        colaBookIds: [],
+        muebleIdsFiltro: ['mueble-inexistente'],
+      });
+      expect(lambdaSendMock).not.toHaveBeenCalled();
+      expect(respuesta).toMatchObject({ statusCode: 202 });
     });
   });
 });
