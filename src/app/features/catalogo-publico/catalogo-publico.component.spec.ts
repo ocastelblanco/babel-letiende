@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Title } from '@angular/platform-browser';
+import { By, Title } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
@@ -8,7 +8,19 @@ import type { Espacio } from '../../core/models/espacio.model';
 import type { Libro } from '../../core/models/libro.model';
 import type { Mueble } from '../../core/models/mueble.model';
 import type { Ubicacion } from '../../core/models/ubicacion.model';
+import { EscanerCodigoBarrasComponent } from '../../shared/escaner-codigo-barras/escaner-codigo-barras.component';
 import { CatalogoPublicoComponent, TITULO_CATALOGO_PUBLICO } from './catalogo-publico.component';
+
+// `EscanerCodigoBarrasComponent` (renderizado dentro del modal) importa
+// `@zxing/browser` a nivel de módulo — mismo mock que
+// `catalogar-libro.component.spec.ts`/`escaner-codigo-barras.component.spec.ts`,
+// aunque estas pruebas no ejercitan la cámara real: emiten `codigoDetectado`
+// directamente sobre la instancia del hijo.
+vi.mock('@zxing/browser', () => ({
+  BrowserMultiFormatReader: vi.fn(function BrowserMultiFormatReaderFalso() {
+    return { decodeFromConstraints: vi.fn() };
+  }),
+}));
 
 const libroFalso: Libro = {
   isbn: '9780000000000',
@@ -566,6 +578,75 @@ describe('CatalogoPublicoComponent', () => {
 
       // Dos tarjetas independientes, no una sola agrupada.
       expect(fixture.nativeElement.querySelectorAll('li').length).toBe(2);
+    });
+  });
+
+  describe('escaneo de ISBN en modal', () => {
+    function botonPorTexto(fixture: ComponentFixture<CatalogoPublicoComponent>, texto: string): HTMLButtonElement {
+      const botones = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+      return botones.find((boton) => boton.textContent?.trim() === texto) as HTMLButtonElement;
+    }
+
+    function emitirCodigoDetectado(fixture: ComponentFixture<CatalogoPublicoComponent>, isbn: string): void {
+      const escaner = fixture.debugElement.query(By.directive(EscanerCodigoBarrasComponent));
+      (escaner.componentInstance as EscanerCodigoBarrasComponent).codigoDetectado.emit(isbn);
+    }
+
+    it('no muestra el modal de escaneo hasta hacer click en "Escanear"', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      expect(fixture.nativeElement.querySelector('app-escaner-codigo-barras')).toBeFalsy();
+    });
+
+    it('el botón "Escanear" abre el modal con el escáner', () => {
+      const { fixture } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      botonPorTexto(fixture, 'Escanear').click();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-escaner-codigo-barras')).toBeTruthy();
+    });
+
+    it('un ISBN escaneado que coincide con un libro cierra el modal y navega a su ficha', () => {
+      const { fixture, navigateMock } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      botonPorTexto(fixture, 'Escanear').click();
+      fixture.detectChanges();
+
+      emitirCodigoDetectado(fixture, libroFalso.isbn as string);
+      fixture.detectChanges();
+
+      expect(navigateMock).toHaveBeenCalledWith(['/libro', libroFalso.bookId]);
+      expect(fixture.nativeElement.querySelector('app-escaner-codigo-barras')).toBeFalsy();
+    });
+
+    it('un ISBN escaneado sin coincidencia muestra un mensaje de error, sin navegar, y deja el modal abierto', () => {
+      const { fixture, navigateMock } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      botonPorTexto(fixture, 'Escanear').click();
+      fixture.detectChanges();
+
+      emitirCodigoDetectado(fixture, '0000000000000');
+      fixture.detectChanges();
+
+      expect(navigateMock).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.textContent).toContain(
+        'No se encontró ningún libro con ese código en el catálogo.',
+      );
+      expect(fixture.nativeElement.querySelector('app-escaner-codigo-barras')).toBeTruthy();
+    });
+
+    it('el botón "Cerrar" del modal lo cierra sin navegar', () => {
+      const { fixture, navigateMock } = configurarPrueba({ libros: [libroFalso], cargando: false, error: false });
+
+      botonPorTexto(fixture, 'Escanear').click();
+      fixture.detectChanges();
+
+      botonPorTexto(fixture, 'Cerrar').click();
+      fixture.detectChanges();
+
+      expect(navigateMock).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.querySelector('app-escaner-codigo-barras')).toBeFalsy();
     });
   });
 });

@@ -7,13 +7,22 @@
   <main class="mx-auto max-w-5xl">
     @if (!cargando() && !error() && libros().length > 0) {
       <div class="mb-6 flex flex-col gap-3">
-        <input
-          type="search"
-          placeholder="Buscar por título, autor o ISBN…"
-          [value]="terminoBusqueda()"
-          (input)="terminoBusqueda.set($any($event.target).value)"
-          class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
-        />
+        <div class="flex gap-2">
+          <input
+            type="search"
+            placeholder="Buscar por título, autor o ISBN…"
+            [value]="terminoBusqueda()"
+            (input)="terminoBusqueda.set($any($event.target).value)"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+          />
+          <button
+            type="button"
+            (click)="abrirEscaner()"
+            class="shrink-0 rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            Escanear
+          </button>
+        </div>
 
         <div class="flex flex-col gap-3 sm:flex-row">
           <select
@@ -172,4 +181,26 @@
       </ul>
     }
   </main>
+
+  @if (escanerVisible()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-primary/40 px-4">
+      <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 class="mb-4 text-lg font-bold text-primary">Escanear ISBN</h2>
+
+        <app-escaner-codigo-barras (codigoDetectado)="alDetectarCodigo($event)" />
+
+        @if (errorEscaneoPublico()) {
+          <p class="mt-2 text-sm text-danger">{{ errorEscaneoPublico() }}</p>
+        }
+
+        <button
+          type="button"
+          (click)="cerrarEscaner()"
+          class="mt-4 h-12 w-full rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  }
 </div>

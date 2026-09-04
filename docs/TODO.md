@@ -263,11 +263,14 @@ Se promueve la Tarea 2 al segundo slot activo (con la Tarea 3 en backlog, ver ab
 
 Con esto se cierra el lote de 3 tareas salvo la Tarea 3, que se promueve al único slot activo.
 
-## Tarea 3 — Botón de escaneo en el Catálogo público — ACTIVA, SIN EMPEZAR
+## Tarea 3 — Botón de escaneo en el Catálogo público — COMPLETA (2026-09-04)
 
-- [ ] Extraer la cámara/decodificación EAN-13 de `catalogar-libro.component.ts` (líneas ~301-352, `@zxing/browser`, hoy duplicada también en `editar-libro.component.ts`) a un componente compartido standalone `EscanerCodigoBarrasComponent` (`src/app/shared/`), con un `@Output()` que emite el ISBN detectado.
-- [ ] Botón "Escanear" en `CatalogoPublicoComponent`, junto a la búsqueda, que abre ese componente en un modal.
-- [ ] Al detectar ISBN, buscar coincidencia en el signal `libros()` ya cargado (sin llamada nueva al backend) y navegar a `/libro/:bookId`; sin match, mensaje de error simple (decisión ya tomada con el usuario, ver `MEMORY.md` §2).
-- [ ] Sin cambios de rutas ni de backend — `/libro/:libroId` ya existe.
+- [x] Nuevo componente compartido standalone `EscanerCodigoBarrasComponent` (`src/app/shared/escaner-codigo-barras/`) — encapsula toda la lógica de cámara `@zxing/browser` (EAN-13, `facingMode: 'environment', aspectRatio: { ideal: 3 }`) antes duplicada en `CatalogarLibroComponent`, con su propio botón/`<video>`/mensajes de error, y expone `output()` (`codigoDetectado: string`, Angular 22 signal-based) en vez de tocar un formulario directamente. **Decisión tomada durante la implementación:** `CatalogarLibroComponent` se dejó sin tocar (no se migró a usar el componente nuevo) — su spec ejercita `escaneando()`/`iniciarEscaneo()`/`detenerEscaneo()` directamente sobre el propio componente, y migrarlo habría exigido reescribir esas pruebas en un componente ya complejo (duplicados, condición de carrera documentada) por un beneficio marginal; la duplicación con `EditarLibroComponent` queda igual que antes de esta tarea, sin empeorar.
+- [x] Botón "Escanear" en `CatalogoPublicoComponent`, junto a la búsqueda, abre `EscanerCodigoBarrasComponent` en un modal (mismo patrón `fixed inset-0` que `SelectorPortadaComponent`/el diálogo "Vender" de `libro-detalle.component.ts`).
+- [x] Al detectar ISBN, busca coincidencia exacta en el signal `libros()` ya cargado (sin llamada nueva al backend) y navega a `/libro/:bookId`; sin match, mensaje de error simple sin caer a la búsqueda de texto (decisión ya tomada con el usuario, ver `MEMORY.md` §2).
+- [x] Sin cambios de rutas ni de backend.
+- [x] 10 tests nuevos (5 `EscanerCodigoBarrasComponent`, 5 `CatalogoPublicoComponent`: modal oculto por defecto, se abre con "Escanear", ISBN con match navega y cierra el modal, ISBN sin match muestra error sin navegar, botón "Cerrar") — 422 tests frontend (antes 412). `npm run build` y `npm test -- --watch=false` verificados en verde.
+
+**Con esto se cierra por completo el lote de 3 tareas traído por el usuario el 2026-09-04** (fallback de portadas — PR #114 — validación por lotes por Mueble — PR #115, aclaración de alcance en PR #116 — y escáner en catálogo público, PR pendiente de abrir). Sin tareas activas hasta el próximo lote de ajustes del usuario.
 
 
