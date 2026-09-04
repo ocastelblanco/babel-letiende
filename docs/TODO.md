@@ -271,6 +271,19 @@ Con esto se cierra el lote de 3 tareas salvo la Tarea 3, que se promueve al úni
 - [x] Sin cambios de rutas ni de backend.
 - [x] 10 tests nuevos (5 `EscanerCodigoBarrasComponent`, 5 `CatalogoPublicoComponent`: modal oculto por defecto, se abre con "Escanear", ISBN con match navega y cierra el modal, ISBN sin match muestra error sin navegar, botón "Cerrar") — 422 tests frontend (antes 412). `npm run build` y `npm test -- --watch=false` verificados en verde.
 
-**Con esto se cierra por completo el lote de 3 tareas traído por el usuario el 2026-09-04** (fallback de portadas — PR #114 — validación por lotes por Mueble — PR #115, aclaración de alcance en PR #116 — y escáner en catálogo público, PR pendiente de abrir). Sin tareas activas hasta el próximo lote de ajustes del usuario.
+**Con esto se cierra por completo el lote de 3 tareas traído por el usuario el 2026-09-04** (fallback de portadas — PR #114 — validación por lotes por Mueble — PR #115, aclaración de alcance en PR #116 — y escáner en catálogo público — PR #117, todos fusionados). Sin tareas activas hasta el próximo lote de ajustes del usuario.
+
+---
+
+**Hotfix — botón flotante "Volver arriba" en el Catálogo público (2026-09-04):** el usuario pidió un botón flotante (ícono `^`) que aparezca al hacer scroll más de una pantalla de alto en el catálogo público y lleve de vuelta al inicio del listado. Toma el único slot activo del motor JIT.
+
+## Tarea — Botón flotante "Volver arriba" en el Catálogo público — COMPLETA (2026-09-04)
+
+- [x] Botón flotante fijo (`fixed bottom-6 right-6`, `z-40` — bajo el modal del escáner que usa `z-50`) en `CatalogoPublicoComponent`, visible solo cuando `window.scrollY > window.innerHeight` (signal `mostrarBotonArriba`, listener `scroll` en `window` con `{ passive: true }`), oculto en el resto. Ícono chevron arriba (mismo estilo Heroicons outline ya usado en `BarraNavegacionComponent`), estilo `bg-primary`/`text-neutral`/`rounded-full`/sombra coherente con el resto de la app. Al hacer click (`volverArriba()`), `window.scrollTo({ top: 0, behavior: 'smooth' })`.
+- [x] SSR-safe: listener y acceso a `window` guardados con `isPlatformBrowser(inject(PLATFORM_ID))` (mismo patrón de `AuthService`/`EmbebidoService`) — se agrega en `ngOnInit`, se remueve en `ngOnDestroy` (nuevo en este componente).
+- [x] 5 tests nuevos (oculto por defecto, aparece tras scroll profundo, se oculta al subir, `scrollTo` con los argumentos correctos al hacer click, listener removido en `ngOnDestroy`) — 427 tests frontend (antes 422).
+- [x] `npm run build -- --configuration=production` (build SSR + navegador) y `npm test -- --watch=false` verificados en verde — sin ninguna referencia a `window` fuera de los guards `isPlatformBrowser`.
+
+Sin tareas activas hasta el próximo lote/hotfix del usuario.
 
 
