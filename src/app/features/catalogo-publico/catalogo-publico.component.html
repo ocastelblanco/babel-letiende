@@ -18,9 +18,10 @@
           <button
             type="button"
             (click)="abrirEscaner()"
-            class="shrink-0 rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm font-semibold text-primary transition-opacity hover:opacity-90"
+            aria-label="Escanear código de barras"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white text-primary transition-opacity hover:opacity-90"
           >
-            Escanear
+            <span class="material-symbols-outlined" aria-hidden="true">barcode_scanner</span>
           </button>
         </div>
 
