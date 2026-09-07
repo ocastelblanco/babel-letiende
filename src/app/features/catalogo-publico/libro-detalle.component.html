@@ -28,7 +28,7 @@
               <p class="text-xs text-primary/60">{{ libro.editorial }}</p>
             }
             @if (rangoPvp(); as rango) {
-              <p class="mt-2 text-lg font-bold text-secondary">
+              <p class="mt-2 text-lg font-bold text-secondary-accesible">
                 @if (rango.minimo === rango.maximo) {
                   {{ rango.minimo | pvp }}
                 } @else {
@@ -54,7 +54,7 @@
               } @else {
                 <p class="text-sm text-primary/70">Ubicación no disponible.</p>
               }
-              <p class="mt-1 text-sm font-semibold text-secondary">{{ ejemplar.pvp | pvp }}</p>
+              <p class="mt-1 text-sm font-semibold text-secondary-accesible">{{ ejemplar.pvp | pvp }}</p>
 
               @if (puedeVender()) {
                 <button

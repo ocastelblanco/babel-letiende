@@ -15,13 +15,28 @@ Definidos como variables de tema de Tailwind 4 en `src/styles.css:12-23` y usado
 | Token | Valor hex | Uso principal en el código |
 |---|---|---|
 | `primary` | `#230C00` | Texto principal, fondo de botones primarios, bordes sutiles (`border-primary/10`, `border-primary/20`) |
-| `secondary` | `#E8630A` | Acentos puntuales — precio del catálogo público (`text-secondary`), enlaces (`text-secondary underline`) |
+| `secondary` | `#E8630A` | Acentos puntuales sobre elementos grandes, bordes o fondos — nunca en párrafo/label pequeño (§1.1-bis) |
+| `secondary-accesible` | `#B84D08` | Variante oscurecida de `secondary`, solo para texto — precio del catálogo público y de detalle (`text-secondary-accesible`), enlace activo de la barra |
 | `tertiary` | `#00B7A3` | Mensajes de éxito (`text-tertiary`) |
 | `neutral` | `#FFE7B3` | Texto sobre fondo `bg-primary` (botones primarios: `text-neutral`) |
 | `surface` | `#FFF8F1` | Fondo de página (`bg-surface`) — medido por pixel en `comandante.letiende.co`, más claro que el `#F7F5F2` documentado en el `DESIGN.md` de Comandante; el código prioriza el valor real desplegado (`src/styles.css:17-19`) |
 | `danger` | `#C0392B` | Mensajes de error, botones de eliminar — no forma parte de la paleta original de Comandante, es una adición propia de Babel |
 
 `primary`, `secondary`, `tertiary` y `neutral` coinciden exactamente con los valores documentados en `CLAUDE.md` §4 (`#230C00`, `#E8630A`, `#00B7A3`, `#FFE7B3`).
+
+### 1.1-bis Contraste de `secondary` en texto (WCAG)
+
+`secondary` (`#E8630A`) sobre blanco/`surface` da **3.37:1** — reprueba el 4.5:1 que exige WCAG AA
+para texto normal, incluido texto en negrita de 14px (`text-sm font-bold`), que no llega al umbral de
+"texto grande" (18.66px en negrita). Hallazgo real de Lighthouse (`color-contrast`, 07/09/2026, 1678
+elementos flageados: el precio de cada tarjeta del catálogo, `p.mt-auto.text-secondary`) — no
+documentado hasta esta corrección (`docs/optimizacion-aplicaciones.md` de `letiende.co`, OPT-6).
+
+**Regla:** cualquier texto (párrafo, label, enlace) que use el color de marca `secondary` usa
+`text-secondary-accesible` (`#B84D08`, 5.12:1 sobre blanco — verificado con la fórmula de contraste
+relativo de WCAG, no aproximado). `secondary` puro sigue siendo válido en usos no textuales o de texto
+grande: bordes (`border-secondary`), fondos, anillos de foco (`focus-visible:ring-secondary`) — ésos no
+están sujetos al umbral de contraste de texto.
 
 ### 1.2 Tipografía
 
