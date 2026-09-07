@@ -25,6 +25,27 @@ const angularApp = new AngularNodeAppEngine();
  */
 
 /**
+ * `/robots.txt` — RFC 9309 exige que viva exactamente en la raíz del origen
+ * consultado, sin redirecciones. Antes de esta ruta no existía ningún
+ * archivo ni handler para `/robots.txt`: la petición caía en el middleware
+ * de redirección de abajo (301 a `/libros/robots.txt`, sin `Disallow` ni
+ * `User-agent` reales), que a su vez no coincidía con ningún archivo
+ * estático (el build no tiene ninguna carpeta `libros/`) y terminaba
+ * resuelta por el catch-all de Angular SSR — 302 a `/libros` y cuerpo
+ * vacío. Lighthouse lo reportaba como "robots.txt is not valid".
+ *
+ * Se registra ANTES del middleware de redirección para que nunca entre en
+ * esa cadena, y se sirve como `text/plain` sin pasar por Angular. Contenido
+ * mínimo: `Allow: /` preserva el comportamiento implícito previo (sin
+ * archivo, un crawler asume acceso permitido) sin inventar reglas de
+ * `Disallow` que este repositorio no ha documentado todavía.
+ */
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send('User-agent: *\nAllow: /\n');
+});
+
+/**
  * Redirección 301 desde el dominio antiguo (`babel.letiende.co`).
  *
  * El build usa `baseHref: /libros/` (para que el proxy de letiende.co
