@@ -5,11 +5,14 @@
 **Sistema de inventario y punto de venta en producción para una librería — arquitectado mediante orquestación de agentes IA, instrumentado tarea por tarea, y entregado con un reparto de esfuerzo 20/80 entre humano y agente.**
 
 [![Live](https://img.shields.io/badge/live-babel.letiende.co-E8630A?style=flat-square)](https://babel.letiende.co)
+[![Licencia](https://img.shields.io/badge/licencia-Apache%202.0-blue?style=flat-square)](LICENSE)
 [![Angular](https://img.shields.io/badge/Angular-22-DD0031?style=flat-square&logo=angular&logoColor=white)](https://angular.dev)
 [![AWS](https://img.shields.io/badge/AWS-Lambda_·_DynamoDB_·_API_Gateway-232F3E?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
 [![Serverless](https://img.shields.io/badge/IaC-Serverless_Framework_4-FD5750?style=flat-square&logo=serverless&logoColor=white)](https://serverless.com)
 [![Pareto](https://img.shields.io/badge/esfuerzo-20%25_humano_·_80%25_agente-00B7A3?style=flat-square)](#entrega-instrumentada)
 [![Orquestado desde móvil](https://img.shields.io/badge/37%25_orquestado_desde-un_celular-5C2E91?style=flat-square&logo=android&logoColor=white)](#el-canal-móvil)
+[![AI-generated: producido principalmente por un modelo de IA](https://img.shields.io/static/v1?label=&message=AI-generated&color=red&style=flat-square)](https://nasa-ammos.github.io/slim/?search=Badges)
+[![SLIM](https://img.shields.io/badge/Best%20Practices%20from-SLIM-blue?style=flat-square)](https://nasa-ammos.github.io/slim/)
 [![English](https://img.shields.io/badge/read_in-English-FFE7B3?style=flat-square)](./README.md)
 
 </div>
@@ -369,7 +372,7 @@ El código, los commits, los comentarios y los identificadores de base de datos 
 
 ## Licencia
 
-[MIT](./LICENSE).
+[Apache 2.0](./LICENSE).
 
 ---
 
