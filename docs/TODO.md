@@ -2,6 +2,21 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Coordinación externa (07/09/2026) — crear llms.txt:** pedido **externo** al roadmap de este
+repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0023, en `docs/TODO.md`; OPT-3
+en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del motor JIT. Lighthouse
+(auditoría `agentic-browsing`/`llms-txt`) marcaba "llms-txt does not follow recommendations" — no
+existía ningún archivo ni ruta para `/llms.txt`. Se agregó `app.get('/llms.txt', ...)` en
+`src/server.ts`, mismo patrón que `/robots.txt` (registrado antes del middleware de redirección, para
+vivir en la raíz real del origen). Contenido basado en la convención real de `llmstxt.org` (H1 +
+blockquote + secciones H2 con links Markdown) y en `README.es.md`/`docs/tech-specs.md`: enlaza el
+catálogo público (`https://letiende.co/libros/`, la única superficie sin autenticación) y la
+documentación técnica del repositorio; no enlaza el área de administración, que exige sesión.
+Verificado con el build de producción real + servidor SSR local: `/llms.txt` responde `200 text/plain`
+con el contenido esperado, cumple las 3 condiciones que audita Lighthouse (H1, al menos un link
+Markdown, más de 50 caracteres). 427 tests frontend + 388 tests backend en verde. PR abierto en
+`babel-letiende`, sin fusionar todavía.
+
 **Coordinación externa (07/09/2026) — robots.txt inválido:** pedido **externo** al roadmap de este
 repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0021, en `docs/TODO.md`; OPT-2
 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del motor JIT. Lighthouse

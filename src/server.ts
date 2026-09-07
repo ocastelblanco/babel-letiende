@@ -46,6 +46,45 @@ app.get('/robots.txt', (_req, res) => {
 });
 
 /**
+ * `/llms.txt` — convención de la comunidad (no un estándar formal, ver
+ * https://llmstxt.org/) para orientar a asistentes de IA sobre el sitio.
+ * Mismo razonamiento que `/robots.txt` arriba: debe vivir en la raíz real
+ * del origen consultado, sin redirecciones, así que se registra ANTES del
+ * middleware de redirección de abajo y se sirve directo, sin pasar por
+ * Angular. Lighthouse (auditoría `llms-txt`, agentic-browsing) exige un
+ * encabezado H1, al menos un link en formato Markdown y contenido de más
+ * de 50 caracteres — las tres condiciones las cumple el contenido real de
+ * abajo, tomado de `README.es.md`/`docs/tech-specs.md`, no genérico.
+ *
+ * Solo se enlaza el catálogo público (`/`, `/libro/:bookId` — sin guard,
+ * `docs/tech-specs.md` §4.2) y documentación pública del repositorio; el
+ * área de administración/catalogación exige autenticación y no es
+ * contenido indexable (mismo criterio que `/robots.txt`).
+ */
+app.get('/llms.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send(`# Babel
+
+> Babel es el sistema de catalogación, ubicación física y venta de la librería del centro cultural Le Tiende (Bogotá, Colombia). Resuelve el escaneo de códigos de barras ISBN con enriquecimiento automático de metadatos (título, autor, portada, editorial, precio de venta al público), la ubicación física en una jerarquía de tres niveles (espacio → mueble → ubicación), la venta en tienda, y un catálogo público sin autenticación, renderizado en servidor e indexable.
+
+Construido con Angular 22 (SSR) sobre AWS Lambda y DynamoDB, como parte del ecosistema de Le Tiende junto a Ágora (cartelera de eventos) y Comandante (café bar del centro cultural). El área de administración (catalogación, ventas, reportes) exige autenticación y no es contenido público.
+
+## Catálogo
+
+- [Catálogo público de libros](https://letiende.co/libros/): inventario completo de la librería, con ficha propia por libro y filtro por ubicación física. Sin autenticación requerida.
+
+## Docs
+
+- [Especificación técnica](https://github.com/ocastelblanco/babel-letiende/blob/main/docs/tech-specs.md): arquitectura, rutas, infraestructura y endpoints.
+- [Producto (PRD)](https://github.com/ocastelblanco/babel-letiende/blob/main/docs/PRD.md): visión, usuarios y objetivos del producto.
+
+## Optional
+
+- [Repositorio en GitHub](https://github.com/ocastelblanco/babel-letiende): código fuente completo del proyecto.
+`);
+});
+
+/**
  * Redirección 301 desde el dominio antiguo (`babel.letiende.co`).
  *
  * El build usa `baseHref: /libros/` (para que el proxy de letiende.co
