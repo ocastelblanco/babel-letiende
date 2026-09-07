@@ -2,6 +2,21 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Coordinación externa (07/09/2026) — contraste de color (WCAG):** pedido **externo** al roadmap de
+este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0024, en `docs/TODO.md`;
+OPT-6 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del motor JIT.
+Lighthouse (`color-contrast`, `/libros/`, 07/09/2026) marcaba 1678 elementos reprobados — el precio de
+cada tarjeta del catálogo público, `text-secondary` (`#E8630A`) sobre blanco, da 3.37:1 (reprueba el
+4.5:1 exigido a texto normal, incluido negrita de 14px, por debajo del umbral de "texto grande").
+Verificado con la fórmula real de contraste relativo de WCAG (no aproximado): se agregó el token
+`--color-secondary-accesible: #B84D08` en `src/styles.css` (5.12:1 sobre blanco), aplicado con
+`text-secondary-accesible` donde `secondary` coloreaba texto pequeño real — precio del catálogo
+(grid y lista), precio de detalle de libro y enlace activo "Librería" de la barra embebida.
+`secondary` puro se conserva para bordes, fondos y anillos de foco, sin cambio. `docs/DESIGN.md` §1.1
+y §1.1-bis documentan la regla nueva (no existía ninguna sección de accesibilidad de contraste antes
+de este cambio). Build de producción, 427/427 pruebas y CSS compilado verificados. PR abierto en
+`babel-letiende`, sin fusionar todavía.
+
 **Coordinación externa (07/09/2026) — crear llms.txt:** pedido **externo** al roadmap de este
 repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0023, en `docs/TODO.md`; OPT-3
 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del motor JIT. Lighthouse

@@ -133,7 +133,7 @@
               }
               <p class="line-clamp-2 text-sm font-semibold text-primary">{{ libro.titulo }}</p>
               <p class="line-clamp-1 text-xs text-primary/70">{{ libro.autor }}</p>
-              <p class="mt-auto pt-2 text-sm font-bold text-secondary">
+              <p class="mt-auto pt-2 text-sm font-bold text-secondary-accesible">
                 @if (libro.pvpMinimo === libro.pvpMaximo) {
                   {{ libro.pvpMinimo | pvp }}
                 } @else {
@@ -171,7 +171,7 @@
                 <p class="truncate text-sm font-semibold text-primary">{{ libro.titulo }}</p>
                 <p class="truncate text-xs text-primary/70">{{ libro.autor }}</p>
               </div>
-              <p class="shrink-0 text-sm font-bold text-secondary">
+              <p class="shrink-0 text-sm font-bold text-secondary-accesible">
                 @if (libro.pvpMinimo === libro.pvpMaximo) {
                   {{ libro.pvpMinimo | pvp }}
                 } @else {

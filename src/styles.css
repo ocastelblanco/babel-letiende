@@ -12,6 +12,12 @@
 @theme {
   --color-primary: #230c00;
   --color-secondary: #e8630a;
+  /* #b84d08 — variante oscurecida de `secondary`, solo para texto. `secondary` sobre
+     blanco/`surface` da 3.37:1 (reprueba WCAG AA, 4.5:1 para texto normal) — verificado con
+     Lighthouse real contra `/libros/` (07/09/2026): el precio del catálogo (`text-sm font-bold
+     text-secondary`) reprobaba `color-contrast`. Esta variante da 5.12:1. `secondary` puro sigue
+     siendo válido en texto grande, bordes y fondos (docs/DESIGN.md §10) — nunca en párrafo/label. */
+  --color-secondary-accesible: #b84d08;
   --color-tertiary: #00b7a3;
   --color-neutral: #ffe7b3;
   /* #fff8f1 medido por pixel en https://comandante.letiende.co (fondo real
