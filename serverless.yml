@@ -1971,6 +1971,13 @@ functions:
     description: >-
       Renderizado SSR de Angular (catálogo público + app shell autenticada).
       Sin permisos de DynamoDB: solo renderiza, no accede a datos directamente.
+    # El catálogo público (RenderMode.Server, sin caché) llama GET /api/libros
+    # durante el propio SSR, que depende del mismo Scan completo y paginado
+    # de babel-libros que ya obliga a 25s en la función `libros` — sin este
+    # mismo margen, `ssr` hace timeout en el provider.timeout (10s) por
+    # defecto y el catálogo público responde 500 en la primera carga
+    # (confirmado en CloudWatch: Duration 10000ms, Status timeout).
+    timeout: 25
     memorySize: 512
     environment:
       # Protección SSRF de Angular (`AngularNodeAppEngine`) exige una lista
