@@ -2,6 +2,17 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Coordinación externa (07/09/2026) — robots.txt inválido:** pedido **externo** al roadmap de este
+repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0021, en `docs/TODO.md`; OPT-2
+en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del motor JIT. Lighthouse
+marcaba "robots.txt is not valid" en `https://babel.letiende.co/robots.txt`; verificado con curl que
+no existía ningún archivo ni ruta para `/robots.txt` — la petición caía en el middleware de
+redirección del dominio antiguo, terminaba en el catch-all de Angular SSR sin servir nunca contenido
+válido. Se agregó `app.get('/robots.txt', ...)` en `src/server.ts`, registrado antes de ese
+middleware para que la ruta nunca entre en la cadena de redirecciones (RFC 9309 exige que viva
+exactamente en la raíz del origen). Contenido mínimo `User-agent: *` / `Allow: /`, sin inventar reglas
+de `Disallow` no documentadas. PR abierto en `babel-letiende`, sin fusionar todavía.
+
 **Coordinación externa (07/09/2026) — meta description faltante en el catálogo público:** pedido
 **externo** al roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co`
 (T-0019, en `docs/TODO.md`; OPT-1 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los
