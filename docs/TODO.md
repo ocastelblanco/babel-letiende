@@ -298,4 +298,16 @@ Sin tareas activas hasta el próximo lote/hotfix del usuario.
 
 Sin tareas activas hasta el próximo lote/hotfix del usuario.
 
+---
 
+**Insignias de licencia, autoría IA y SLIM — TAREA EXTERNA (2026-09-07):** pedido **externo** al roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0018 en su `TODO.md`, tarea OPT-4 de `docs/optimizacion-aplicaciones.md`), mismo tratamiento que la integración con el proxy (ver bitácora arriba, T-0014). No ocupa ninguno de los 2 slots del motor JIT.
+
+## Tarea — Insignias de licencia, autoría IA y SLIM en README/README.es — COMPLETA (2026-09-07)
+
+- [x] Verificado `LICENSE` real del repo (MIT, confirmado contra el archivo, coincide con lo que ya declaraba la sección "License" del README) — se agregó el badge `[![License](...)](LICENSE)` que antes no existía en el bloque de insignias.
+- [x] Reparto humano/agente verificado contra `tracking-detail.csv` (149 filas, medido, no estimado): 20.8% humano / 79.2% agente al cierre de producción — mayoría del esfuerzo la hizo el agente, por lo que corresponde el badge **AI-generated** (taxonomía SLIM: "primarily produced by an AI model"), no "AI-assisted" como en `letiende.co` (cuyo propio reparto medido es mayoritariamente humano, 73.4%/26.6%).
+- [x] Badge SLIM (`Best Practices from SLIM`) agregado.
+- [x] Las tres insignias agregadas a `README.md` y `README.es.md`, mismo orden/estilo (`flat-square`) que `letiende.co`, sin tocar nada más del documento.
+- [x] Confirmado que `README.md`/`README.es.md` no forman parte de ningún `assets`/`fileReplacements` de `angular.json` — cambio sin impacto en el build.
+
+Sin tareas activas hasta el próximo lote/hotfix del usuario.
