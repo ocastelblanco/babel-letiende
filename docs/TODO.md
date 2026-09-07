@@ -2,6 +2,14 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Coordinación externa (07/09/2026) — meta description faltante en el catálogo público:** pedido
+**externo** al roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co`
+(T-0019, en `docs/TODO.md`; OPT-1 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los
+2 slots del motor JIT. Lighthouse marcaba "Document does not have a meta description" en
+`https://babel.letiende.co/libros/`; se agregó `meta.updateTag()` en `CatalogoPublicoComponent`,
+mismo patrón `Meta`/`Title` de `@angular/platform-browser` que ya usaba `LibroDetalleComponent`. PR
+abierto en `babel-letiende`, sin fusionar todavía.
+
 **Prioridad de selección aplicada (2026-07-27):** el usuario cerró su ronda de pruebas manuales en `staging` (pausa iniciada 2026-07-25 tras `ajustes-finales.md` Tareas A-G) y entregó un nuevo lote de ajustes en `ajustes-2026-07-27.md`. El motor JIT se retoma con las 3 tareas que ese documento describe para Babel, en el orden en que aparecen en el documento, **antes** de las 2 últimas piezas del roadmap (modo offline, producción) que quedaron en pausa — instrucción explícita del usuario. La cuarta pieza de `ajustes-2026-07-27.md` — el generador de QR para imprimir — es una herramienta fuera de Babel (no vive en la app, no consume su API) y el usuario la excluyó deliberadamente de este orden: se rastrea aparte, en su propia pista independiente (ver sección al final), sin ocupar ninguno de los 2 slots activos.
 
 **Tarea 1 completada (2026-07-27):** vista Lista/Tarjetas + orden Título/Autor/Precio en `CatalogoPublicoComponent` (PR #67, fusionado por el usuario). Se promueve el siguiente ítem del backlog (Reporte de ventas — Descuento de venta) al segundo slot activo.

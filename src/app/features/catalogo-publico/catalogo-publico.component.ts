@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { Title } from '@angular/platform-browser';
+import { Meta, Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LibrosService } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
@@ -52,6 +52,10 @@ function agruparLibros(libros: Libro[]): LibroAgrupado {
 
 /** Título de pestaña del catálogo público — mismo texto en todo momento (ver `ngOnInit`). */
 export const TITULO_CATALOGO_PUBLICO = 'Catálogo librería - Le Tiende';
+
+/** `<meta name="description">` del catálogo público (OPT-1, `docs/optimizacion-aplicaciones.md`) — mismo alcance que describe `CLAUDE.md` §1: consulta sin autenticación con filtro por ubicación. */
+const DESCRIPCION_CATALOGO_PUBLICO =
+  'Catálogo público de la librería de Le Tiende en Bogotá: busca libros disponibles por título, autor o ISBN y consulta su ubicación física en la tienda.';
 
 /** Quita tildes y normaliza mayúsculas para que la búsqueda encuentre "garcia" al buscar "García". */
 function normalizarTexto(valor: string): string {
@@ -119,6 +123,7 @@ export class CatalogoPublicoComponent implements OnInit, OnDestroy {
   private readonly librosService = inject(LibrosService);
   private readonly ubicacionFisicaService = inject(UbicacionFisicaService);
   private readonly title = inject(Title);
+  private readonly meta = inject(Meta);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly platformId = inject(PLATFORM_ID);
@@ -285,6 +290,7 @@ export class CatalogoPublicoComponent implements OnInit, OnDestroy {
     // rápidos del catálogo público). Sin esto, el título de pestaña queda
     // pegado al último libro visitado al volver a `/`.
     this.title.setTitle(TITULO_CATALOGO_PUBLICO);
+    this.meta.updateTag({ name: 'description', content: DESCRIPCION_CATALOGO_PUBLICO });
     void this.librosService.cargarCatalogo();
     void this.ubicacionFisicaService.cargarEspacios();
     void this.ubicacionFisicaService.cargarMuebles();
