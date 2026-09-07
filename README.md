@@ -5,7 +5,7 @@
 **A production inventory and point-of-sale system for a bookstore — architected through AI agent orchestration, instrumented task by task, and delivered on a 20/80 human-to-agent effort split.**
 
 [![Live](https://img.shields.io/badge/live-babel.letiende.co-E8630A?style=flat-square)](https://babel.letiende.co)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)](LICENSE)
 [![Angular](https://img.shields.io/badge/Angular-22-DD0031?style=flat-square&logo=angular&logoColor=white)](https://angular.dev)
 [![AWS](https://img.shields.io/badge/AWS-Lambda_·_DynamoDB_·_API_Gateway-232F3E?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
 [![Serverless](https://img.shields.io/badge/IaC-Serverless_Framework_4-FD5750?style=flat-square&logo=serverless&logoColor=white)](https://serverless.com)
@@ -372,7 +372,7 @@ Code, commits, comments and database identifiers are written in **Spanish**; the
 
 ## License
 
-[MIT](./LICENSE).
+[Apache 2.0](./LICENSE).
 
 ---
 
