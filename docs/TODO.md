@@ -2,6 +2,18 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Coordinación externa (07/09/2026) — logo sin `width`/`height` explícitos:** pedido **externo** al
+roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0025, en
+`docs/TODO.md`; OPT-7 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del
+motor JIT. Lighthouse (`unsized-images`, `/libros/`) marcaba dos elementos: el logo de la barra
+(embebida y standalone) y el logo de la portada del catálogo — ninguno con dimensiones explícitas,
+causa real de *layout shift*. Se agregó `width="73" height="32"` (barra), `width="128" height="56"`
+(portada del catálogo) y `width="144" height="63"` (login, no auditado por Lighthouse pero con el
+mismo defecto) — proporción real del viewBox del SVG (525.26×230.56), el tamaño visible lo sigue
+controlando Tailwind. Las portadas de libro (`aspect-[2/3]`, `h-32 w-24`, etc.) ya tienen ambas
+dimensiones fijas o `aspect-ratio` explícito, verificado antes de tocar nada — no las marca el mismo
+audit. Build + 427/427 pruebas en verde. PR abierto en `babel-letiende`, sin fusionar todavía.
+
 **Coordinación externa (07/09/2026) — contraste de color (WCAG):** pedido **externo** al roadmap de
 este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0024, en `docs/TODO.md`;
 OPT-6 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del motor JIT.
