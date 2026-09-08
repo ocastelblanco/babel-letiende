@@ -2,6 +2,31 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Incidente real de producción (08/09/2026) — revertido el mismo día en que se fusionó:** activar
+`sourceMap` (abajo) se desplegó a producción y, minutos después, `curl` real contra
+`https://letiende.co/libros/main-*.js.map` confirmó **500** — no un hallazgo teórico. Causa raíz en
+CloudWatch (`/aws/lambda/babel-letiende-production-ssr`, filtro `ERROR`):
+`RequestEntityTooLarge — Exceeded maximum allowed payload size (6291556 bytes)`. El mapa del bundle
+principal pesa **5,9 MB** (`main-*.js.map`, el resto de mapas son de pocos KB) — por debajo del límite
+de 6 MB de Lambda en bytes crudos, pero la función `ssr` sirve estáticos con `express.static` **desde
+dentro del propio Lambda** (`server.ts:150-151`), y la respuesta de invocación síncrona de Lambda tiene
+un límite duro de 6 MB **después** de la codificación que aplica API Gateway — el archivo lo cruza.
+Nunca se había topado este límite porque nunca había existido un archivo estático de este tamaño en el
+paquete de despliegue.
+
+**Decisión, revertida en el mismo PR original antes de que este documento llegara a marcar la tarea
+como cerrada:** `sourceMap` se apaga de nuevo en `production` de `angular.json`. Habilitarlo de verdad
+en este repositorio exige mover el estático fuera del Lambda (S3 + CloudFront, mismo patrón que
+`letiende-assets` de `letiende.co`) — eso es una tarea de infraestructura aparte (**L**, no **S**), no
+una línea de configuración. Comandante **no tiene este problema** (Firebase Hosting, sin Lambda de por
+medio, verificado en producción real que sirve sus `.map` sin error) — el flag ahí se queda activo.
+
+**Lección para sesiones futuras:** el DoD original de T-0026 pedía "evaluar el impacto en el tamaño del
+paquete de despliegue" — se evaluó el tamaño del **zip** (1,4 MB → 5,8 MB, muy por debajo de 50 MB) pero
+no el tamaño de la **respuesta HTTP individual** de servir ese archivo a través del Lambda, que es un
+límite completamente distinto y mucho más estricto. Verificar el tamaño del paquete de despliegue no
+basta cuando el mismo Lambda también sirve los archivos que empaqueta.
+
 **Coordinación externa (07/09/2026) — activar `sourceMap` en producción:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0026, en
 `docs/TODO.md`; OPT-8 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del
