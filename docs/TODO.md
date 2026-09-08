@@ -2,6 +2,22 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Coordinación externa (08/09/2026) — lazy-load de las 11 rutas del router:** pedido **externo** al
+roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0033, en
+`docs/TODO.md`; OPT-15 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del
+motor JIT. Lighthouse (`unused-javascript`, `/libros/`) marcaba **695 KiB de 1,18 MB sin usar** en el
+`main.js` — con diferencia el número más grande de las cuatro apps del ecosistema. Investigado antes de
+tocar nada: `app.routes.ts` tenía las 11 rutas con `component:` (importación estática), a diferencia de
+Ágora y Comandante (ya 100% `loadComponent`) — todo el árbol de administración (catalogar, 7 vistas de
+`/admin/*`) se descargaba en el bundle inicial incluso para un visitante anónimo del catálogo público.
+Corregido convirtiendo las 11 a `loadComponent`, mismo patrón ya usado en Ágora. Verificado con SSR
+real, no solo con el tamaño del bundle: `curl` contra `/libros/`, `/libros/login`, `/libros/catalogar` y
+`/libros/admin` locales responde `200` en las cuatro (las últimas dos son `RenderMode.Client`, per
+`app.routes.server.ts` — igual siguen resolviendo bien el chunk lazy en el navegador). El `main.js`
+inicial pasó de 1,18 MB a **15,49 kB** — el resto queda repartido en chunks lazy que solo se descargan
+al navegar a cada ruta. Build + 427/427 pruebas en verde. PR abierto en `babel-letiende`, sin fusionar
+todavía.
+
 **Incidente real de producción (08/09/2026) — revertido el mismo día en que se fusionó:** activar
 `sourceMap` (abajo) se desplegó a producción y, minutos después, `curl` real contra
 `https://letiende.co/libros/main-*.js.map` confirmó **500** — no un hallazgo teórico. Causa raíz en
