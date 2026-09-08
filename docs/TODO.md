@@ -2,6 +2,18 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Coordinación externa (07/09/2026) — activar `sourceMap` en producción:** pedido **externo** al
+roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0026, en
+`docs/TODO.md`; OPT-8 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del
+motor JIT. Lighthouse (`valid-source-maps`, `/libros/`) marcaba el bundle principal sin mapa de
+fuentes. Se agregó `"sourceMap": true` a la configuración `production` de `angular.json` (ya existía
+en `development`). **Evaluado antes de fusionar**, como pedía el DoD: este repositorio empaqueta
+`dist/babel-letiende/**` completo (browser + server) dentro del Lambda `ssr`
+(`serverless.yml:1993-1996`), así que los mapas viajan con el paquete — medido con `serverless package
+--stage staging`: el zip de `ssr` pasó de 1.4 MB a 5.8 MB (16 MB de `.map` nuevos en `dist/`), muy por
+debajo del límite de 50 MB de carga directa de Lambda. Build + 427/427 pruebas en verde. PR abierto en
+`babel-letiende`, sin fusionar todavía.
+
 **Coordinación externa (07/09/2026) — logo sin `width`/`height` explícitos:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0025, en
 `docs/TODO.md`; OPT-7 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del
