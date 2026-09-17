@@ -588,4 +588,77 @@ describe('EditarLibroComponent', () => {
       expect(componente.selectorPortadaVisible()).toBe(false);
     });
   });
+
+  describe('renderizado incremental (windowing) de la lista', () => {
+    // Mock mínimo de `IntersectionObserver` — jsdom no lo implementa, mismo
+    // patrón que `scroll-infinito.directive.spec.ts`.
+    let callbackRegistrado: IntersectionObserverCallback | undefined;
+    const observeMock = vi.fn();
+    const IntersectionObserverOriginal = globalThis.IntersectionObserver;
+
+    const librosGrandes: Libro[] = Array.from({ length: 65 }, (_, indice) => ({
+      ...libroFalso,
+      bookId: `libro-${indice}`,
+      isbn: `97800000${String(indice).padStart(4, '0')}`,
+      titulo: `Libro número ${String(indice).padStart(2, '0')}`,
+      autor: 'Autor de prueba',
+    }));
+
+    function dispararInterseccion(): void {
+      callbackRegistrado?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+    }
+
+    /** Cuenta los botones "Editar" renderizados — uno por libro visible; el `<li>` centinela no tiene botón, así que no se cuenta a sí mismo. */
+    function contarLibrosRenderizados(fixture: ComponentFixture<EditarLibroComponent>): number {
+      return Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).filter(
+        (boton) => boton.textContent?.trim() === 'Editar',
+      ).length;
+    }
+
+    beforeEach(() => {
+      callbackRegistrado = undefined;
+      observeMock.mockClear();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      globalThis.IntersectionObserver = vi.fn(function IntersectionObserverFalso(
+        callback: IntersectionObserverCallback,
+      ) {
+        callbackRegistrado = callback;
+        return { observe: observeMock, disconnect: vi.fn(), unobserve: vi.fn() };
+      }) as any;
+    });
+
+    afterEach(() => {
+      globalThis.IntersectionObserver = IntersectionObserverOriginal;
+    });
+
+    it('renderiza solo 60 libros al inicio, aunque el inventario tenga más', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes });
+
+      expect(contarLibrosRenderizados(fixture)).toBe(60);
+    });
+
+    it('renderiza más libros al simular la intersección del centinela', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes });
+
+      dispararInterseccion();
+      fixture.detectChanges();
+
+      expect(contarLibrosRenderizados(fixture)).toBe(65);
+    });
+
+    it('buscar un término resetea el límite de renderizado a 60', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      dispararInterseccion();
+      fixture.detectChanges();
+      expect(componente.limiteRenderizado()).toBe(65);
+
+      componente.filtro.set('Libro número 0');
+      fixture.detectChanges();
+
+      expect(componente.limiteRenderizado()).toBe(60);
+    });
+  });
 });

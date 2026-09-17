@@ -110,7 +110,7 @@
       <p class="text-center text-primary/70">No se encontraron libros para tu búsqueda.</p>
     } @else if (vista() === 'tarjetas') {
       <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-        @for (libro of librosOrdenados(); track libro.bookId) {
+        @for (libro of librosVisibles(); track libro.bookId) {
           <li>
             <a
               [routerLink]="['/libro', libro.bookId]"
@@ -143,10 +143,13 @@
             </a>
           </li>
         }
+        @if (limiteRenderizado() < librosOrdenados().length) {
+          <li appScrollInfinito (alcanzarFinal)="cargarMasLibros()" class="list-none"></li>
+        }
       </ul>
     } @else {
       <ul class="flex flex-col gap-3">
-        @for (libro of librosOrdenados(); track libro.bookId) {
+        @for (libro of librosVisibles(); track libro.bookId) {
           <li>
             <a
               [routerLink]="['/libro', libro.bookId]"
@@ -180,6 +183,9 @@
               </p>
             </a>
           </li>
+        }
+        @if (limiteRenderizado() < librosOrdenados().length) {
+          <li appScrollInfinito (alcanzarFinal)="cargarMasLibros()" class="list-none"></li>
         }
       </ul>
     }

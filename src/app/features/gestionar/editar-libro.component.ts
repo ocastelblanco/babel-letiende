@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
@@ -11,8 +11,12 @@ import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
 import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
+import { ScrollInfinitoDirective } from '../../shared/directivas/scroll-infinito.directive';
 
 const PVP_MAXIMO = 5_000_000;
+
+/** Cantidad de libros renderizados al inicio y agregados en cada tanda (`docs/plan-rendimiento-catalogo.md`, renderizado incremental con `IntersectionObserver`). */
+const TAMANO_TANDA_RENDERIZADO = 60;
 
 /** Quita tildes y normaliza mayúsculas — mismo criterio que `catalogo-publico.component.ts`/`catalogar-libro.component.ts`. */
 function normalizarTexto(valor: string): string {
@@ -49,7 +53,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-editar-libro',
-  imports: [ReactiveFormsModule, PvpPipe, SelectorPortadaComponent, SinPortadaFallbackDirective],
+  imports: [ReactiveFormsModule, PvpPipe, SelectorPortadaComponent, SinPortadaFallbackDirective, ScrollInfinitoDirective],
   templateUrl: './editar-libro.component.html',
 })
 export class EditarLibroComponent implements OnInit, OnDestroy {
@@ -100,6 +104,31 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
         (libro.isbn ?? '').includes(isbnBuscado),
     );
   });
+
+  /**
+   * Límite de renderizado incremental (windowing) sobre `librosFiltrados` —
+   * arranca en `TAMANO_TANDA_RENDERIZADO` y crece de a `TAMANO_TANDA_RENDERIZADO`
+   * cuando el centinela `appScrollInfinito` al final de la lista entra en el
+   * viewport (`docs/plan-rendimiento-catalogo.md`). Evita renderizar al DOM
+   * el inventario COMPLETO (3.000+ libros) de una sola vez.
+   */
+  protected readonly limiteRenderizado = signal(TAMANO_TANDA_RENDERIZADO);
+
+  /** Subconjunto de `librosFiltrados` efectivamente renderizado al DOM. */
+  protected readonly librosVisibles = computed(() => this.librosFiltrados().slice(0, this.limiteRenderizado()));
+
+  /** Resetea el límite a `TAMANO_TANDA_RENDERIZADO` cada vez que cambia el resultado filtrado (ej. al escribir en el buscador) — evita arrastrar un límite ya crecido de una búsqueda anterior. */
+  private readonly resetearLimiteAlFiltrar = effect(() => {
+    this.librosFiltrados();
+    this.limiteRenderizado.set(TAMANO_TANDA_RENDERIZADO);
+  });
+
+  /** Aumenta `limiteRenderizado` en una tanda más, sin pasarse del total filtrado — invocado por el centinela `appScrollInfinito` al final de la lista. */
+  protected cargarMasLibros(): void {
+    this.limiteRenderizado.update((limite) =>
+      Math.min(limite + TAMANO_TANDA_RENDERIZADO, this.librosFiltrados().length),
+    );
+  }
 
   /** Referencia al `<video>` del escáner del filtro (lista de libros). */
   private readonly videoEscaner = viewChild<ElementRef<HTMLVideoElement>>('videoEscaner');

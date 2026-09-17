@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, PLATFORM_ID, computed, effect, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Meta, Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -7,7 +7,11 @@ import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service'
 import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
+import { ScrollInfinitoDirective } from '../../shared/directivas/scroll-infinito.directive';
 import { EscanerCodigoBarrasComponent } from '../../shared/escaner-codigo-barras/escaner-codigo-barras.component';
+
+/** Cantidad de libros renderizados al inicio y agregados en cada tanda (`docs/plan-rendimiento-catalogo.md`, renderizado incremental con `IntersectionObserver`). */
+const TAMANO_TANDA_RENDERIZADO = 60;
 
 export type VistaCatalogo = 'tarjetas' | 'lista';
 export type CriterioOrden = 'titulo' | 'autor' | 'pvp';
@@ -116,7 +120,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-catalogo-publico',
-  imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective, EscanerCodigoBarrasComponent],
+  imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective, ScrollInfinitoDirective, EscanerCodigoBarrasComponent],
   templateUrl: './catalogo-publico.component.html',
 })
 export class CatalogoPublicoComponent implements OnInit, OnDestroy {
@@ -237,6 +241,33 @@ export class CatalogoPublicoComponent implements OnInit, OnDestroy {
       return campoA.localeCompare(campoB) * factor;
     });
   });
+
+  /**
+   * Límite de renderizado incremental (windowing) sobre `librosOrdenados` —
+   * arranca en `TAMANO_TANDA_RENDERIZADO` y crece de a `TAMANO_TANDA_RENDERIZADO`
+   * cuando el centinela `appScrollInfinito` al final de la lista/grilla entra
+   * en el viewport (`docs/plan-rendimiento-catalogo.md`). Evita renderizar al
+   * DOM el catálogo COMPLETO (3.000+ libros) de una sola vez. El scroll sigue
+   * siendo el nativo de `window` (el botón "Volver arriba" de arriba no se ve
+   * afectado).
+   */
+  protected readonly limiteRenderizado = signal(TAMANO_TANDA_RENDERIZADO);
+
+  /** Subconjunto de `librosOrdenados` efectivamente renderizado al DOM (vistas Tarjetas y Lista comparten el mismo límite). */
+  protected readonly librosVisibles = computed(() => this.librosOrdenados().slice(0, this.limiteRenderizado()));
+
+  /** Resetea el límite a `TAMANO_TANDA_RENDERIZADO` cada vez que cambia `librosOrdenados` — cubre búsqueda, filtro de espacio/mueble, criterio/dirección de orden y cambio de vista, porque todos ya recalculan `librosOrdenados`. */
+  private readonly resetearLimiteAlOrdenar = effect(() => {
+    this.librosOrdenados();
+    this.limiteRenderizado.set(TAMANO_TANDA_RENDERIZADO);
+  });
+
+  /** Aumenta `limiteRenderizado` en una tanda más, sin pasarse del total ordenado — invocado por el centinela `appScrollInfinito` al final de cada vista. */
+  protected cargarMasLibros(): void {
+    this.limiteRenderizado.update((limite) =>
+      Math.min(limite + TAMANO_TANDA_RENDERIZADO, this.librosOrdenados().length),
+    );
+  }
 
   /**
    * Botón flotante "Volver arriba" — visible solo tras más de una pantalla
