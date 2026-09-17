@@ -51,7 +51,7 @@
       }
 
       <ul class="flex flex-col gap-3">
-        @for (libro of librosFiltrados(); track libro.bookId) {
+        @for (libro of librosVisibles(); track libro.bookId) {
           <li class="flex flex-col gap-2 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
             <div class="flex items-start gap-3">
               @if (libro.portadaUrl) {
@@ -102,6 +102,9 @@
           </li>
         } @empty {
           <p class="text-center text-sm text-primary/60">No se encontraron libros.</p>
+        }
+        @if (limiteRenderizado() < librosFiltrados().length) {
+          <li appScrollInfinito (alcanzarFinal)="cargarMasLibros()" class="list-none"></li>
         }
       </ul>
     } @else {

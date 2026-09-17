@@ -715,4 +715,133 @@ describe('CatalogoPublicoComponent', () => {
       expect(removeEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
     });
   });
+
+  describe('renderizado incremental (windowing) del catálogo', () => {
+    // Mock mínimo de `IntersectionObserver` — jsdom no lo implementa, mismo
+    // patrón que `scroll-infinito.directive.spec.ts`.
+    let callbackRegistrado: IntersectionObserverCallback | undefined;
+    const observeMock = vi.fn();
+    const IntersectionObserverOriginal = globalThis.IntersectionObserver;
+
+    const librosGrandes: Libro[] = Array.from({ length: 65 }, (_, indice) => ({
+      ...libroFalso,
+      bookId: `book-${indice}`,
+      isbn: `97800000${String(indice).padStart(4, '0')}`,
+      titulo: `Libro número ${String(indice).padStart(2, '0')}`,
+      autor: 'Autor de prueba',
+    }));
+
+    function dispararInterseccion(): void {
+      callbackRegistrado?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+    }
+
+    function contarLibrosRenderizados(fixture: ComponentFixture<CatalogoPublicoComponent>): number {
+      return fixture.nativeElement.querySelectorAll('ul li a').length;
+    }
+
+    beforeEach(() => {
+      callbackRegistrado = undefined;
+      observeMock.mockClear();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      globalThis.IntersectionObserver = vi.fn(function IntersectionObserverFalso(
+        callback: IntersectionObserverCallback,
+      ) {
+        callbackRegistrado = callback;
+        return { observe: observeMock, disconnect: vi.fn(), unobserve: vi.fn() };
+      }) as any;
+    });
+
+    afterEach(() => {
+      globalThis.IntersectionObserver = IntersectionObserverOriginal;
+    });
+
+    it('renderiza solo 60 libros al inicio en la vista Tarjetas, aunque el catálogo tenga más', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes, cargando: false, error: false });
+
+      expect(contarLibrosRenderizados(fixture)).toBe(60);
+    });
+
+    it('renderiza más libros al simular la intersección del centinela', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes, cargando: false, error: false });
+
+      dispararInterseccion();
+      fixture.detectChanges();
+
+      expect(contarLibrosRenderizados(fixture)).toBe(65);
+    });
+
+    it('la vista Lista también respeta el límite de renderizado', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes, cargando: false, error: false });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.seleccionarVista('lista');
+      fixture.detectChanges();
+
+      expect(contarLibrosRenderizados(fixture)).toBe(60);
+    });
+
+    it('buscar un término resetea el límite de renderizado a 60', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes, cargando: false, error: false });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      dispararInterseccion();
+      fixture.detectChanges();
+      expect(componente.limiteRenderizado()).toBe(65);
+
+      componente.terminoBusqueda.set('Libro número 0');
+      fixture.detectChanges();
+
+      expect(componente.limiteRenderizado()).toBe(60);
+    });
+
+    it('cambiar el filtro de espacio/mueble resetea el límite de renderizado a 60', () => {
+      const { fixture } = configurarPrueba(
+        { libros: librosGrandes, cargando: false, error: false },
+        { espacios: [espacioPrincipal], muebles: [muebleBiblioteca1], ubicaciones: [ubicacion1] },
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      dispararInterseccion();
+      fixture.detectChanges();
+      expect(componente.limiteRenderizado()).toBe(65);
+
+      componente.seleccionarEspacio('espacio-1');
+      fixture.detectChanges();
+
+      expect(componente.limiteRenderizado()).toBe(60);
+    });
+
+    it('cambiar el criterio de orden resetea el límite de renderizado a 60', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes, cargando: false, error: false });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      dispararInterseccion();
+      fixture.detectChanges();
+      expect(componente.limiteRenderizado()).toBe(65);
+
+      componente.seleccionarCriterioOrden('pvp');
+      fixture.detectChanges();
+
+      expect(componente.limiteRenderizado()).toBe(60);
+    });
+
+    it('sigue existiendo un solo botón "Volver arriba" y sigue funcionando con el catálogo grande (regresión)', () => {
+      const { fixture } = configurarPrueba({ libros: librosGrandes, cargando: false, error: false });
+      const scrollToMock = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+      vi.spyOn(window, 'scrollY', 'get').mockReturnValue(window.innerHeight + 1);
+      window.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+
+      const boton = fixture.nativeElement.querySelector('button[aria-label="Volver arriba"]') as HTMLButtonElement;
+      expect(boton).toBeTruthy();
+      boton.click();
+
+      expect(scrollToMock).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    });
+  });
 });
