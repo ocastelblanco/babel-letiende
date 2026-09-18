@@ -262,6 +262,29 @@ describe('handlerCrear (POST /api/libros)', () => {
     const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
     expect(cuerpo['isbn']).toBeNull();
   });
+
+  // GSI disperso `disponible-index` (`docs/plan-rendimiento-catalogo.md` §3,
+  // fase 1): mismo patrón que `isbn-index` — el atributo interno de
+  // persistencia nunca debe aparecer en la respuesta HTTP.
+  it('cataloga un libro con cantidadTotal > 0: el objeto guardado incluye disponibleParaCatalogo SI, la respuesta HTTP no', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+
+    const respuesta = await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 201 });
+    const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(libroGuardado['disponibleParaCatalogo']).toBe('SI');
+
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(cuerpo).not.toHaveProperty('disponibleParaCatalogo');
+  });
+
+  // `validarDatosNuevoLibro` exige `cantidadTotal > 0` al catalogar, así que
+  // la rama "atributo ausente" (`cantidadDisponible === 0`) no es alcanzable
+  // desde `handlerCrear` — sí lo es desde `handlerEditar` (ver más abajo),
+  // que sí permite bajar la cantidad a 0.
 });
 
 const datosEditarValidos = {
@@ -476,6 +499,48 @@ describe('handlerEditar (PUT /api/libros/:bookId)', () => {
       const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
       expect(cuerpo['isbn']).toBeNull();
     });
+
+    // GSI disperso `disponible-index` (`docs/plan-rendimiento-catalogo.md`
+    // §3, fase 1): mismo patrón que `isbn-index`.
+    it('edita subiendo cantidadTotal (cantidadDisponible > 0): el objeto guardado incluye disponibleParaCatalogo SI, la respuesta HTTP no', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+
+      const respuesta = await handlerEditar(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosEditarValidos }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(libroGuardado['disponibleParaCatalogo']).toBe('SI');
+
+      const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+      expect(cuerpo).not.toHaveProperty('disponibleParaCatalogo');
+    });
+
+    it('edita bajando cantidadTotal a 0 (cantidadDisponible llega a 0): el objeto guardado NO tiene la clave disponibleParaCatalogo', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+
+      const respuesta = await handlerEditar(
+        eventoConBookId({
+          authorization: 'Bearer token',
+          bookId: 'libro-1',
+          body: { ...datosEditarValidos, cantidadTotal: 0 },
+        }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(libroGuardado).not.toHaveProperty('disponibleParaCatalogo');
+
+      const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+      expect(cuerpo).not.toHaveProperty('disponibleParaCatalogo');
+    });
   });
 });
 
@@ -638,8 +703,11 @@ describe('handlerFusionarDuplicado (POST /api/libros/:bookId/fusionar-duplicado)
 
         expect(respuesta).toMatchObject({ statusCode: 200 });
         const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
-        // La respuesta es EXACTAMENTE lo que devolvió fusionarLibroDuplicado
-        // (ReturnValues: ALL_NEW) — el handler no recalcula ni re-lee nada.
+        // La respuesta es lo que devolvió fusionarLibroDuplicado (ReturnValues:
+        // ALL_NEW) — el handler no recalcula ni re-lee nada, salvo descartar
+        // `disponibleParaCatalogo` si viniera presente (ver test dedicado
+        // abajo: ese campo interno de persistencia nunca debe llegar al
+        // cliente).
         expect(cuerpo).toEqual(libroFusionado);
 
         // Solo 2 lecturas puntuales: verificar el rol (babel-usuarios) y
@@ -684,6 +752,31 @@ describe('handlerFusionarDuplicado (POST /api/libros/:bookId/fusionar-duplicado)
         expect(campos).not.toHaveProperty('cantidadDisponible');
       },
     );
+
+    it('descarta `disponibleParaCatalogo` de la respuesta HTTP aunque venga presente en el ítem ALL_NEW de DynamoDB', async () => {
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+      // `fusionarLibroDuplicado` real (dynamodb.ts) siempre deja este atributo
+      // presente tras la fusión (GSI disperso `disponible-index`,
+      // `docs/plan-rendimiento-catalogo.md` §3) — se simula aquí para
+      // confirmar que el handler lo descarta antes de responder, sin
+      // depender de que el mock lo omita por accidente.
+      fusionarLibroDuplicadoMock.mockResolvedValueOnce({
+        ...libroFalso,
+        cantidadTotal: 5,
+        cantidadDisponible: 5,
+        disponibleParaCatalogo: 'SI',
+      });
+
+      const respuesta = await handlerFusionarDuplicado(
+        eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosFusionarValidos }),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+      expect(cuerpo).not.toHaveProperty('disponibleParaCatalogo');
+    });
   });
 });
 

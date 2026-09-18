@@ -527,7 +527,17 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
     // (DynamoDB responde `ValidationException`). `omitirCamposNulos` solo
     // afecta al objeto que se guarda; la respuesta HTTP sigue devolviendo
     // `isbn: null` explícito, tal como lo espera el frontend.
-    await guardar(nombreTablaLibros(), omitirCamposNulos(libro, ['isbn']));
+    //
+    // `disponibleParaCatalogo` (GSI disperso `disponible-index`,
+    // `docs/plan-rendimiento-catalogo.md` §3, fase 1): mismo criterio que
+    // `isbn` — solo PRESENTE (`'SI'`) cuando `cantidadDisponible > 0`, nunca
+    // expuesto en `Libro` ni en la respuesta HTTP (detalle interno de
+    // persistencia).
+    const itemAPersistir = {
+      ...libro,
+      ...(libro.cantidadDisponible > 0 ? { disponibleParaCatalogo: 'SI' as const } : {}),
+    };
+    await guardar(nombreTablaLibros(), omitirCamposNulos(itemAPersistir, ['isbn']));
 
     return respuestaJson(201, libro);
   } catch (error) {
@@ -714,7 +724,13 @@ export const handlerEditar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
     // Mismo criterio que `handlerCrear`: se persiste sin el `isbn` cuando es
     // `null` (GSI `isbn-index` tipado `S`), pero la respuesta HTTP sigue
     // devolviendo `libroActualizado` completo, con `isbn: null` explícito.
-    await guardar(nombreTablaLibros(), omitirCamposNulos(libroActualizado, ['isbn']));
+    // `disponibleParaCatalogo` (GSI disperso `disponible-index`): mismo
+    // criterio que `handlerCrear`.
+    const itemAPersistir = {
+      ...libroActualizado,
+      ...(libroActualizado.cantidadDisponible > 0 ? { disponibleParaCatalogo: 'SI' as const } : {}),
+    };
+    await guardar(nombreTablaLibros(), omitirCamposNulos(itemAPersistir, ['isbn']));
 
     return respuestaJson(200, libroActualizado);
   } catch (error) {
@@ -891,7 +907,18 @@ export const handlerFusionarDuplicado: APIGatewayProxyHandlerV2 = async (event):
         },
         datos.ejemplaresNuevos,
       );
-      return respuestaJson(200, libroActualizado);
+      // `fusionarLibroDuplicado` devuelve el ítem `ALL_NEW` tal cual queda en
+      // DynamoDB, que desde esta tarea incluye `disponibleParaCatalogo` (GSI
+      // disperso `disponible-index`, `docs/plan-rendimiento-catalogo.md` §3)
+      // — detalle interno de persistencia que `libroActualizado` no declara
+      // en su tipo `Libro`, pero que SÍ estaría presente en tiempo de
+      // ejecución si se reenviara tal cual. Se descarta explícitamente antes
+      // de responder, mismo criterio que `handlerCrear`/`handlerEditar` (que
+      // nunca lo incluyen en la respuesta HTTP, solo al persistir).
+      const { disponibleParaCatalogo: _disponibleParaCatalogo, ...libroSinCampoInterno } = libroActualizado as Libro & {
+        disponibleParaCatalogo?: string;
+      };
+      return respuestaJson(200, libroSinCampoInterno);
     } catch (error) {
       if (error instanceof ItemNoExisteError) {
         return respuestaJson(404, { error: 'El libro no existe.' });

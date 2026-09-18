@@ -5,7 +5,13 @@ import type {
 } from 'aws-lambda';
 import * as XLSX from 'xlsx';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
-import { decrementarPorCantidadSiSuficiente, escanearTodo, guardar, obtenerPorClave } from '../services/dynamodb';
+import {
+  decrementarPorCantidadSiSuficiente,
+  escanearTodo,
+  guardar,
+  obtenerPorClave,
+  removerAtributo,
+} from '../services/dynamodb';
 
 /**
  * Copia local de `src/app/core/models/libro.model.ts` (misma forma exacta).
@@ -206,14 +212,21 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
       return respuestaJson(404, { error: 'El libro no existe.' });
     }
 
-    const decrementado = await decrementarPorCantidadSiSuficiente(
+    const resultadoDecremento = await decrementarPorCantidadSiSuficiente(
       nombreTablaLibros(),
       { bookId: datos.bookId },
       'cantidadDisponible',
       datos.cantidad,
     );
-    if (!decrementado) {
+    if (!resultadoDecremento.exito) {
       return respuestaJson(400, { error: 'No quedan suficientes ejemplares disponibles de este libro.' });
+    }
+    // GSI disperso `disponible-index` (`docs/plan-rendimiento-catalogo.md` §3,
+    // fase 1): si esta venta agotó el libro, `disponibleParaCatalogo` debe
+    // quedar AUSENTE — el valor real tras el decremento lo confirma DynamoDB
+    // (`ReturnValues: 'UPDATED_NEW'`), nunca se calcula restando aquí.
+    if (resultadoDecremento.nuevoValor === 0) {
+      await removerAtributo(nombreTablaLibros(), { bookId: datos.bookId }, 'disponibleParaCatalogo');
     }
 
     const precioFinal = Math.round(libro.pvp * datos.cantidad * (1 - datos.porcentajeDescuentoVenta / 100));

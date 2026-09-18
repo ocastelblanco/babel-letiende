@@ -3,14 +3,21 @@ import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenInvalidoError } from '../lib/verificar-token';
 
-const { verificarTokenDesdeHeaderMock, obtenerPorClaveMock, guardarMock, decrementarPorCantidadSiSuficienteMock, escanearTodoMock } =
-  vi.hoisted(() => ({
-    verificarTokenDesdeHeaderMock: vi.fn(),
-    obtenerPorClaveMock: vi.fn(),
-    guardarMock: vi.fn(),
-    decrementarPorCantidadSiSuficienteMock: vi.fn(),
-    escanearTodoMock: vi.fn(),
-  }));
+const {
+  verificarTokenDesdeHeaderMock,
+  obtenerPorClaveMock,
+  guardarMock,
+  decrementarPorCantidadSiSuficienteMock,
+  removerAtributoMock,
+  escanearTodoMock,
+} = vi.hoisted(() => ({
+  verificarTokenDesdeHeaderMock: vi.fn(),
+  obtenerPorClaveMock: vi.fn(),
+  guardarMock: vi.fn(),
+  decrementarPorCantidadSiSuficienteMock: vi.fn(),
+  removerAtributoMock: vi.fn(),
+  escanearTodoMock: vi.fn(),
+}));
 
 vi.mock('../lib/verificar-token', async () => {
   const real = await vi.importActual<typeof import('../lib/verificar-token')>('../lib/verificar-token');
@@ -24,6 +31,7 @@ vi.mock('../services/dynamodb', () => ({
   obtenerPorClave: obtenerPorClaveMock,
   guardar: guardarMock,
   decrementarPorCantidadSiSuficiente: decrementarPorCantidadSiSuficienteMock,
+  removerAtributo: removerAtributoMock,
   escanearTodo: escanearTodoMock,
 }));
 
@@ -147,7 +155,7 @@ describe('handler (POST /api/ventas)', () => {
     obtenerPorClaveMock
       .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
       .mockResolvedValueOnce(libroFalso);
-    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(false);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue({ exito: false });
 
     const respuesta = await handler(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
@@ -161,7 +169,7 @@ describe('handler (POST /api/ventas)', () => {
       .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
       .mockResolvedValueOnce(libroFalso);
     // libroFalso.cantidadDisponible es 1 — pedir 5 debe rechazarse atómicamente vía la condición de dynamodb.ts, aquí simulada por el mock.
-    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(false);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue({ exito: false });
 
     const respuesta = await handler(eventoFalso({ ...datosValidos, cantidad: 5 }, 'Bearer token'), {} as never, {} as never);
 
@@ -180,7 +188,7 @@ describe('handler (POST /api/ventas)', () => {
     obtenerPorClaveMock
       .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
       .mockResolvedValueOnce(libroFalso);
-    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(true);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue({ exito: true, nuevoValor: 5 });
 
     const respuesta = await handler(
       eventoFalso({ ...datosValidos, porcentajeDescuentoVenta: 10 }, 'Bearer token'),
@@ -211,7 +219,7 @@ describe('handler (POST /api/ventas)', () => {
     obtenerPorClaveMock
       .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
       .mockResolvedValueOnce(libroFalso);
-    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(true);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue({ exito: true, nuevoValor: 5 });
 
     const respuesta = await handler(
       eventoFalso({ ...datosValidos, cantidad: 3, porcentajeDescuentoVenta: 10 }, 'Bearer token'),
@@ -238,11 +246,46 @@ describe('handler (POST /api/ventas)', () => {
     obtenerPorClaveMock
       .mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' })
       .mockResolvedValueOnce(libroFalso);
-    decrementarPorCantidadSiSuficienteMock.mockResolvedValue(true);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue({ exito: true, nuevoValor: 5 });
 
     const respuesta = await handler(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 201 });
+  });
+
+  // GSI disperso `disponible-index` (`docs/plan-rendimiento-catalogo.md` §3,
+  // fase 1): el valor REAL de `cantidadDisponible` tras el decremento lo
+  // confirma DynamoDB (`ReturnValues: 'UPDATED_NEW'`), nunca se calcula
+  // restando en el handler — por eso estas dos pruebas fuerzan el
+  // `nuevoValor` devuelto por el mock en vez de derivarlo de `libroFalso`.
+  it('remueve disponibleParaCatalogo cuando la venta agota el último ejemplar disponible', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
+      .mockResolvedValueOnce(libroFalso);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue({ exito: true, nuevoValor: 0 });
+
+    const respuesta = await handler(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 201 });
+    expect(removerAtributoMock).toHaveBeenCalledWith(
+      'babel-libros-test',
+      { bookId: 'book-1' },
+      'disponibleParaCatalogo',
+    );
+  });
+
+  it('no remueve disponibleParaCatalogo cuando la venta no agota el stock', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
+      .mockResolvedValueOnce(libroFalso);
+    decrementarPorCantidadSiSuficienteMock.mockResolvedValue({ exito: true, nuevoValor: 3 });
+
+    const respuesta = await handler(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 201 });
+    expect(removerAtributoMock).not.toHaveBeenCalled();
   });
 });
 

@@ -12,7 +12,14 @@ vi.mock('@aws-sdk/lib-dynamodb', async () => {
   return { ...real, DynamoDBDocumentClient: { from: () => ({ send: sendMock }) } };
 });
 
-const { escanearMayorQue, escanearProyeccion, escanearTodo } = await import('./dynamodb');
+const {
+  escanearMayorQue,
+  escanearProyeccion,
+  escanearTodo,
+  decrementarPorCantidadSiSuficiente,
+  removerAtributo,
+  fusionarLibroDuplicado,
+} = await import('./dynamodb');
 
 /**
  * `Scan` de DynamoDB tiene un límite de ~1 MB de datos por página — la
@@ -135,6 +142,98 @@ describe('paginación de Scan (escanearTodo / escanearMayorQue / escanearProyecc
         const entrada = (llamada[0] as { input: Record<string, unknown> }).input;
         expect(entrada['ProjectionExpression']).toBe('#atributo0');
       }
+    });
+  });
+});
+
+/**
+ * `disponibleParaCatalogo` (GSI disperso `disponible-index`,
+ * `docs/plan-rendimiento-catalogo.md` §3, fase 1): estas pruebas cubren los 3
+ * únicos lugares donde `dynamodb.ts` mantiene ese atributo — `decrementarPorCantidadSiSuficiente`
+ * (venta), `removerAtributo` (nueva función genérica) y `fusionarLibroDuplicado`.
+ */
+describe('mantenimiento de disponibleParaCatalogo', () => {
+  beforeEach(() => {
+    sendMock.mockReset();
+  });
+
+  describe('decrementarPorCantidadSiSuficiente', () => {
+    it('envía ReturnValues UPDATED_NEW en el UpdateCommand', async () => {
+      sendMock.mockResolvedValueOnce({ Attributes: { cantidadDisponible: 3 } });
+
+      await decrementarPorCantidadSiSuficiente('tabla-falsa', { bookId: 'libro-1' }, 'cantidadDisponible', 1);
+
+      const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+      expect(entrada['ReturnValues']).toBe('UPDATED_NEW');
+    });
+
+    it('devuelve exito true con el nuevoValor real cuando queda mayor a 0', async () => {
+      sendMock.mockResolvedValueOnce({ Attributes: { cantidadDisponible: 3 } });
+
+      const resultado = await decrementarPorCantidadSiSuficiente('tabla-falsa', { bookId: 'libro-1' }, 'cantidadDisponible', 1);
+
+      expect(resultado).toEqual({ exito: true, nuevoValor: 3 });
+    });
+
+    it('devuelve exito true con nuevoValor 0 cuando el decremento agota el atributo', async () => {
+      sendMock.mockResolvedValueOnce({ Attributes: { cantidadDisponible: 0 } });
+
+      const resultado = await decrementarPorCantidadSiSuficiente('tabla-falsa', { bookId: 'libro-1' }, 'cantidadDisponible', 1);
+
+      expect(resultado).toEqual({ exito: true, nuevoValor: 0 });
+    });
+
+    it('devuelve exito false cuando la ConditionExpression falla (sin ejemplares suficientes)', async () => {
+      const { ConditionalCheckFailedException } = await import('@aws-sdk/client-dynamodb');
+      sendMock.mockRejectedValueOnce(
+        new ConditionalCheckFailedException({ message: 'falló la condición', $metadata: {} }),
+      );
+
+      const resultado = await decrementarPorCantidadSiSuficiente('tabla-falsa', { bookId: 'libro-1' }, 'cantidadDisponible', 5);
+
+      expect(resultado).toEqual({ exito: false });
+    });
+  });
+
+  describe('removerAtributo', () => {
+    it('envía un UpdateCommand con UpdateExpression REMOVE sobre el atributo indicado', async () => {
+      sendMock.mockResolvedValueOnce({});
+
+      await removerAtributo('tabla-falsa', { bookId: 'libro-1' }, 'disponibleParaCatalogo');
+
+      const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+      expect(entrada['UpdateExpression']).toBe('REMOVE #atributo');
+      expect(entrada['ExpressionAttributeNames']).toEqual({ '#atributo': 'disponibleParaCatalogo' });
+      expect(entrada['Key']).toEqual({ bookId: 'libro-1' });
+    });
+  });
+
+  describe('fusionarLibroDuplicado', () => {
+    const camposFalsos = {
+      isbn: '9780000000000',
+      titulo: 'Cien años de soledad',
+      autor: 'Gabriel García Márquez',
+      editorial: 'Sudamericana',
+      portadaUrl: null,
+      ubicacionId: 'ubicacion-1',
+      pvp: 45000,
+      porcentajeDescuentoEditorial: 35,
+      costo: 29250,
+      utilidadCatalogo: 15750,
+      actualizadoEn: '2026-09-18T00:00:00.000Z',
+    };
+
+    it('incluye disponibleParaCatalogo en el SET del UpdateCommand, de forma incondicional', async () => {
+      sendMock.mockResolvedValueOnce({ Attributes: { bookId: 'libro-1' } });
+
+      await fusionarLibroDuplicado('tabla-falsa', 'libro-1', camposFalsos, 2);
+
+      const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+      expect(entrada['UpdateExpression']).toContain('#disponibleParaCatalogo = :disponibleParaCatalogo');
+      expect((entrada['ExpressionAttributeNames'] as Record<string, string>)['#disponibleParaCatalogo']).toBe(
+        'disponibleParaCatalogo',
+      );
+      expect((entrada['ExpressionAttributeValues'] as Record<string, unknown>)[':disponibleParaCatalogo']).toBe('SI');
     });
   });
 });
