@@ -180,23 +180,32 @@ export async function escanearProyeccion<T extends object>(
   });
 }
 
+/** Resultado de `decrementarPorCantidadSiSuficiente`: distingue "no se pudo decrementar" de "se decrementó, y el valor nuevo es X" — necesario desde que `POST /api/ventas` debe saber si `cantidadDisponible` llegó exactamente a 0 (`docs/plan-rendimiento-catalogo.md` §3, fase 1) para remover `disponibleParaCatalogo` del GSI disperso `disponible-index`. */
+export type ResultadoDecremento = { exito: true; nuevoValor: number } | { exito: false };
+
 /**
  * Decrementa un atributo numérico en `cantidad` solo si su valor actual es
  * mayor o igual a `cantidad` — operación atómica (`ConditionExpression`) para
  * evitar sobrevender si dos ventas del mismo libro llegan casi al mismo
  * tiempo (`POST /api/ventas`, TODO.md Tarea 2: vender más de un ejemplar en
- * una sola `Venta`). Devuelve `false` (sin lanzar) si la condición falla, ya
- * sea porque no quedan suficientes ejemplares o porque el ítem no existe —
- * quien llama decide qué código HTTP corresponde en cada caso.
+ * una sola `Venta`). Devuelve `{ exito: false }` (sin lanzar) si la condición
+ * falla, ya sea porque no quedan suficientes ejemplares o porque el ítem no
+ * existe — quien llama decide qué código HTTP corresponde en cada caso.
+ *
+ * `ReturnValues: 'UPDATED_NEW'` + `nuevoValor` (`docs/plan-rendimiento-catalogo.md`
+ * §3, fase 1): el valor real de `nombreAtributo` tras el decremento SIEMPRE se
+ * toma del que devuelve DynamoDB, nunca se calcula restando en este código —
+ * dos ventas concurrentes del mismo libro no permiten predecirlo con certeza
+ * de antemano.
  */
 export async function decrementarPorCantidadSiSuficiente(
   nombreTabla: string,
   clave: ClaveDynamoDB,
   nombreAtributo: string,
   cantidad: number,
-): Promise<boolean> {
+): Promise<ResultadoDecremento> {
   try {
-    await documento.send(
+    const resultado = await documento.send(
       new UpdateCommand({
         TableName: nombreTabla,
         Key: clave,
@@ -204,15 +213,39 @@ export async function decrementarPorCantidadSiSuficiente(
         ConditionExpression: '#atributo >= :cantidad',
         ExpressionAttributeNames: { '#atributo': nombreAtributo },
         ExpressionAttributeValues: { ':cantidad': cantidad },
+        ReturnValues: 'UPDATED_NEW',
       }),
     );
-    return true;
+    const nuevoValor = (resultado.Attributes as Record<string, number>)[nombreAtributo] as number;
+    return { exito: true, nuevoValor };
   } catch (error) {
     if (error instanceof ConditionalCheckFailedException) {
-      return false;
+      return { exito: false };
     }
     throw error;
   }
+}
+
+/**
+ * Quita por completo un atributo de un ítem (`REMOVE`) — usado para sacar
+ * `disponibleParaCatalogo` del ítem cuando `cantidadDisponible` llega a 0
+ * (`docs/plan-rendimiento-catalogo.md` §3, fase 1): un GSI disperso exige que
+ * el atributo esté AUSENTE, no en un valor "vacío", para que el ítem quede
+ * fuera del índice (mismo criterio que `omitirCamposNulos`/`isbn`).
+ */
+export async function removerAtributo(
+  nombreTabla: string,
+  clave: ClaveDynamoDB,
+  nombreAtributo: string,
+): Promise<void> {
+  await documento.send(
+    new UpdateCommand({
+      TableName: nombreTabla,
+      Key: clave,
+      UpdateExpression: 'REMOVE #atributo',
+      ExpressionAttributeNames: { '#atributo': nombreAtributo },
+    }),
+  );
 }
 
 /** Lanzado por `fusionarLibroDuplicado` cuando el `bookId` no existe (`ConditionExpression`) — quien llama decide el código HTTP (típicamente `404`). */
@@ -270,6 +303,12 @@ export async function fusionarLibroDuplicado<T extends object>(
     ':utilidadCatalogo': campos.utilidadCatalogo,
     ':actualizadoEn': campos.actualizadoEn,
     ':ejemplaresNuevos': ejemplaresNuevos,
+    // `ejemplaresNuevos` ya llega validado como entero positivo
+    // (`validarDatosFusionarDuplicado`, `libros.ts`), así que el `ADD` de más
+    // abajo SIEMPRE deja `cantidadDisponible > 0` — incondicional, sin
+    // necesidad de `REMOVE` aquí (`docs/plan-rendimiento-catalogo.md` §3,
+    // fase 1).
+    ':disponibleParaCatalogo': 'SI',
   };
   const asignacionIsbn = campos.isbn === null ? '' : '#isbn = :isbn, ';
   const remocionIsbn = campos.isbn === null ? ' REMOVE #isbn' : '';
@@ -287,7 +326,8 @@ export async function fusionarLibroDuplicado<T extends object>(
           `SET ${asignacionIsbn}#titulo = :titulo, #autor = :autor, #editorial = :editorial, ` +
           '#portadaUrl = :portadaUrl, #ubicacionId = :ubicacionId, #pvp = :pvp, ' +
           '#porcentajeDescuentoEditorial = :porcentajeDescuentoEditorial, #costo = :costo, ' +
-          '#utilidadCatalogo = :utilidadCatalogo, #actualizadoEn = :actualizadoEn ' +
+          '#utilidadCatalogo = :utilidadCatalogo, #actualizadoEn = :actualizadoEn, ' +
+          '#disponibleParaCatalogo = :disponibleParaCatalogo ' +
           `ADD #cantidadTotal :ejemplaresNuevos, #cantidadDisponible :ejemplaresNuevos${remocionIsbn}`,
         ExpressionAttributeNames: {
           '#bookId': 'bookId',
@@ -304,6 +344,7 @@ export async function fusionarLibroDuplicado<T extends object>(
           '#actualizadoEn': 'actualizadoEn',
           '#cantidadTotal': 'cantidadTotal',
           '#cantidadDisponible': 'cantidadDisponible',
+          '#disponibleParaCatalogo': 'disponibleParaCatalogo',
         },
         ExpressionAttributeValues: expressionAttributeValues,
         // `ALL_NEW` devuelve el ítem completo ya actualizado en la misma

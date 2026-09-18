@@ -3114,6 +3114,8 @@ resources:
             AttributeType: S
           - AttributeName: isbn
             AttributeType: S
+          - AttributeName: disponibleParaCatalogo
+            AttributeType: S
         KeySchema:
           - AttributeName: bookId
             KeyType: HASH
@@ -3126,6 +3128,19 @@ resources:
               ProjectionType: ALL
             # Sin ProvisionedThroughput: en PAY_PER_REQUEST el GSI hereda el
             # modo de la tabla, y declararlo aquí hace fallar el despliegue.
+          - IndexName: disponible-index
+            KeySchema:
+              - AttributeName: disponibleParaCatalogo
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            # GSI disperso (`disponibleParaCatalogo` solo está PRESENTE cuando
+            # `cantidadDisponible > 0`, mismo patrón que `isbn-index` con
+            # `isbn`): primera fase de `docs/plan-rendimiento-catalogo.md` §3,
+            # prepara el atributo/índice para que una tarea futura convierta
+            # `GET /api/libros` de Scan a Query — ese cambio de handler NO
+            # ocurre en esta tarea. Sin ProvisionedThroughput, mismo motivo
+            # que `isbn-index`.
 
     TablaVentas:
       Type: AWS::DynamoDB::Table
