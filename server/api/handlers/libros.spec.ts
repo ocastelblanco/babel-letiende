@@ -1609,8 +1609,8 @@ describe('handler (GET /api/libros, catálogo público)', () => {
     process.env['TABLA_LIBROS'] = 'babel-libros-test';
   });
 
-  it('responde 200 pidiendo solo la proyección de 8 campos de LibroIndice (no el Libro completo)', async () => {
-    escanearMayorQueMock.mockResolvedValue([
+  it('responde 200 pidiendo solo la proyección de 8 campos de LibroIndice contra disponible-index (no el Libro completo, no un Scan)', async () => {
+    consultarPorIndiceMock.mockResolvedValue([
       {
         bookId: 'libro-1',
         isbn: '9780000000000',
@@ -1626,16 +1626,13 @@ describe('handler (GET /api/libros, catálogo público)', () => {
     const respuesta = await handler({} as never, {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 200 });
-    expect(escanearMayorQueMock).toHaveBeenCalledWith('babel-libros-test', 'cantidadDisponible', 0, [
-      'bookId',
-      'isbn',
-      'titulo',
-      'autor',
-      'ubicacionId',
-      'pvp',
-      'portadaUrl',
-      'cantidadDisponible',
-    ]);
+    expect(consultarPorIndiceMock).toHaveBeenCalledWith(
+      'babel-libros-test',
+      'disponible-index',
+      'disponibleParaCatalogo',
+      'SI',
+      ['bookId', 'isbn', 'titulo', 'autor', 'ubicacionId', 'pvp', 'portadaUrl', 'cantidadDisponible'],
+    );
     const cuerpo = JSON.parse(respuesta.body as string) as unknown[];
     expect(cuerpo).toEqual([
       {
@@ -1654,7 +1651,7 @@ describe('handler (GET /api/libros, catálogo público)', () => {
   it('restituye isbn: null explícito para un libro persistido sin el atributo isbn (undefined, no null)', async () => {
     // Mismo gotcha que `handlerIndice`/`normalizarLibro`: un libro sin ISBN se persiste sin el
     // atributo (`omitirCamposNulos`), así que llega `undefined`, no `null`.
-    escanearMayorQueMock.mockResolvedValue([
+    consultarPorIndiceMock.mockResolvedValue([
       {
         bookId: 'libro-sin-isbn',
         titulo: 'Libro sin ISBN',
@@ -1672,8 +1669,8 @@ describe('handler (GET /api/libros, catálogo público)', () => {
     expect(cuerpo[0]).toHaveProperty('isbn', null);
   });
 
-  it('responde 500 si escanearMayorQue lanza', async () => {
-    escanearMayorQueMock.mockRejectedValue(new Error('DynamoDB no disponible'));
+  it('responde 500 si consultarPorIndice lanza', async () => {
+    consultarPorIndiceMock.mockRejectedValue(new Error('DynamoDB no disponible'));
 
     const respuesta = await handler({} as never, {} as never, {} as never);
 

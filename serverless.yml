@@ -2085,9 +2085,14 @@ resources:
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
-          # Solo lectura (Scan) sobre babel-libros — endpoint público de
-          # solo consulta, sin necesidad de escribir ni leer otras tablas
-          # (CLAUDE.md A05).
+          # Rol compartido por 2 funciones de solo lectura, sin necesidad de
+          # escribir ni leer otras tablas (CLAUDE.md A05): `libros` (GET
+          # /api/libros, catálogo público) ya NO hace Scan — usa Query sobre
+          # el GSI disperso `disponible-index` (docs/plan-rendimiento-catalogo.md
+          # §3, fase 2) — pero `librosSitemap` (GET /sitemap.xml) sigue
+          # haciendo Scan completo sobre la tabla (mismo criterio de
+          # disponibilidad, sin proyección), así que este rol necesita AMBAS
+          # acciones.
           - PolicyName: babel-libros-dynamodb-${sls:stage}
             PolicyDocument:
               Version: '2012-10-17'
@@ -2097,6 +2102,11 @@ resources:
                     - dynamodb:Scan
                   Resource:
                     - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                  Resource:
+                    - !Sub '${TablaLibros.Arn}/index/disponible-index'
 
     LibrosDetalleLambdaRole:
       Type: AWS::IAM::Role

@@ -65,23 +65,60 @@ export async function eliminar(nombreTabla: string, clave: ClaveDynamoDB): Promi
   await documento.send(new DeleteCommand({ TableName: nombreTabla, Key: clave }));
 }
 
-/** Consulta un índice secundario global por igualdad exacta de su clave de partición. */
+/**
+ * Consulta un índice secundario global por igualdad exacta de su clave de
+ * partición.
+ *
+ * Igual que un `Scan` (`escanearPaginado`), un `Query` de DynamoDB tiene el
+ * mismo límite de ~1 MB de datos por página — la respuesta trae
+ * `LastEvaluatedKey` si queda más por recorrer, sin lanzar ningún error. Esta
+ * función recorre TODAS las páginas antes de devolver el resultado, mismo
+ * criterio que las funciones de `Scan` (ver el comentario de
+ * `escanearPaginado` sobre el bug real de producción del 2026-08-19 con ese
+ * mismo límite) — necesario para `disponible-index` con 1.000+ libros
+ * (`docs/plan-rendimiento-catalogo.md` §3, fase 2), aunque no cambia el
+ * comportamiento de los 2 llamadores existentes (`isbn-index`, que nunca
+ * dispara una segunda página).
+ *
+ * `atributos`, si se pasa, agrega `ProjectionExpression` (mismo mecanismo que
+ * `escanearMayorQue`/`escanearProyeccion`) para traer solo esos campos — usa
+ * placeholders `#atributo0`, `#atributo1`, etc. para no chocar con el
+ * placeholder `#clave` que ya usa esta función para la condición de la
+ * `Query`. Sin este parámetro, el comportamiento queda exactamente igual que
+ * antes (proyección completa).
+ */
 export async function consultarPorIndice<T extends object>(
   nombreTabla: string,
   nombreIndice: string,
   nombreAtributoClave: string,
   valorClave: string,
+  atributos?: (keyof T & string)[],
 ): Promise<T[]> {
-  const resultado = await documento.send(
-    new QueryCommand({
-      TableName: nombreTabla,
-      IndexName: nombreIndice,
-      KeyConditionExpression: '#clave = :valor',
-      ExpressionAttributeNames: { '#clave': nombreAtributoClave },
-      ExpressionAttributeValues: { ':valor': valorClave },
-    }),
-  );
-  return (resultado.Items ?? []) as T[];
+  const items: T[] = [];
+  let ultimaClaveEvaluada: Record<string, unknown> | undefined;
+  do {
+    const resultado = await documento.send(
+      new QueryCommand({
+        TableName: nombreTabla,
+        IndexName: nombreIndice,
+        KeyConditionExpression: '#clave = :valor',
+        ExpressionAttributeNames: {
+          '#clave': nombreAtributoClave,
+          ...(atributos
+            ? Object.fromEntries(atributos.map((atributo, indice) => [`#atributo${indice}`, atributo]))
+            : {}),
+        },
+        ExpressionAttributeValues: { ':valor': valorClave },
+        ...(atributos
+          ? { ProjectionExpression: atributos.map((_, indice) => `#atributo${indice}`).join(', ') }
+          : {}),
+        ExclusiveStartKey: ultimaClaveEvaluada,
+      }),
+    );
+    items.push(...((resultado.Items ?? []) as T[]));
+    ultimaClaveEvaluada = resultado.LastEvaluatedKey;
+  } while (ultimaClaveEvaluada !== undefined);
+  return items;
 }
 
 /**

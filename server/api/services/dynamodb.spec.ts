@@ -13,6 +13,7 @@ vi.mock('@aws-sdk/lib-dynamodb', async () => {
 });
 
 const {
+  consultarPorIndice,
   escanearMayorQue,
   escanearProyeccion,
   escanearTodo,
@@ -143,6 +144,107 @@ describe('paginación de Scan (escanearTodo / escanearMayorQue / escanearProyecc
         expect(entrada['ProjectionExpression']).toBe('#atributo0');
       }
     });
+  });
+});
+
+/**
+ * `consultarPorIndice` (`Query` sobre un GSI) — igual que un `Scan`, tiene el
+ * mismo límite de ~1 MB por página, así que recorre todas las páginas
+ * (`docs/plan-rendimiento-catalogo.md` §3, fase 2: `GET /api/libros` pasa a
+ * consultar el GSI disperso `disponible-index` con 1.000+ libros, mismo
+ * riesgo que el bug real de producción del 2026-08-19 con `Scan`).
+ */
+describe('consultarPorIndice', () => {
+  beforeEach(() => {
+    sendMock.mockReset();
+  });
+
+  it('con una sola página, no repite la llamada', async () => {
+    sendMock.mockResolvedValueOnce({ Items: [{ id: '1' }] });
+
+    const resultado = await consultarPorIndice('tabla-falsa', 'mi-indice', 'clave', 'valor-1');
+
+    expect(resultado).toEqual([{ id: '1' }]);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('agrega los ítems de TODAS las páginas hasta que LastEvaluatedKey deja de venir', async () => {
+    sendMock
+      .mockResolvedValueOnce({ Items: [{ id: '1' }, { id: '2' }], LastEvaluatedKey: { id: '2' } })
+      .mockResolvedValueOnce({ Items: [{ id: '3' }] });
+
+    const resultado = await consultarPorIndice('tabla-falsa', 'mi-indice', 'clave', 'valor-1');
+
+    expect(resultado).toEqual([{ id: '1' }, { id: '2' }, { id: '3' }]);
+    expect(sendMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('pasa el LastEvaluatedKey de una página como ExclusiveStartKey de la siguiente, manteniendo IndexName/KeyConditionExpression', async () => {
+    sendMock
+      .mockResolvedValueOnce({ Items: [{ id: '1' }], LastEvaluatedKey: { id: '1' } })
+      .mockResolvedValueOnce({ Items: [{ id: '2' }] });
+
+    await consultarPorIndice('tabla-falsa', 'mi-indice', 'clave', 'valor-1');
+
+    const primeraLlamada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+    const segundaLlamada = (sendMock.mock.calls[1]?.[0] as { input: Record<string, unknown> }).input;
+    expect(primeraLlamada['ExclusiveStartKey']).toBeUndefined();
+    expect(segundaLlamada['ExclusiveStartKey']).toEqual({ id: '1' });
+    for (const entrada of [primeraLlamada, segundaLlamada]) {
+      expect(entrada['IndexName']).toBe('mi-indice');
+      expect(entrada['KeyConditionExpression']).toBe('#clave = :valor');
+      expect(entrada['ExpressionAttributeValues']).toEqual({ ':valor': 'valor-1' });
+    }
+  });
+
+  it('sin quinto parámetro no agrega ProjectionExpression (regresión de retrocompatibilidad de isbn-index)', async () => {
+    sendMock.mockResolvedValueOnce({ Items: [{ id: '1' }] });
+
+    await consultarPorIndice('tabla-falsa', 'isbn-index', 'isbn', '9780000000000');
+
+    const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+    expect(entrada['ProjectionExpression']).toBeUndefined();
+    expect(entrada['ExpressionAttributeNames']).toEqual({ '#clave': 'isbn' });
+  });
+
+  it('con quinto parámetro agrega ProjectionExpression/ExpressionAttributeNames sin chocar con el placeholder #clave', async () => {
+    sendMock.mockResolvedValueOnce({ Items: [{ id: '1' }] });
+
+    const resultado = await consultarPorIndice('tabla-falsa', 'disponible-index', 'disponibleParaCatalogo', 'SI', [
+      'bookId',
+      'titulo',
+    ]);
+
+    expect(resultado).toEqual([{ id: '1' }]);
+    const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+    expect(entrada['KeyConditionExpression']).toBe('#clave = :valor');
+    expect(entrada['ProjectionExpression']).toBe('#atributo0, #atributo1');
+    expect(entrada['ExpressionAttributeNames']).toEqual({
+      '#clave': 'disponibleParaCatalogo',
+      '#atributo0': 'bookId',
+      '#atributo1': 'titulo',
+    });
+  });
+
+  it('mantiene el ProjectionExpression en cada página', async () => {
+    sendMock
+      .mockResolvedValueOnce({ Items: [{ id: '1' }], LastEvaluatedKey: { id: '1' } })
+      .mockResolvedValueOnce({ Items: [{ id: '2' }] });
+
+    await consultarPorIndice('tabla-falsa', 'disponible-index', 'disponibleParaCatalogo', 'SI', ['bookId']);
+
+    for (const llamada of sendMock.mock.calls) {
+      const entrada = (llamada[0] as { input: Record<string, unknown> }).input;
+      expect(entrada['ProjectionExpression']).toBe('#atributo0');
+    }
+  });
+
+  it('una tabla/índice vacío (sin Items) devuelve [] sin lanzar', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    const resultado = await consultarPorIndice('tabla-falsa', 'mi-indice', 'clave', 'valor-1');
+
+    expect(resultado).toEqual([]);
   });
 });
 
