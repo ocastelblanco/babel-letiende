@@ -485,6 +485,8 @@ Con el backfill confirmado en ambos entornos, sigue la **Tarea 5 (PR B)**: cambi
 - [x] `npm run build:api`, `npm run test:api`, `npx serverless print --stage dev` (confirma `Query` sobre `disponible-index` + `Scan` para el sitemap) y `npx serverless package --stage dev` verificados en verde, de forma independiente.
 - [ ] Verificar en `staging`/`production` que el catálogo público sigue mostrando los mismos libros que antes del cambio (mismo contenido, ruta de acceso distinta) — pendiente del usuario tras desplegar.
 
-**Con esto se cierra por completo el lote de rendimiento del catálogo traído por el usuario el 2026-09-17** (Tarea 1 — PR #131, Tarea 3 — PR #132, Tarea 5 PR A — PR #133, Tarea 5 PR B — este PR, todos fusionados salvo el último). Quedan en backlog, sin fecha: Tarea 2 (paginación real, aplazada por decisión del usuario a favor de la Tarea 3) y Tarea 4 (N+1 de `resolverEjemplares`, saltada a favor de la Tarea 5).
+**Con esto se cierra por completo el lote de rendimiento del catálogo traído por el usuario el 2026-09-17** (Tarea 1 — PR #131, Tarea 3 — PR #132, Tarea 5 PR A — PR #133, Tarea 5 PR B — PR #134, todos fusionados y confirmados por el usuario en `production`). Quedan en backlog, sin fecha: Tarea 2 (paginación real, aplazada por decisión del usuario a favor de la Tarea 3) y Tarea 4 (N+1 de `resolverEjemplares`, saltada a favor de la Tarea 5).
+
+**Pausa deliberada (2026-09-18):** el usuario decidió dejar aquí la ronda de optimización del catálogo — "por ahora funciona bien, veremos si luego necesitamos otra cosa". Sin tareas activas hasta el próximo lote/hotfix del usuario. Si se retoma más adelante, `docs/plan-rendimiento-catalogo.md` §2/§3 ya tiene el detalle y el orden sugerido de las Tareas 2 y 4 pendientes.
 
 Se promueve la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) al segundo slot activo una vez resuelta la pregunta abierta de diseño del plan — mientras tanto, solo la Tarea 1 ocupa un slot.
