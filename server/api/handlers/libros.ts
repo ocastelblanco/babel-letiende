@@ -150,10 +150,11 @@ function nombreTablaUbicaciones(): string {
  */
 export const handler: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayProxyResultV2> => {
   try {
-    const libros = await escanearMayorQue<LibroIndice>(
+    const libros = await consultarPorIndice<LibroIndice>(
       nombreTablaLibros(),
-      'cantidadDisponible',
-      0,
+      'disponible-index',
+      'disponibleParaCatalogo',
+      'SI',
       ['bookId', 'isbn', 'titulo', 'autor', 'ubicacionId', 'pvp', 'portadaUrl', 'cantidadDisponible'],
     );
     // Mismo motivo que `handlerIndice`: un libro sin ISBN se persiste sin el
