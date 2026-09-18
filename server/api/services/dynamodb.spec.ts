@@ -90,7 +90,34 @@ describe('paginación de Scan (escanearTodo / escanearMayorQue / escanearProyecc
         const entrada = (llamada[0] as { input: Record<string, unknown> }).input;
         expect(entrada['FilterExpression']).toBe('#atributo > :valor');
         expect(entrada['ExpressionAttributeValues']).toEqual({ ':valor': 0 });
+        expect(entrada['ProjectionExpression']).toBeUndefined();
       }
+    });
+
+    it('sin cuarto parámetro no agrega ProjectionExpression (regresión de retrocompatibilidad)', async () => {
+      sendMock.mockResolvedValueOnce({ Items: [{ id: '1', cantidad: 5 }] });
+
+      await escanearMayorQue('tabla-falsa', 'cantidad', 0);
+
+      const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+      expect(entrada['ProjectionExpression']).toBeUndefined();
+      expect(entrada['ExpressionAttributeNames']).toEqual({ '#atributo': 'cantidad' });
+    });
+
+    it('con cuarto parámetro agrega ProjectionExpression/ExpressionAttributeNames sin chocar con el placeholder del FilterExpression', async () => {
+      sendMock.mockResolvedValueOnce({ Items: [{ id: '1', cantidad: 5 }] });
+
+      const resultado = await escanearMayorQue('tabla-falsa', 'cantidad', 0, ['id', 'titulo']);
+
+      expect(resultado).toEqual([{ id: '1', cantidad: 5 }]);
+      const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+      expect(entrada['FilterExpression']).toBe('#atributo > :valor');
+      expect(entrada['ProjectionExpression']).toBe('#atributo0, #atributo1');
+      expect(entrada['ExpressionAttributeNames']).toEqual({
+        '#atributo': 'cantidad',
+        '#atributo0': 'id',
+        '#atributo1': 'titulo',
+      });
     });
   });
 

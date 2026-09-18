@@ -440,6 +440,20 @@ Sin tareas activas hasta el próximo lote/hotfix del usuario.
 - [x] 442 tests frontend en verde (427 + 15 nuevos), verificado de forma independiente. `npm run build -- --configuration=production` limpio (SSR + navegador), verificado de forma independiente.
 - [x] Smoke test: `/catalogar` responde `200`. `/` cuelga con `ng serve` local sin backend real alcanzable — confirmado que es una limitación preexistente del entorno (reproducida también en `main`, sin estos cambios), no una regresión; mismo caso ya documentado para otras tareas (ej. Tarea 4 del lote de duplicados, 2026-08-29).
 
-Verificación visual interactiva en `staging` pendiente del usuario. Se promueve la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) al segundo slot activo una vez resuelta la pregunta abierta de diseño del plan (`docs/plan-rendimiento-catalogo.md`) — mientras tanto, el motor JIT queda con un solo slot activo hasta que el usuario confirme la Tarea 1 en `staging`.
+Verificación visual interactiva en `staging` pendiente del usuario. **Confirmado por el usuario en `staging`: "Todo funciona", PR #131 fusionado.**
+
+**Prioridad de selección aplicada (2026-09-17):** pregunta abierta de la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) resuelta con el usuario — de las 3 opciones planteadas (paginación progresiva en segundo plano / paginación real + búsqueda en backend / aplazar y medir con la Tarea 3 primero), eligió **aplazar la Tarea 2** y promover la Tarea 3 (reducir campos de `GET /api/libros`) al único slot activo, por ser más pequeña y de menor riesgo.
+
+## Tarea 3 — Reducir campos de `GET /api/libros` (catálogo público) — COMPLETA (2026-09-17)
+
+Reutiliza exactamente el mismo patrón que `GET /api/libros/indice` (`escanearProyeccion`-style, `LibroIndice`, 8 campos) — confirmado leyendo `CatalogoPublicoComponent` completo que no usa ningún otro campo de `Libro` (ni `editorial`, `porcentajeDescuentoEditorial`, `costo`, `cantidadTotal`, etc.). Alcance acotado a `GET /api/libros` (catálogo público) — `GET /api/libros/inventario` (Catalogar > Editar) queda fuera: esa pantalla sí necesita el libro completo al abrir "Editar".
+
+- [x] Backend: `escanearMayorQue` (`server/api/services/dynamodb.ts`) ganó un 4º parámetro opcional `atributos?: (keyof T & string)[]` que agrega `ProjectionExpression` (placeholders `#atributo0`, `#atributo1`... para no chocar con el `#atributo` del `FilterExpression`) — retrocompatible, `handlerSitemap` (único otro call-site) sigue igual sin pasarlo.
+- [x] `handler` (`GET /api/libros`, `libros.ts:151-162`): usa la proyección de 8 campos (mismo array que `handlerIndice`, reutiliza la interfaz `LibroIndice` ya declarada en el archivo) en vez de `Libro` completo; restituye `isbn ?? null` igual que `handlerIndice` (ya no usa `normalizarLibro`, tipado para `Libro` completo).
+- [x] Frontend: `LibrosService.cargarCatalogo()`/`librosSignal`/`libros` pasan de `Libro[]` a `LibroIndice[]`. `CatalogoPublicoComponent`: `agruparLibros`, el cast y `Map<string, LibroIndice[]>` actualizados (3 usos) — import de `Libro` eliminado del archivo (ya no se usa como tipo).
+- [x] Tests nuevos: 3 en `libros.spec.ts` (no existían tests previos de `handler`, solo de `handlerSitemap` — proyección de 8 campos, `isbn: null` restituido, 500 si falla) + 2 en `dynamodb.spec.ts` (`escanearMayorQue` con y sin el 4º parámetro). 393 tests backend (antes 388) / 442 frontend (sin cambios, no requirió tocar `catalogo-publico.component.spec.ts` — el mock de `LibrosService` usa `useValue: any`).
+- [x] `npm run build -- --configuration=production`, `npm run build:api`, `npm test -- --watch=false`, `npm run test:api`, `npx serverless print --stage dev` y `npx serverless package --stage dev` verificados en verde, de forma independiente (no solo el reporte del agente).
+
+Con esto se cierra la Tarea 3. La Tarea 2 (paginación real) sigue en backlog, a la espera de que el usuario mida en `staging` si el payload liviano ya es suficiente. Verificación visual interactiva en `staging` pendiente del usuario. Motor JIT sin tareas activas hasta esa confirmación.
 
 Se promueve la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) al segundo slot activo una vez resuelta la pregunta abierta de diseño del plan — mientras tanto, solo la Tarea 1 ocupa un slot.

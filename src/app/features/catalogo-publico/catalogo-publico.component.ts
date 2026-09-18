@@ -2,9 +2,8 @@ import { Component, OnDestroy, OnInit, PLATFORM_ID, computed, effect, inject, si
 import { isPlatformBrowser } from '@angular/common';
 import { Meta, Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { LibrosService } from '../../core/api/libros.service';
+import { LibrosService, type LibroIndice } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
-import type { Libro } from '../../core/models/libro.model';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
 import { ScrollInfinitoDirective } from '../../shared/directivas/scroll-infinito.directive';
@@ -39,8 +38,8 @@ export interface LibroAgrupado {
 }
 
 /** Agrupa un conjunto de libros que comparten ISBN en un único `LibroAgrupado` — PVP mínimo/máximo (D4) y `cantidadDisponible` sumada entre todos. */
-function agruparLibros(libros: Libro[]): LibroAgrupado {
-  const primero = libros[0] as Libro;
+function agruparLibros(libros: LibroIndice[]): LibroAgrupado {
+  const primero = libros[0] as LibroIndice;
   const precios = libros.map((libro) => libro.pvp);
   return {
     bookId: primero.bookId,
@@ -204,7 +203,7 @@ export class CatalogoPublicoComponent implements OnInit, OnDestroy {
    * ISBN nunca se apila (decisión **D2**), siempre queda como grupo de 1.
    */
   protected readonly librosAgrupados = computed(() => {
-    const porIsbn = new Map<string, Libro[]>();
+    const porIsbn = new Map<string, LibroIndice[]>();
     const grupos: LibroAgrupado[] = [];
 
     for (const libro of this.librosFiltrados()) {

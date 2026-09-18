@@ -120,17 +120,32 @@ async function escanearPaginado<T extends object>(
  * `Scan` recorre toda la tabla (no usa índice), así que solo es aceptable
  * para tablas pequeñas/alcance inicial — ver TODO.md/MEMORY.md sobre
  * filtros más finos como tarea futura.
+ *
+ * `atributos`, si se pasa, agrega `ProjectionExpression` (mismo mecanismo
+ * que `escanearProyeccion`) para traer solo esos campos — usa placeholders
+ * `#atributo0`, `#atributo1`, etc. para no chocar con el placeholder
+ * `#atributo` del `FilterExpression` de esta función. Sin este parámetro,
+ * el comportamiento queda exactamente igual que antes (proyección completa).
  */
 export async function escanearMayorQue<T extends object>(
   nombreTabla: string,
   nombreAtributo: string,
   valorMinimoExcluido: number,
+  atributos?: (keyof T & string)[],
 ): Promise<T[]> {
   return escanearPaginado<T>({
     TableName: nombreTabla,
     FilterExpression: '#atributo > :valor',
-    ExpressionAttributeNames: { '#atributo': nombreAtributo },
+    ExpressionAttributeNames: {
+      '#atributo': nombreAtributo,
+      ...(atributos
+        ? Object.fromEntries(atributos.map((atributo, indice) => [`#atributo${indice}`, atributo]))
+        : {}),
+    },
     ExpressionAttributeValues: { ':valor': valorMinimoExcluido },
+    ...(atributos
+      ? { ProjectionExpression: atributos.map((_, indice) => `#atributo${indice}`).join(', ') }
+      : {}),
   });
 }
 
