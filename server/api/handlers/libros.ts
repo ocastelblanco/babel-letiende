@@ -150,12 +150,15 @@ function nombreTablaUbicaciones(): string {
  */
 export const handler: APIGatewayProxyHandlerV2 = async (): Promise<APIGatewayProxyResultV2> => {
   try {
-    const libros = await escanearMayorQue<Libro>(
+    const libros = await escanearMayorQue<LibroIndice>(
       nombreTablaLibros(),
       'cantidadDisponible',
       0,
+      ['bookId', 'isbn', 'titulo', 'autor', 'ubicacionId', 'pvp', 'portadaUrl', 'cantidadDisponible'],
     );
-    return respuestaJson(200, libros.map(normalizarLibro));
+    // Mismo motivo que `handlerIndice`: un libro sin ISBN se persiste sin el
+    // atributo (`omitirCamposNulos`), así que llega `undefined`, no `null`.
+    return respuestaJson(200, libros.map((libro) => ({ ...libro, isbn: libro.isbn ?? null })));
   } catch {
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }

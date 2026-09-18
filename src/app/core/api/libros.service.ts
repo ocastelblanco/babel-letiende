@@ -65,7 +65,7 @@ export class LibrosService {
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
 
-  private readonly librosSignal = signal<Libro[]>([]);
+  private readonly librosSignal = signal<LibroIndice[]>([]);
   /** Último catálogo resuelto por `cargarCatalogo()`. */
   readonly libros = this.librosSignal.asReadonly();
 
@@ -103,7 +103,7 @@ export class LibrosService {
     this.errorSignal.set(false);
 
     try {
-      const libros = await firstValueFrom(this.http.get<Libro[]>('/api/libros'));
+      const libros = await firstValueFrom(this.http.get<LibroIndice[]>('/api/libros'));
       this.librosSignal.set(libros);
     } catch {
       this.librosSignal.set([]);
