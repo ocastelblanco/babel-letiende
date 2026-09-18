@@ -12,8 +12,8 @@ Memoria de arquitectura y estado del proyecto. Actualizar al cierre de cada sesi
 | URL producción | https://babel.letiende.co (en producción desde 03/08/2026, dominio personalizado PR #81) |
 | URL staging (real) | `https://oyzau0c910.execute-api.us-east-1.amazonaws.com` (API Gateway HTTP API, stage `staging`) |
 | Rama principal | `main` |
-| Rama de trabajo actual | `feature/query-disponible-catalogo` (Tarea 5, PR B — cierre del lote de rendimiento, completa, PR pendiente de abrir) |
-| Última sesión | 18/09/2026 — Backfill completo y verificado en `staging` (22/22) y `production` (1.000/1.000, confirmado por el usuario antes de tocar datos reales). PR B: `GET /api/libros` cambiado de `Scan` a `Query` sobre `disponible-index` (`consultarPorIndice` generalizada con paginación + proyección); IAM ajustado sin romper `librosSitemap` (rol compartido, se agregó `Query` sin quitar `Scan`). 412 tests backend, build y `serverless package --stage dev` verificados. **Con esto se cierra por completo el lote de rendimiento del catálogo** (Tareas 1, 3, 5 — Tareas 2 y 4 en backlog sin fecha). Ver §2 y `TODO.md` |
+| Rama de trabajo actual | `main` (sin rama de trabajo activa) |
+| Última sesión | 18/09/2026 — PR #134 (Tarea 5 PR B) fusionado y confirmado por el usuario en `production`. **El usuario decidió pausar aquí la ronda de optimización del catálogo** ("por ahora funciona bien, veremos si luego necesitamos otra cosa") — Tareas 2 (paginación real) y 4 (N+1 de `resolverEjemplares`) quedan en backlog sin fecha, detalladas en `docs/plan-rendimiento-catalogo.md` para retomar cuando el usuario lo pida. Sin tareas activas. Ver §2 y `TODO.md` |
 
 ---
 
