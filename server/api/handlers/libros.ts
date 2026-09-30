@@ -4,6 +4,7 @@ import type {
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
 import * as XLSX from 'xlsx';
+import { formatearFechaBogota } from '../lib/fechas';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import {
   consultarPorIndice,
@@ -1054,7 +1055,7 @@ export const handlerExportarInventario: APIGatewayProxyHandlerV2 = async (event)
       const mueble = ubicacion ? mueblePorId.get(ubicacion.muebleId) : undefined;
       const espacio = mueble ? espacioPorId.get(mueble.espacioId) : undefined;
       return {
-        'Fecha de catalogación': libro.creadoEn,
+        'Fecha de catalogación': formatearFechaBogota(libro.creadoEn),
         ISBN: libro.isbn ?? '—',
         Título: libro.titulo,
         Autor: libro.autor,
