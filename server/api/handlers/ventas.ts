@@ -4,6 +4,7 @@ import type {
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
 import * as XLSX from 'xlsx';
+import { formatearFechaBogota } from '../lib/fechas';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import {
   decrementarPorCantidadSiSuficiente,
@@ -454,7 +455,7 @@ export const handlerExportar: APIGatewayProxyHandlerV2 = async (event): Promise<
     const ventas = await consultarVentasFiltradas(validacion.filtros);
 
     const filas = ventas.map((venta) => ({
-      'Fecha de venta': venta.vendidoEn,
+      'Fecha de venta': formatearFechaBogota(venta.vendidoEn),
       ISBN: venta.isbn ?? '—',
       Título: venta.tituloLibro,
       Editorial: venta.editorialLibro,

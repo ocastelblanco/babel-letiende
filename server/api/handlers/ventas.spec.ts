@@ -513,7 +513,7 @@ describe('handlerExportar (GET /api/ventas/exportar)', () => {
       const filas = filasDelXlsx(respuesta.body as string);
       expect(filas).toHaveLength(2);
       expect(filas[0]).toMatchObject({
-        'Fecha de venta': ventaFalsa1.vendidoEn,
+        'Fecha de venta': '30/06/2026 19:00:00',
         ISBN: ventaFalsa1.isbn,
         Título: 'Cien años de soledad',
         Editorial: 'Sudamericana',

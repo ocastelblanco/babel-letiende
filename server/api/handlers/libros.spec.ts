@@ -993,7 +993,7 @@ describe('handlerExportarInventario (GET /api/libros/exportar)', () => {
     const filas = filasDelXlsx(respuesta.body as string);
     expect(filas).toHaveLength(2);
     expect(filas[0]).toMatchObject({
-      'Fecha de catalogación': libroFalso.creadoEn,
+      'Fecha de catalogación': '31/12/2025 19:00:00',
       ISBN: libroFalso.isbn,
       Título: libroFalso.titulo,
       Autor: libroFalso.autor,

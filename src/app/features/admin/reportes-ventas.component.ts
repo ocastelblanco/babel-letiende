@@ -17,7 +17,7 @@ const FORMAS_DE_PAGO: readonly FormaDePago[] = ['efectivo', 'tarjeta', 'transfer
  * este componente nunca decide por sí mismo si el usuario puede exportar.
  *
  * `desde`/`hasta` son inputs `type="date"` (`YYYY-MM-DD`): se normalizan al
- * inicio/fin del día en UTC antes de enviarlos, para que un `hasta` elegido
+ * inicio/fin del día en hora de Bogotá (UTC-5) y se convierten a ISO UTC antes de enviarlos, para que un `hasta` elegido
  * por el usuario incluya todas las ventas de ese día (el backend compara
  * `Venta.vendidoEn` — un ISO completo con hora — como string; sin esta
  * normalización, un `hasta` de solo fecha excluiría casi todas las ventas
@@ -63,10 +63,10 @@ export class ReportesVentasComponent {
     const valores = this.formulario.getRawValue();
     const filtros: FiltrosExportarVentas = {};
     if (valores.desde) {
-      filtros.desde = `${valores.desde}T00:00:00.000Z`;
+      filtros.desde = new Date(`${valores.desde}T00:00:00.000-05:00`).toISOString();
     }
     if (valores.hasta) {
-      filtros.hasta = `${valores.hasta}T23:59:59.999Z`;
+      filtros.hasta = new Date(`${valores.hasta}T23:59:59.999-05:00`).toISOString();
     }
     if (valores.editorial.trim()) {
       filtros.editorial = valores.editorial.trim();

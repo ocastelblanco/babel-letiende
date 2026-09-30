@@ -81,8 +81,8 @@ describe('ReportesVentasComponent', () => {
     fixture.detectChanges();
 
     expect(exportarVentasMock).toHaveBeenCalledWith({
-      desde: '2026-07-01T00:00:00.000Z',
-      hasta: '2026-07-31T23:59:59.999Z',
+      desde: '2026-07-01T05:00:00.000Z',
+      hasta: '2026-08-01T04:59:59.999Z',
       editorial: 'Planeta',
       formaDePago: 'efectivo',
     } satisfies FiltrosExportarVentas);
