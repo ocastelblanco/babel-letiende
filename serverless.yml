@@ -168,6 +168,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/services/dynamodb.js'
         # `libros.js` compilado incluye TANTO `handler` (GET, este) como
         # `handlerCrear` (POST, función `catalogarLibro`) — ambos exports
@@ -234,6 +235,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/services/dynamodb.js'
         # Mismo motivo que la función `libros` (MEMORY.md §7): `libros.js`
         # compilado incluye todos los handlers del archivo, así que el
@@ -306,6 +308,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PATCH — mismo cuidado
@@ -367,6 +370,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que el GET público, pero esta Lambda
@@ -428,6 +432,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/DELETE/inventario — mismo
@@ -489,6 +494,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/
@@ -547,6 +553,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PUT/inventario — mismo
@@ -610,6 +617,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PUT/DELETE — mismo cuidado
@@ -676,6 +684,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario —
@@ -745,6 +754,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/exportar —
@@ -809,6 +819,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/
@@ -873,6 +884,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/
@@ -1792,6 +1804,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/ventas.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Verifica tokens con firebase-admin — igual que usuariosMe/
@@ -1855,6 +1868,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/ventas.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (ventas.ts) que POST — mismo cuidado documentado en
@@ -1919,6 +1933,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/ventas.js'
+        - 'dist-server/api/lib/fechas.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         # Misma función (ventas.ts) que POST/GET — mismo cuidado documentado
