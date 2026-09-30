@@ -255,7 +255,7 @@ Todos los endpoints los sirve la función Lambda `api`, bajo el prefijo `/api`. 
 | PATCH | `/api/libros/:bookId/estante` | Vendedor/Admin | Cambia el estante de un libro (`bookId` es la clave primaria real de `babel-libros`, ver §5.1 — `isbn` puede ser `null`). | `{ estanteId }` |
 | POST | `/api/ventas` | Vendedor/Admin | Registra una venta; decrementa `cantidadDisponible`; calcula `precioFinal`/`utilidad` con snapshot de `costoLibro`. | `{ bookId, formaDePago, porcentajeDescuentoVenta }` |
 | GET | `/api/ventas` | Admin | Lista/filtra ventas para reportes. | Query: `desde`, `hasta`, `editorial`, `formaDePago` |
-| GET | `/api/ventas/exportar` | Admin | Genera y descarga el reporte en XLSX. | Mismos filtros que arriba |
+| GET | `/api/ventas/exportar` | Admin | Genera y descarga el reporte en XLSX. Las fechas del archivo se escriben en hora de Bogotá (UTC-5, `DD/MM/YYYY HH:MM:SS`, helper `server/api/lib/fechas.ts`); `desde`/`hasta` siguen siendo ISO UTC, y el frontend los calcula a partir del día bogotano. | Mismos filtros que arriba |
 | GET | `/api/estantes` | Vendedor/Admin | Lista estantes (solo lectura) — un vendedor la necesita para elegir dónde ubicar un libro al catalogarlo. | — |
 | POST / PUT / DELETE | `/api/estantes` | Admin | Alta/edición/baja de estantes. | `Estante` |
 | GET / POST / PUT / DELETE | `/api/editoriales-descuentos` | Admin | CRUD de descuentos por editorial (porcentaje por defecto y alternativas para libros en consignación). | `DescuentoEditorial` |

@@ -199,6 +199,12 @@ Esta sección documenta comportamientos no obvios descubiertos durante el desarr
 ### Avatar de Google (`lh3.googleusercontent.com`) — 429 Too Many Requests
 Mismo hallazgo que en Comandante: añadir siempre `referrerpolicy="no-referrer"` en cualquier `<img>` que cargue una foto de perfil de Google.
 
+### Un módulo nuevo del backend debe agregarse al `package.patterns` de cada función que lo importe
+Cada función de `serverless.yml` empaqueta solo los archivos listados (`'!**'` + allowlist). Si un handler importa un módulo nuevo (p. ej. `server/api/lib/fechas.ts`) y no se agrega `dist-server/api/lib/<modulo>.js` a **todas** las funciones que cargan ese handler, el build y las pruebas pasan pero la Lambda revienta al iniciar con `Runtime.ImportModuleError` (500 en staging, PR #137). Antes de abrir el PR: `npm run build:api` y revisar que el módulo nuevo esté en los patterns de cada función afectada. Ojo: `libros.js` lo cargan 12 funciones y `ventas.js` 3.
+
+### Fechas: UTC en datos, hora de Bogotá en reportes
+Las fechas se guardan siempre en ISO UTC. Al presentarlas en reportes se convierten a hora de Bogotá (UTC-5 fijo, sin horario de verano) con `formatearFechaBogota`; los filtros por día se calculan con `-05:00` y se convierten a ISO UTC (el backend compara `vendidoEn` como texto). Nunca escribir un ISO UTC crudo en un reporte.
+
 ### Cold starts de Lambda en SSR
 El primer request tras inactividad a una función Lambda que sirve SSR de Angular puede tardar significativamente más (cold start incluye bootstrap de Node + Angular Universal). Evaluar `provisioned concurrency` solo si el costo lo justifica (rompe el objetivo de $0); por defecto, aceptar la latencia en frío y optimizar el bundle del servidor.
 

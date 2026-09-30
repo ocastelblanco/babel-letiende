@@ -490,3 +490,13 @@ Con el backfill confirmado en ambos entornos, sigue la **Tarea 5 (PR B)**: cambi
 **Pausa deliberada (2026-09-18):** el usuario decidió dejar aquí la ronda de optimización del catálogo — "por ahora funciona bien, veremos si luego necesitamos otra cosa". Sin tareas activas hasta el próximo lote/hotfix del usuario. Si se retoma más adelante, `docs/plan-rendimiento-catalogo.md` §2/§3 ya tiene el detalle y el orden sugerido de las Tareas 2 y 4 pendientes.
 
 Se promueve la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) al segundo slot activo una vez resuelta la pregunta abierta de diseño del plan — mientras tanto, solo la Tarea 1 ocupa un slot.
+
+## Hotfix — Fechas de los reportes en hora de Bogotá (UTC-5) — COMPLETA (2026-09-30)
+
+- [x] `server/api/lib/fechas.ts` (`formatearFechaBogota`) + pruebas; aplicado a `Fecha de venta` (`ventas.ts`) y `Fecha de catalogación` (`libros.ts`).
+- [x] Filtros desde/hasta de `ReportesVentasComponent` calculados con el día bogotano (`-05:00`) y convertidos a ISO UTC.
+- [x] `serverless.yml`: `dist-server/api/lib/fechas.js` agregado al `package.patterns` de las 15 funciones de `libros.js` y `ventas.js` (corrige el 500 de `staging` causado por el primer push del PR).
+- [x] Documentación actualizada (`PRD.md` §5.5, `tech-specs.md` §5, `CLAUDE.md` §7, `MEMORY.md` §1/§2/§7).
+- [x] Probado por el usuario en `staging`: todo funciona. PR #137 pendiente de fusión.
+
+Sin tareas activas hasta el próximo lote/hotfix del usuario. El backlog pausado (Tareas 2 y 4 de `docs/plan-rendimiento-catalogo.md`) sigue sin fecha.

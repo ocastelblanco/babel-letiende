@@ -157,6 +157,7 @@ Vendedor → Llega a la ficha del libro (escaneando su ISBN, buscándolo en el c
 El administrador visualiza y descarga en formato XLSX dos tipos de reporte, ambos desde la misma sección:
 
 - **Ventas:** los libros vendidos, filtrados u ordenados por rango de fecha de venta, PVP, utilidad, costo, editorial o forma de pago.
+- **Zona horaria:** todas las fechas de los reportes (y los filtros desde/hasta de ventas) se muestran y se interpretan en hora de Bogotá (UTC-5), formato `DD/MM/YYYY HH:MM:SS`. En base de datos las fechas siguen guardándose en UTC.
 - **Inventario:** el catálogo completo con ISBN, título, autor, editorial, PVP, % de descuento editorial, cantidad de ejemplares disponibles, espacio, mueble y ubicación de cada libro.
 
 ### 5.6 Configuración de la aplicación (solo administrador)
