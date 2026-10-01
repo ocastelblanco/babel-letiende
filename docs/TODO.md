@@ -497,6 +497,6 @@ Se promueve la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) a
 - [x] Filtros desde/hasta de `ReportesVentasComponent` calculados con el día bogotano (`-05:00`) y convertidos a ISO UTC.
 - [x] `serverless.yml`: `dist-server/api/lib/fechas.js` agregado al `package.patterns` de las 15 funciones de `libros.js` y `ventas.js` (corrige el 500 de `staging` causado por el primer push del PR).
 - [x] Documentación actualizada (`PRD.md` §5.5, `tech-specs.md` §5, `CLAUDE.md` §7, `MEMORY.md` §1/§2/§7).
-- [x] Probado por el usuario en `staging`: todo funciona. PR #137 pendiente de fusión.
+- [x] Probado por el usuario en `staging`: todo funciona. PR #137 fusionado.
 
 Sin tareas activas hasta el próximo lote/hotfix del usuario. El backlog pausado (Tareas 2 y 4 de `docs/plan-rendimiento-catalogo.md`) sigue sin fecha.
