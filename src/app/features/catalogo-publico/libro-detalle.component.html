@@ -117,6 +117,11 @@
                 }
               </div>
 
+              <div class="rounded-xl bg-neutral/60 px-3 py-2 text-center">
+                <p class="text-xs text-primary/60">Precio a cobrar</p>
+                <p class="text-xl font-bold text-primary">{{ precioVenta() | pvp }}</p>
+              </div>
+
               <div>
                 <label for="formaDePago" class="mb-1 block text-sm font-semibold text-primary">Forma de pago</label>
                 <select
