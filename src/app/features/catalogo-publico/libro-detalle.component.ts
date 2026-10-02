@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Meta, Title } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
@@ -118,6 +119,29 @@ export class LibroDetalleComponent implements OnInit {
     cantidad: [1, [Validators.required, Validators.min(1)]],
     porcentajeDescuentoVenta: [0, [Validators.required, Validators.min(0), Validators.max(100)]],
     formaDePago: ['' as FormaDePago | '', Validators.required],
+  });
+
+  /** Puente signal de los valores en vivo de `formularioVenta` — `abrirDialogoVenta`/`cerrarDialogoVenta` usan `reset()`, que también emite por `valueChanges`, así que esto se mantiene sincronizado en cada apertura/cierre del diálogo. */
+  private readonly valoresFormularioVenta = toSignal(this.formularioVenta.valueChanges, {
+    initialValue: this.formularioVenta.getRawValue(),
+  });
+
+  /**
+   * Precio TOTAL a cobrar con la cantidad y el % de descuento actuales del
+   * formulario — mismo cálculo que hace el backend al registrar la venta
+   * (`Math.round(pvp * cantidad * (1 - descuento / 100))`, `ventas.ts`), para
+   * que el vendedor vea en vivo cuánto le queda por cobrar al comprador
+   * mientras ajusta cantidad/descuento, antes de confirmar.
+   */
+  protected readonly precioVenta = computed(() => {
+    const ejemplar = this.ejemplarSeleccionadoVenta();
+    if (!ejemplar) {
+      return 0;
+    }
+    const valores = this.valoresFormularioVenta();
+    const cantidad = Number(valores.cantidad) || 0;
+    const descuento = Number(valores.porcentajeDescuentoVenta) || 0;
+    return Math.round(ejemplar.pvp * cantidad * (1 - descuento / 100));
   });
 
   constructor() {

@@ -2,6 +2,8 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
+**Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2. **El motor JIT sigue sin tareas activas.**
+
 **Coordinación externa (08/09/2026) — lazy-load de las 11 rutas del router:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0033, en
 `docs/TODO.md`; OPT-15 en `docs/optimizacion-aplicaciones.md` §4). No ocupa ninguno de los 2 slots del

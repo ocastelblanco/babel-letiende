@@ -256,6 +256,39 @@ describe('LibroDetalleComponent', () => {
       expect(obtenerDetalleMock).toHaveBeenCalledTimes(2);
     });
 
+    it('muestra el precio a cobrar con la cantidad y el descuento por defecto (1 ejemplar, 0% descuento = PVP completo)', async () => {
+      const { fixture } = abrirFicha();
+      await abrirDialogo(fixture);
+
+      // `ejemplarFalso.pvp` es 45000 — con cantidad 1 y 0% de descuento, el precio a cobrar es el PVP completo.
+      expect(fixture.nativeElement.textContent).toContain('Precio a cobrar');
+      expect(fixture.nativeElement.textContent).toContain('$45.000');
+    });
+
+    it('el precio a cobrar cambia en vivo al cambiar el % de descuento, con el mismo cálculo que el backend', async () => {
+      const { fixture } = abrirFicha();
+      await abrirDialogo(fixture);
+
+      const componente = fixture.componentInstance;
+      componente['formularioVenta'].patchValue({ porcentajeDescuentoVenta: 10 });
+      fixture.detectChanges();
+
+      // Math.round(45000 * 1 * (1 - 10/100)) = 40500 — misma fórmula que ventas.ts.
+      expect(fixture.nativeElement.textContent).toContain('$40.500');
+    });
+
+    it('el precio a cobrar también cambia en vivo al cambiar la cantidad', async () => {
+      const { fixture } = abrirFicha();
+      await abrirDialogo(fixture);
+
+      const componente = fixture.componentInstance;
+      componente['formularioVenta'].patchValue({ cantidad: 2, porcentajeDescuentoVenta: 10 });
+      fixture.detectChanges();
+
+      // Math.round(45000 * 2 * (1 - 10/100)) = 81000.
+      expect(fixture.nativeElement.textContent).toContain('$81.000');
+    });
+
     it('muestra el mensaje de error del backend sin cerrar el diálogo si la venta falla', async () => {
       const registrarVentaMock = vi
         .fn()
