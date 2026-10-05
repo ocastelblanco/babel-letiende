@@ -133,6 +133,20 @@ Vendedor/Administrador → Busca el libro en la lista de catalogados (filtro por
 
 Un libro cuya cantidad de ejemplares queda en 0 deja de aparecer en el catálogo público, en las búsquedas públicas y no está disponible para la venta (ver §5.4) — pero su ficha (`/libro/:bookId`) sigue siendo accesible directamente (ej. por un enlace ya compartido), mostrando que no hay ejemplares disponibles, sin el botón "Vender".
 
+### 5.3.1 Traslado masivo de libros (pestaña "Trasladar") — planeado
+
+Tercera pestaña del área **Gestionar** (`/catalogar`), accesible a vendedor y administrador (diseño en `docs/plan-trasladar-libros.md`).
+
+```
+Vendedor/Administrador → Elige Espacio y Mueble, y una, varias o todas sus Ubicaciones
+   → Sistema lista los libros de esas ubicaciones, todos preseleccionados (agotados ocultos por defecto)
+   → Deselecciona/vuelve a seleccionar los libros que quiera
+   → Presiona el botón flotante de traslado → elige Espacio > Mueble > Ubicación destino
+   → Presiona "Trasladar" → los libros seleccionados quedan en la nueva ubicación
+```
+
+Si un libro trasladado tiene el mismo ISBN que otro ya presente en la ubicación destino, se **fusionan automáticamente**: el registro del destino conserva sus datos (título, PVP, descuento) y suma los ejemplares disponibles del trasladado.
+
 ### 5.4 Registro de venta
 
 La venta se registra desde la **ficha del libro** (`/libro/:bookId`, §5.7): es la misma pantalla que ve cualquier visitante, con un botón adicional visible solo para vendedor/administrador autenticado. Encontrar el libro (por escaneo de ISBN, búsqueda en el catálogo público, o navegación directa) y venderlo son un solo flujo, no dos pantallas separadas.
@@ -200,6 +214,7 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | Validar libros — revisión asíncrona en bloque de PVP y portada del inventario catalogado | **Completado** (2026-08-19, `docs/plan-validar-libros-async.md`) — ver `TODO.md` |
 | ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | **Completado** (dominio personalizado 31/07/2026, lanzamiento público 03/08/2026) — ver `TODO.md` |
+| Traslado masivo de libros entre ubicaciones (pestaña "Trasladar" en Catalogar) | **Planeado** (2026-10-05, `docs/plan-trasladar-libros.md`) — ver `TODO.md` |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
 
 ---

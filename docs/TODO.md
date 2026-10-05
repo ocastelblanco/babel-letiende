@@ -502,3 +502,28 @@ Se promueve la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) a
 - [x] Probado por el usuario en `staging`: todo funciona. PR #137 fusionado.
 
 Sin tareas activas hasta el próximo lote/hotfix del usuario. El backlog pausado (Tareas 2 y 4 de `docs/plan-rendimiento-catalogo.md`) sigue sin fecha.
+
+---
+
+**Lote nuevo (2026-10-05) — Pestaña "Trasladar" en Catalogar:** el usuario pidió una tercera pestaña en `/catalogar` para trasladar en bloque los libros de un Mueble (una, varias o todas sus Ubicaciones) a otra Ubicación. Plan aprobado por el usuario el 05/10/2026, con 5 decisiones de producto (fusión automática de duplicados por ISBN en el destino, agotados ocultos por defecto, vendedor y administrador, resumen dentro del diálogo, un solo destino). Diseño completo en **`docs/plan-trasladar-libros.md`**. Dos tareas atómicas en secuencia (regla del staging compartido): la Tarea 2 solo se abre cuando la Tarea 1 esté fusionada y desplegada.
+
+## Tarea 1 — Endpoint `POST /api/libros/trasladar` (backend) — ACTIVA
+
+Rama `feature/endpoint-trasladar-libros`. Detalle en `docs/plan-trasladar-libros.md` §4.
+
+- [ ] `handlerTrasladar` en `server/api/handlers/libros.ts`: token + rol `vendedor`/`administrador` desde `babel-usuarios`; body `{ bookIds, ubicacionIdDestino }` (no vacío, sin repetidos, tope 500); destino existe en `babel-ubicaciones`.
+- [ ] Por libro: `sinCambios` (ya en destino) / `trasladados` (`UpdateItem` con `attribute_exists`) / `fusionados` (duplicado por ISBN en el destino vía `isbn-index`) / `fallidos`. Duplicados dentro del mismo lote agrupados en memoria antes de escribir.
+- [ ] Fusión en `TransactWriteItems`: `ADD` de los ejemplares disponibles del trasladado sobre el destino (+ `disponibleParaCatalogo = 'SI'` si `n > 0`); origen eliminado si no tiene historial, o conservado agotado en su ubicación si tiene ventas; condición sobre las cantidades leídas del origen. El destino conserva sus datos; se reportan PVP distintos.
+- [ ] `serverless.yml`: función `trasladarLibros` con rol IAM propio de mínimo privilegio y `package.patterns` completos (gotcha PR #137); descripción < 256 caracteres.
+- [ ] Pruebas: traslado simple, ya en destino, sin ISBN, fusión con y sin historial, duplicados en el lote, condición fallida, 400/401/403, tope de 500.
+- [ ] `npm run build:api`, `npm run test:api`, `npx serverless print --stage dev`, `npx serverless package --stage dev` en verde; docs (`tech-specs.md` §5, `MEMORY.md` §2) actualizadas.
+
+## Tarea 2 — Pestaña "Trasladar" (`TrasladarLibrosComponent`, frontend) — ACTIVA (bloqueada hasta desplegar la Tarea 1)
+
+Rama `feature/pestana-trasladar`. Detalle en `docs/plan-trasladar-libros.md` §5.
+
+- [ ] Tercera pestaña en `GestionarComponent` (`'trasladar'`, título `Trasladar - Le Tiende`).
+- [ ] Origen: Espacio → Mueble → casillas de Ubicaciones (atajo "Todas"); lista filtrada del inventario ya cargado, todos preseleccionados, interruptor "Mostrar agotados", seleccionar todos/ninguno, contador, `appScrollInfinito`.
+- [ ] Botón flotante `moving` (deshabilitado sin selección) → diálogo con cascada de destino + resumen + botón **Trasladar**.
+- [ ] `LibrosService.trasladarLibros`; mensaje de resultado (incluye fusiones y PVP distintos); recarga del inventario y limpieza de la selección.
+- [ ] Pruebas del componente y del servicio; `npm run build -- --configuration=production` y `npm test -- --watch=false` en verde; docs (`PRD.md` §5.3, `MEMORY.md` §2) actualizadas.
