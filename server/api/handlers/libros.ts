@@ -7,16 +7,19 @@ import * as XLSX from 'xlsx';
 import { formatearFechaBogota } from '../lib/fechas';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import {
+  ConflictoDeConcurrenciaError,
   consultarPorIndice,
   eliminar,
   escanearMayorQue,
   escanearProyeccion,
   escanearTodo,
   fusionarLibroDuplicado,
+  fusionarLibroTrasladado,
   guardar,
   ItemNoExisteError,
   obtenerPorClave,
   omitirCamposNulos,
+  trasladarLibroAUbicacion,
 } from '../services/dynamodb';
 
 /**
@@ -927,6 +930,222 @@ export const handlerFusionarDuplicado: APIGatewayProxyHandlerV2 = async (event):
       }
       throw error;
     }
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/** Tope de libros por petición de `POST /api/libros/trasladar` (`docs/plan-trasladar-libros.md` §4). */
+const MAXIMO_LIBROS_POR_TRASLADO = 500;
+/** Libros (o grupos de ISBN) procesados a la vez — acota el tiempo total para no pasar el límite de ~29 s de API Gateway. */
+const CONCURRENCIA_TRASLADO = 10;
+
+interface DatosTrasladar {
+  bookIds: string[];
+  ubicacionIdDestino: string;
+}
+
+function validarDatosTrasladar(
+  datos: unknown,
+): { valido: true; datos: DatosTrasladar } | { valido: false; error: string } {
+  if (typeof datos !== 'object' || datos === null) {
+    return { valido: false, error: 'El cuerpo de la petición debe ser un objeto JSON.' };
+  }
+  const { bookIds, ubicacionIdDestino } = datos as Record<string, unknown>;
+  if (!Array.isArray(bookIds) || bookIds.length === 0) {
+    return { valido: false, error: 'bookIds debe ser una lista no vacía.' };
+  }
+  if (bookIds.length > MAXIMO_LIBROS_POR_TRASLADO) {
+    return { valido: false, error: `Se pueden trasladar como máximo ${MAXIMO_LIBROS_POR_TRASLADO} libros por petición.` };
+  }
+  if (!bookIds.every((id) => typeof id === 'string' && id.trim() !== '')) {
+    return { valido: false, error: 'Cada bookId debe ser un texto no vacío.' };
+  }
+  if (new Set(bookIds).size !== bookIds.length) {
+    return { valido: false, error: 'bookIds no puede tener elementos repetidos.' };
+  }
+  if (typeof ubicacionIdDestino !== 'string' || ubicacionIdDestino.trim() === '') {
+    return { valido: false, error: 'ubicacionIdDestino es obligatorio.' };
+  }
+  return { valido: true, datos: { bookIds: bookIds as string[], ubicacionIdDestino } };
+}
+
+/** Ejecuta `tarea` sobre cada elemento con a lo sumo `limite` en vuelo a la vez. */
+async function procesarConConcurrencia<T>(elementos: T[], limite: number, tarea: (elemento: T) => Promise<void>): Promise<void> {
+  let siguiente = 0;
+  const trabajadores = Array.from({ length: Math.min(limite, elementos.length) }, async () => {
+    while (siguiente < elementos.length) {
+      const elemento = elementos[siguiente++] as T;
+      await tarea(elemento);
+    }
+  });
+  await Promise.all(trabajadores);
+}
+
+/**
+ * `POST /api/libros/trasladar` — traslada en bloque libros a una ubicación
+ * destino (pestaña "Trasladar" de `/catalogar`, `docs/plan-trasladar-libros.md`).
+ * Exige rol `vendedor` o `administrador` resuelto en `babel-usuarios`
+ * (CLAUDE.md A01). Ruta estática, sin conflicto con `/api/libros/{bookId}`.
+ *
+ * Por libro: ya está en el destino → `sinCambios`; sin duplicado por ISBN en
+ * el destino → traslado simple (`UpdateItem` de `ubicacionId`); con duplicado
+ * (mismo ISBN ya presente en el destino, o repetido dentro del mismo lote) →
+ * fusión (`fusionarLibroTrasladado`: el destino conserva sus datos y suma los
+ * ejemplares disponibles; el origen se elimina o queda agotado si tiene
+ * ventas). Los duplicados del mismo lote se agrupan por ISBN en memoria ANTES
+ * de escribir — no se confía en releer `isbn-index`, que es eventualmente
+ * consistente. Un libro agotado con historial de ventas no se fusiona (no
+ * tiene ejemplares que sumar): solo se mueve.
+ *
+ * Un error en un libro NO aborta el lote: queda en `fallidos` con su motivo.
+ */
+export const handlerTrasladar: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para trasladar libros en Babel.' });
+    }
+
+    let cuerpo: unknown;
+    try {
+      cuerpo = event.body ? JSON.parse(event.body) : undefined;
+    } catch {
+      return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
+    }
+
+    const validacion = validarDatosTrasladar(cuerpo);
+    if (!validacion.valido) {
+      return respuestaJson(400, { error: validacion.error });
+    }
+    const { bookIds, ubicacionIdDestino } = validacion.datos;
+
+    const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId: ubicacionIdDestino });
+    if (!ubicacion) {
+      return respuestaJson(400, { error: 'La ubicación indicada no existe.' });
+    }
+
+    const tabla = nombreTablaLibros();
+    const ahora = new Date().toISOString();
+    const trasladados: string[] = [];
+    const sinCambios: string[] = [];
+    const fusionados: { bookId: string; bookIdDestino: string; pvpDestino: number; pvpTrasladado: number }[] = [];
+    const fallidos: { bookId: string; motivo: string }[] = [];
+
+    // 1. Lectura de cada libro (los inexistentes van a `fallidos`).
+    const leidos = new Map<string, Libro>();
+    await procesarConConcurrencia(bookIds, CONCURRENCIA_TRASLADO, async (bookId) => {
+      try {
+        const libro = await obtenerPorClave<Libro>(tabla, { bookId });
+        if (libro) {
+          leidos.set(bookId, normalizarLibro(libro));
+        } else {
+          fallidos.push({ bookId, motivo: 'El libro no existe.' });
+        }
+      } catch {
+        fallidos.push({ bookId, motivo: 'No se pudo leer el libro.' });
+      }
+    });
+
+    // 2. Clasificación: ya en destino / pendientes de mover.
+    const anclasEnDestino = new Map<string, Libro>(); // isbn → registro ya presente en el destino (dentro del lote)
+    const pendientes: Libro[] = [];
+    for (const bookId of bookIds) {
+      const libro = leidos.get(bookId);
+      if (!libro) continue;
+      if (libro.ubicacionId === ubicacionIdDestino) {
+        sinCambios.push(bookId);
+        if (libro.isbn && !anclasEnDestino.has(libro.isbn)) anclasEnDestino.set(libro.isbn, libro);
+      } else {
+        pendientes.push(libro);
+      }
+    }
+
+    const esFusionable = (libro: Libro): boolean =>
+      !(libro.cantidadDisponible === 0 && libro.cantidadTotal > libro.cantidadDisponible);
+
+    const moverSimple = async (libro: Libro): Promise<boolean> => {
+      try {
+        await trasladarLibroAUbicacion(tabla, libro.bookId, ubicacionIdDestino, ahora);
+        trasladados.push(libro.bookId);
+        return true;
+      } catch (error) {
+        fallidos.push({
+          bookId: libro.bookId,
+          motivo: error instanceof ItemNoExisteError ? 'El libro no existe.' : 'No se pudo trasladar el libro.',
+        });
+        return false;
+      }
+    };
+
+    const fusionarEn = async (libro: Libro, destino: { bookId: string; pvp: number }): Promise<void> => {
+      try {
+        await fusionarLibroTrasladado(tabla, libro, destino.bookId, ahora);
+        fusionados.push({
+          bookId: libro.bookId,
+          bookIdDestino: destino.bookId,
+          pvpDestino: destino.pvp,
+          pvpTrasladado: libro.pvp,
+        });
+      } catch (error) {
+        fallidos.push({
+          bookId: libro.bookId,
+          motivo:
+            error instanceof ConflictoDeConcurrenciaError
+              ? 'El libro cambió mientras se trasladaba (¿una venta?). Intenta de nuevo.'
+              : 'No se pudo fusionar el libro con el existente en el destino.',
+        });
+      }
+    };
+
+    // 3. Tareas independientes: cada libro sin ISBN, y cada grupo de ISBN repetido.
+    const grupos = new Map<string, Libro[]>();
+    const tareas: (() => Promise<void>)[] = [];
+    for (const libro of pendientes) {
+      if (libro.isbn) {
+        const grupo = grupos.get(libro.isbn) ?? [];
+        grupo.push(libro);
+        grupos.set(libro.isbn, grupo);
+      } else {
+        tareas.push(async () => {
+          await moverSimple(libro);
+        });
+      }
+    }
+    for (const [isbn, miembros] of grupos) {
+      tareas.push(async () => {
+        let ancla: { bookId: string; pvp: number } | undefined = anclasEnDestino.get(isbn);
+        if (!ancla && miembros.some(esFusionable)) {
+          try {
+            const existentes = await consultarPorIndice<Libro>(tabla, 'isbn-index', 'isbn', isbn);
+            ancla = existentes.find((existente) => existente.ubicacionId === ubicacionIdDestino);
+          } catch {
+            for (const libro of miembros) {
+              fallidos.push({ bookId: libro.bookId, motivo: 'No se pudo verificar si ya existe en el destino.' });
+            }
+            return;
+          }
+        }
+        for (const libro of miembros) {
+          if (!esFusionable(libro)) {
+            await moverSimple(libro);
+          } else if (ancla) {
+            await fusionarEn(libro, ancla);
+          } else if (await moverSimple(libro)) {
+            ancla = { bookId: libro.bookId, pvp: libro.pvp };
+          }
+        }
+      });
+    }
+
+    await procesarConConcurrencia(tareas, CONCURRENCIA_TRASLADO, (tarea) => tarea());
+
+    return respuestaJson(200, { trasladados, fusionados, sinCambios, fallidos });
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

@@ -13,6 +13,8 @@ const {
   escanearProyeccionMock,
   consultarPorIndiceMock,
   fusionarLibroDuplicadoMock,
+  trasladarLibroAUbicacionMock,
+  fusionarLibroTrasladadoMock,
 } = vi.hoisted(() => ({
   verificarTokenDesdeHeaderMock: vi.fn(),
   obtenerPorClaveMock: vi.fn(),
@@ -23,6 +25,8 @@ const {
   escanearProyeccionMock: vi.fn(),
   consultarPorIndiceMock: vi.fn(),
   fusionarLibroDuplicadoMock: vi.fn(),
+  trasladarLibroAUbicacionMock: vi.fn(),
+  fusionarLibroTrasladadoMock: vi.fn(),
 }));
 
 vi.mock('../lib/verificar-token', async () => {
@@ -48,6 +52,8 @@ vi.mock('../services/dynamodb', async () => {
     escanearProyeccion: escanearProyeccionMock,
     consultarPorIndice: consultarPorIndiceMock,
     fusionarLibroDuplicado: fusionarLibroDuplicadoMock,
+    trasladarLibroAUbicacion: trasladarLibroAUbicacionMock,
+    fusionarLibroTrasladado: fusionarLibroTrasladadoMock,
   };
 });
 
@@ -63,13 +69,14 @@ const {
   handlerDetalle,
   handlerBuscarPorIsbn,
   handlerFusionarDuplicado,
+  handlerTrasladar,
   handlerSitemap,
   validarDatosNuevoLibro,
   validarDatosEditarLibro,
   validarDatosFusionarDuplicado,
   normalizarParaComparacion,
 } = await import('./libros');
-const { ItemNoExisteError } = await import('../services/dynamodb');
+const { ItemNoExisteError, ConflictoDeConcurrenciaError } = await import('../services/dynamodb');
 
 const datosValidos = {
   isbn: '9780000000000',
@@ -1730,5 +1737,181 @@ describe('handlerSitemap (GET /sitemap.xml)', () => {
     const respuesta = await handlerSitemap({} as never, {} as never, {} as never);
 
     expect(respuesta).toMatchObject({ statusCode: 500 });
+  });
+});
+
+describe('handlerTrasladar (POST /api/libros/trasladar)', () => {
+  const destino = 'ubicacion-destino';
+
+  function libro(bookId: string, extra: Record<string, unknown> = {}) {
+    return { ...libroFalso, bookId, isbn: `isbn-${bookId}`, ubicacionId: 'ubicacion-origen', ...extra };
+  }
+
+  /** `obtenerPorClave` según la tabla: usuarios, ubicaciones (solo existe `destino`) y libros por `bookId`. */
+  function configurarTablas(libros: Record<string, unknown>, rol: string | null = 'vendedor') {
+    obtenerPorClaveMock.mockImplementation(async (tabla: string, clave: Record<string, string>) => {
+      if (tabla === 'babel-usuarios-test') return rol ? { email: 'v@letiende.co', rol } : undefined;
+      if (tabla === 'babel-ubicaciones-test') {
+        return clave['ubicacionId'] === destino ? { ubicacionId: destino, muebleId: 'm', nombre: 'D' } : undefined;
+      }
+      return libros[clave['bookId'] as string];
+    });
+  }
+
+  async function trasladar(bookIds: unknown, ubicacionIdDestino: unknown = destino) {
+    return handlerTrasladar(
+      eventoFalso({ bookIds, ubicacionIdDestino }, 'Bearer token'),
+      {} as never,
+      {} as never,
+    ) as Promise<{ statusCode: number; body: string }>;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'v@letiende.co', uid: 'uid-1' });
+    consultarPorIndiceMock.mockResolvedValue([]);
+    trasladarLibroAUbicacionMock.mockResolvedValue(undefined);
+    fusionarLibroTrasladadoMock.mockResolvedValue(undefined);
+  });
+
+  it('responde 401 sin token válido', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+    const respuesta = await trasladar(['a']);
+    expect(respuesta.statusCode).toBe(401);
+    expect(trasladarLibroAUbicacionMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 si el correo no tiene rol en babel-usuarios', async () => {
+    configurarTablas({}, null);
+    const respuesta = await trasladar(['a']);
+    expect(respuesta.statusCode).toBe(403);
+    expect(trasladarLibroAUbicacionMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['bookIds vacío', [], destino],
+    ['bookIds repetidos', ['a', 'a'], destino],
+    ['bookIds con un elemento no texto', ['a', 1], destino],
+    ['sin destino', ['a'], ''],
+    ['más de 500 libros', Array.from({ length: 501 }, (_, i) => `l${i}`), destino],
+  ])('responde 400: %s', async (_nombre, bookIds, ubicacionIdDestino) => {
+    configurarTablas({});
+    const respuesta = await trasladar(bookIds, ubicacionIdDestino);
+    expect(respuesta.statusCode).toBe(400);
+    expect(trasladarLibroAUbicacionMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 400 si la ubicación destino no existe', async () => {
+    configurarTablas({ a: libro('a') });
+    const respuesta = await trasladar(['a'], 'no-existe');
+    expect(respuesta.statusCode).toBe(400);
+    expect(trasladarLibroAUbicacionMock).not.toHaveBeenCalled();
+  });
+
+  it('traslada de forma simple un libro sin duplicado en el destino', async () => {
+    configurarTablas({ a: libro('a') });
+    const respuesta = await trasladar(['a']);
+    expect(respuesta.statusCode).toBe(200);
+    expect(JSON.parse(respuesta.body)).toEqual({ trasladados: ['a'], fusionados: [], sinCambios: [], fallidos: [] });
+    expect(trasladarLibroAUbicacionMock).toHaveBeenCalledWith('babel-libros-test', 'a', destino, expect.any(String));
+    expect(fusionarLibroTrasladadoMock).not.toHaveBeenCalled();
+  });
+
+  it('un libro que ya está en el destino queda en sinCambios sin escribir', async () => {
+    configurarTablas({ a: libro('a', { ubicacionId: destino }) });
+    const respuesta = await trasladar(['a']);
+    expect(JSON.parse(respuesta.body).sinCambios).toEqual(['a']);
+    expect(trasladarLibroAUbicacionMock).not.toHaveBeenCalled();
+    expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+  });
+
+  it('un libro sin ISBN se traslada sin consultar isbn-index', async () => {
+    configurarTablas({ a: libro('a', { isbn: undefined }) });
+    const respuesta = await trasladar(['a']);
+    expect(JSON.parse(respuesta.body).trasladados).toEqual(['a']);
+    expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+  });
+
+  it('fusiona sobre el duplicado del mismo ISBN que ya está en el destino y reporta los dos PVP', async () => {
+    configurarTablas({ a: libro('a', { isbn: '123', pvp: 50000, cantidadTotal: 3, cantidadDisponible: 3 }) });
+    consultarPorIndiceMock.mockResolvedValue([
+      libro('x', { isbn: '123', ubicacionId: 'otra' }),
+      libro('d', { isbn: '123', ubicacionId: destino, pvp: 45000 }),
+    ]);
+    const respuesta = await trasladar(['a']);
+    expect(JSON.parse(respuesta.body).fusionados).toEqual([
+      { bookId: 'a', bookIdDestino: 'd', pvpDestino: 45000, pvpTrasladado: 50000 },
+    ]);
+    expect(fusionarLibroTrasladadoMock).toHaveBeenCalledWith(
+      'babel-libros-test',
+      expect.objectContaining({ bookId: 'a', cantidadTotal: 3, cantidadDisponible: 3 }),
+      'd',
+      expect.any(String),
+    );
+    expect(trasladarLibroAUbicacionMock).not.toHaveBeenCalled();
+  });
+
+  it('con un libro del lote ya en el destino, los demás con su ISBN se fusionan sobre él (sin consultar el índice)', async () => {
+    configurarTablas({
+      d: libro('d', { isbn: '123', ubicacionId: destino }),
+      a: libro('a', { isbn: '123' }),
+    });
+    const respuesta = await trasladar(['d', 'a']);
+    const cuerpo = JSON.parse(respuesta.body);
+    expect(cuerpo.sinCambios).toEqual(['d']);
+    expect(cuerpo.fusionados).toHaveLength(1);
+    expect(cuerpo.fusionados[0]).toMatchObject({ bookId: 'a', bookIdDestino: 'd' });
+    expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+  });
+
+  it('duplicados dentro del mismo lote sin registro en el destino: el primero se traslada y los demás se fusionan sobre él', async () => {
+    configurarTablas({
+      a: libro('a', { isbn: '123' }),
+      b: libro('b', { isbn: '123' }),
+      c: libro('c', { isbn: '123' }),
+    });
+    const respuesta = await trasladar(['a', 'b', 'c']);
+    const cuerpo = JSON.parse(respuesta.body);
+    expect(cuerpo.trasladados).toEqual(['a']);
+    expect(cuerpo.fusionados.map((f: { bookId: string; bookIdDestino: string }) => [f.bookId, f.bookIdDestino])).toEqual([
+      ['b', 'a'],
+      ['c', 'a'],
+    ]);
+  });
+
+  it('un libro agotado con ventas no se fusiona: solo se mueve', async () => {
+    configurarTablas({ a: libro('a', { isbn: '123', cantidadTotal: 4, cantidadDisponible: 0 }) });
+    consultarPorIndiceMock.mockResolvedValue([libro('d', { isbn: '123', ubicacionId: destino })]);
+    const respuesta = await trasladar(['a']);
+    expect(JSON.parse(respuesta.body).trasladados).toEqual(['a']);
+    expect(fusionarLibroTrasladadoMock).not.toHaveBeenCalled();
+  });
+
+  it('si la fusión falla por concurrencia, el libro va a fallidos y el resto del lote sigue', async () => {
+    configurarTablas({ a: libro('a', { isbn: '123' }), b: libro('b', { isbn: undefined }) });
+    consultarPorIndiceMock.mockResolvedValue([libro('d', { isbn: '123', ubicacionId: destino })]);
+    fusionarLibroTrasladadoMock.mockRejectedValue(new ConflictoDeConcurrenciaError('x'));
+    const respuesta = await trasladar(['a', 'b']);
+    const cuerpo = JSON.parse(respuesta.body);
+    expect(cuerpo.fallidos).toEqual([{ bookId: 'a', motivo: expect.stringContaining('Intenta de nuevo') }]);
+    expect(cuerpo.trasladados).toEqual(['b']);
+  });
+
+  it('un bookId inexistente va a fallidos', async () => {
+    configurarTablas({ a: libro('a') });
+    const respuesta = await trasladar(['a', 'fantasma']);
+    const cuerpo = JSON.parse(respuesta.body);
+    expect(cuerpo.trasladados).toEqual(['a']);
+    expect(cuerpo.fallidos).toEqual([{ bookId: 'fantasma', motivo: 'El libro no existe.' }]);
+  });
+
+  it('un libro eliminado entre la lectura y la escritura va a fallidos', async () => {
+    configurarTablas({ a: libro('a', { isbn: undefined }) });
+    trasladarLibroAUbicacionMock.mockRejectedValue(new ItemNoExisteError('x'));
+    const respuesta = await trasladar(['a']);
+    expect(JSON.parse(respuesta.body).fallidos).toEqual([{ bookId: 'a', motivo: 'El libro no existe.' }]);
   });
 });

@@ -507,16 +507,18 @@ Sin tareas activas hasta el próximo lote/hotfix del usuario. El backlog pausado
 
 **Lote nuevo (2026-10-05) — Pestaña "Trasladar" en Catalogar:** el usuario pidió una tercera pestaña en `/catalogar` para trasladar en bloque los libros de un Mueble (una, varias o todas sus Ubicaciones) a otra Ubicación. Plan aprobado por el usuario el 05/10/2026, con 5 decisiones de producto (fusión automática de duplicados por ISBN en el destino, agotados ocultos por defecto, vendedor y administrador, resumen dentro del diálogo, un solo destino). Diseño completo en **`docs/plan-trasladar-libros.md`**. Dos tareas atómicas en secuencia (regla del staging compartido): la Tarea 2 solo se abre cuando la Tarea 1 esté fusionada y desplegada.
 
-## Tarea 1 — Endpoint `POST /api/libros/trasladar` (backend) — ACTIVA
+## Tarea 1 — Endpoint `POST /api/libros/trasladar` (backend) — COMPLETA (2026-10-05, PR abierto, pendiente de verificación en `staging`)
 
 Rama `feature/endpoint-trasladar-libros`. Detalle en `docs/plan-trasladar-libros.md` §4.
 
-- [ ] `handlerTrasladar` en `server/api/handlers/libros.ts`: token + rol `vendedor`/`administrador` desde `babel-usuarios`; body `{ bookIds, ubicacionIdDestino }` (no vacío, sin repetidos, tope 500); destino existe en `babel-ubicaciones`.
-- [ ] Por libro: `sinCambios` (ya en destino) / `trasladados` (`UpdateItem` con `attribute_exists`) / `fusionados` (duplicado por ISBN en el destino vía `isbn-index`) / `fallidos`. Duplicados dentro del mismo lote agrupados en memoria antes de escribir.
-- [ ] Fusión en `TransactWriteItems`: `ADD` de los ejemplares disponibles del trasladado sobre el destino (+ `disponibleParaCatalogo = 'SI'` si `n > 0`); origen eliminado si no tiene historial, o conservado agotado en su ubicación si tiene ventas; condición sobre las cantidades leídas del origen. El destino conserva sus datos; se reportan PVP distintos.
-- [ ] `serverless.yml`: función `trasladarLibros` con rol IAM propio de mínimo privilegio y `package.patterns` completos (gotcha PR #137); descripción < 256 caracteres.
-- [ ] Pruebas: traslado simple, ya en destino, sin ISBN, fusión con y sin historial, duplicados en el lote, condición fallida, 400/401/403, tope de 500.
-- [ ] `npm run build:api`, `npm run test:api`, `npx serverless print --stage dev`, `npx serverless package --stage dev` en verde; docs (`tech-specs.md` §5, `MEMORY.md` §2) actualizadas.
+- [x] `handlerTrasladar` en `server/api/handlers/libros.ts`: token + rol `vendedor`/`administrador` desde `babel-usuarios`; body `{ bookIds, ubicacionIdDestino }` (no vacío, sin repetidos, tope 500); destino existe en `babel-ubicaciones`.
+- [x] Por libro: `sinCambios` (ya en destino) / `trasladados` (`UpdateItem` con `attribute_exists`) / `fusionados` (duplicado por ISBN en el destino vía `isbn-index`) / `fallidos`. Duplicados dentro del mismo lote agrupados en memoria antes de escribir.
+- [x] Fusión en `TransactWriteItems`: `ADD` de los ejemplares disponibles del trasladado sobre el destino (+ `disponibleParaCatalogo = 'SI'` si `n > 0`); origen eliminado si no tiene historial, o conservado agotado en su ubicación si tiene ventas; condición sobre las cantidades leídas del origen. El destino conserva sus datos; se reportan PVP distintos.
+- [x] `serverless.yml`: función `trasladarLibros` con rol IAM propio de mínimo privilegio y `package.patterns` completos (gotcha PR #137); descripción < 256 caracteres.
+- [x] Pruebas: traslado simple, ya en destino, sin ISBN, fusión con y sin historial, duplicados en el lote, condición fallida, 400/401/403, tope de 500.
+- [x] `npm run build:api`, `npm run test:api`, `npx serverless print --stage dev`, `npx serverless package --stage dev` en verde; docs (`tech-specs.md` §5, `MEMORY.md` §2) actualizadas.
+
+Hallazgos: ninguno que cambie el diseño. Decisión menor al implementar: un libro **agotado con ventas** no se fusiona (no tiene ejemplares que sumar) — solo se mueve, aunque haya duplicado en el destino. Verificado de forma independiente: `build:api`, 439 pruebas backend en verde (antes 412+), `serverless print`/`package --stage dev` (el zip de `trasladarLibros` incluye `libros.js`, `fechas.js`, `verificar-token.js` y `dynamodb.js`; descripción de 143 caracteres). Pendiente del usuario: probar `POST /api/libros/trasladar` en `staging` tras el despliegue del PR antes de abrir la Tarea 2.
 
 ## Tarea 2 — Pestaña "Trasladar" (`TrasladarLibrosComponent`, frontend) — ACTIVA (bloqueada hasta desplegar la Tarea 1)
 

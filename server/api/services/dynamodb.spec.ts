@@ -20,7 +20,12 @@ const {
   decrementarPorCantidadSiSuficiente,
   removerAtributo,
   fusionarLibroDuplicado,
+  trasladarLibroAUbicacion,
+  fusionarLibroTrasladado,
+  ConflictoDeConcurrenciaError,
+  ItemNoExisteError,
 } = await import('./dynamodb');
+const { ConditionalCheckFailedException, TransactionCanceledException } = await import('@aws-sdk/client-dynamodb');
 
 /**
  * `Scan` de DynamoDB tiene un límite de ~1 MB de datos por página — la
@@ -337,5 +342,74 @@ describe('mantenimiento de disponibleParaCatalogo', () => {
       );
       expect((entrada['ExpressionAttributeValues'] as Record<string, unknown>)[':disponibleParaCatalogo']).toBe('SI');
     });
+  });
+});
+
+describe('traslado de libros (trasladarLibroAUbicacion / fusionarLibroTrasladado)', () => {
+  type Entrada = { input: { TransactItems?: Record<string, Record<string, unknown>>[] } & Record<string, unknown> };
+  const transaccion = () => (sendMock.mock.calls[0]?.[0] as Entrada).input.TransactItems ?? [];
+
+  beforeEach(() => {
+    sendMock.mockReset();
+  });
+
+  it('trasladarLibroAUbicacion solo hace SET de ubicacionId/actualizadoEn con attribute_exists', async () => {
+    sendMock.mockResolvedValueOnce({});
+    await trasladarLibroAUbicacion('tabla', 'libro-1', 'ubi-2', '2026-10-05T00:00:00.000Z');
+    const entrada = (sendMock.mock.calls[0]?.[0] as Entrada).input;
+    expect(entrada['ConditionExpression']).toBe('attribute_exists(#bookId)');
+    expect(entrada['UpdateExpression']).toBe('SET #ubicacionId = :ubicacionId, #actualizadoEn = :actualizadoEn');
+    expect(entrada['Key']).toEqual({ bookId: 'libro-1' });
+  });
+
+  it('trasladarLibroAUbicacion lanza ItemNoExisteError si el libro ya no existe', async () => {
+    sendMock.mockRejectedValueOnce(new ConditionalCheckFailedException({ message: 'x', $metadata: {} }));
+    await expect(trasladarLibroAUbicacion('tabla', 'libro-1', 'ubi-2', 'ahora')).rejects.toBeInstanceOf(
+      ItemNoExisteError,
+    );
+  });
+
+  it('fusión sin historial: suma al destino y ELIMINA el origen, condicionado a las cantidades leídas', async () => {
+    sendMock.mockResolvedValueOnce({});
+    await fusionarLibroTrasladado('tabla', { bookId: 'o', cantidadTotal: 3, cantidadDisponible: 3 }, 'd', 'ahora');
+    const [destino, origen] = transaccion();
+    expect(destino?.['Update']).toMatchObject({
+      Key: { bookId: 'd' },
+      ConditionExpression: 'attribute_exists(#bookId)',
+      ExpressionAttributeValues: { ':n': 3, ':si': 'SI' },
+    });
+    expect((destino?.['Update'] as { UpdateExpression: string }).UpdateExpression).toContain(
+      'ADD #cantidadTotal :n, #cantidadDisponible :n',
+    );
+    expect(origen?.['Delete']).toMatchObject({
+      Key: { bookId: 'o' },
+      ConditionExpression: '#cantidadTotal = :totalLeido AND #cantidadDisponible = :disponibleLeido',
+      ExpressionAttributeValues: { ':totalLeido': 3, ':disponibleLeido': 3 },
+    });
+  });
+
+  it('fusión con ventas: el origen se conserva agotado (total - n, disponible 0, sin disponibleParaCatalogo)', async () => {
+    sendMock.mockResolvedValueOnce({});
+    await fusionarLibroTrasladado('tabla', { bookId: 'o', cantidadTotal: 5, cantidadDisponible: 2 }, 'd', 'ahora');
+    const [destino, origen] = transaccion();
+    expect(destino?.['Update']).toMatchObject({ ExpressionAttributeValues: { ':n': 2 } });
+    expect(origen?.['Delete']).toBeUndefined();
+    const actualizacion = origen?.['Update'] as { UpdateExpression: string; ExpressionAttributeValues: Record<string, unknown> };
+    expect(actualizacion.UpdateExpression).toContain('REMOVE #disponibleParaCatalogo');
+    expect(actualizacion.ExpressionAttributeValues).toMatchObject({ ':nuevoTotal': 3, ':cero': 0, ':totalLeido': 5, ':disponibleLeido': 2 });
+  });
+
+  it('fusión con 0 disponibles no marca el destino como disponible', async () => {
+    sendMock.mockResolvedValueOnce({});
+    await fusionarLibroTrasladado('tabla', { bookId: 'o', cantidadTotal: 0, cantidadDisponible: 0 }, 'd', 'ahora');
+    const destino = transaccion()[0]?.['Update'] as { UpdateExpression: string };
+    expect(destino.UpdateExpression).not.toContain('disponibleParaCatalogo');
+  });
+
+  it('fusión: una transacción cancelada lanza ConflictoDeConcurrenciaError', async () => {
+    sendMock.mockRejectedValueOnce(new TransactionCanceledException({ message: 'x', $metadata: {} }));
+    await expect(
+      fusionarLibroTrasladado('tabla', { bookId: 'o', cantidadTotal: 1, cantidadDisponible: 1 }, 'd', 'ahora'),
+    ).rejects.toBeInstanceOf(ConflictoDeConcurrenciaError);
   });
 });
