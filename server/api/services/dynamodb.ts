@@ -1,4 +1,8 @@
-import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  ConditionalCheckFailedException,
+  DynamoDBClient,
+  TransactionCanceledException,
+} from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
   DynamoDBDocumentClient,
@@ -6,6 +10,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
   UpdateCommand,
   type ScanCommandInput,
 } from '@aws-sdk/lib-dynamodb';
@@ -394,6 +399,138 @@ export async function fusionarLibroDuplicado<T extends object>(
   } catch (error) {
     if (error instanceof ConditionalCheckFailedException) {
       throw new ItemNoExisteError('El libro no existe.');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Cambia SOLO la `ubicacionId` de un libro (traslado simple, `docs/plan-trasladar-libros.md`
+ * §4) con un `UpdateItem` — nunca lee ni sobrescribe el resto del ítem, así que
+ * es seguro ante una venta concurrente del mismo libro. Lanza `ItemNoExisteError`
+ * si el `bookId` ya no existe (`ConditionExpression`).
+ */
+export async function trasladarLibroAUbicacion(
+  nombreTabla: string,
+  bookId: string,
+  ubicacionIdDestino: string,
+  actualizadoEn: string,
+): Promise<void> {
+  try {
+    await documento.send(
+      new UpdateCommand({
+        TableName: nombreTabla,
+        Key: { bookId },
+        ConditionExpression: 'attribute_exists(#bookId)',
+        UpdateExpression: 'SET #ubicacionId = :ubicacionId, #actualizadoEn = :actualizadoEn',
+        ExpressionAttributeNames: {
+          '#bookId': 'bookId',
+          '#ubicacionId': 'ubicacionId',
+          '#actualizadoEn': 'actualizadoEn',
+        },
+        ExpressionAttributeValues: { ':ubicacionId': ubicacionIdDestino, ':actualizadoEn': actualizadoEn },
+      }),
+    );
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new ItemNoExisteError('El libro no existe.');
+    }
+    throw error;
+  }
+}
+
+/** Lanzado por `fusionarLibroTrasladado` cuando el origen o el destino cambiaron entre la lectura y la escritura (venta concurrente, libro eliminado) — la transacción no se aplicó. */
+export class ConflictoDeConcurrenciaError extends Error {}
+
+/**
+ * Fusiona un libro trasladado sobre el registro que ya existe en la ubicación
+ * destino (`docs/plan-trasladar-libros.md` §4), en UNA transacción
+ * (`TransactWriteItems`): suma (`ADD`) a `destino` los `ejemplares` DISPONIBLES
+ * del origen (el destino conserva todos sus demás datos) y, en el mismo
+ * instante, elimina el origen si no tiene historial de ventas
+ * (`cantidadTotal === cantidadDisponible`) o lo deja agotado en su ubicación si
+ * sí (`cantidadTotal -= ejemplares`, `cantidadDisponible = 0`, sin
+ * `disponibleParaCatalogo`) — `babel-ventas` referencia el `bookId`, así que
+ * borrar un libro con ventas dejaría los reportes sin título/editorial.
+ *
+ * La transacción exige que el origen siga con exactamente las cantidades que
+ * se leyeron (`cantidadTotal`/`cantidadDisponible`) y que el destino exista: si
+ * una venta concurrente cambió alguno, TODA la transacción se cancela
+ * (`ConflictoDeConcurrenciaError`) sin perder ni duplicar inventario.
+ */
+export async function fusionarLibroTrasladado(
+  nombreTabla: string,
+  origen: { bookId: string; cantidadTotal: number; cantidadDisponible: number },
+  bookIdDestino: string,
+  actualizadoEn: string,
+): Promise<void> {
+  const ejemplares = origen.cantidadDisponible;
+  const tieneHistorial = origen.cantidadTotal !== origen.cantidadDisponible;
+  const condicionOrigen = '#cantidadTotal = :totalLeido AND #cantidadDisponible = :disponibleLeido';
+  const nombresOrigen = { '#cantidadTotal': 'cantidadTotal', '#cantidadDisponible': 'cantidadDisponible' };
+  const valoresOrigen = { ':totalLeido': origen.cantidadTotal, ':disponibleLeido': origen.cantidadDisponible };
+
+  const actualizarDestino = {
+    Update: {
+      TableName: nombreTabla,
+      Key: { bookId: bookIdDestino },
+      ConditionExpression: 'attribute_exists(#bookId)',
+      UpdateExpression:
+        'SET #actualizadoEn = :actualizadoEn' +
+        (ejemplares > 0 ? ', #disponibleParaCatalogo = :si' : '') +
+        ' ADD #cantidadTotal :n, #cantidadDisponible :n',
+      ExpressionAttributeNames: {
+        '#bookId': 'bookId',
+        '#actualizadoEn': 'actualizadoEn',
+        '#cantidadTotal': 'cantidadTotal',
+        '#cantidadDisponible': 'cantidadDisponible',
+        ...(ejemplares > 0 ? { '#disponibleParaCatalogo': 'disponibleParaCatalogo' } : {}),
+      },
+      ExpressionAttributeValues: {
+        ':actualizadoEn': actualizadoEn,
+        ':n': ejemplares,
+        ...(ejemplares > 0 ? { ':si': 'SI' } : {}),
+      },
+    },
+  };
+
+  const tocarOrigen = tieneHistorial
+    ? {
+        Update: {
+          TableName: nombreTabla,
+          Key: { bookId: origen.bookId },
+          ConditionExpression: condicionOrigen,
+          UpdateExpression:
+            'SET #cantidadTotal = :nuevoTotal, #cantidadDisponible = :cero, #actualizadoEn = :actualizadoEn ' +
+            'REMOVE #disponibleParaCatalogo',
+          ExpressionAttributeNames: {
+            ...nombresOrigen,
+            '#actualizadoEn': 'actualizadoEn',
+            '#disponibleParaCatalogo': 'disponibleParaCatalogo',
+          },
+          ExpressionAttributeValues: {
+            ...valoresOrigen,
+            ':nuevoTotal': origen.cantidadTotal - ejemplares,
+            ':cero': 0,
+            ':actualizadoEn': actualizadoEn,
+          },
+        },
+      }
+    : {
+        Delete: {
+          TableName: nombreTabla,
+          Key: { bookId: origen.bookId },
+          ConditionExpression: condicionOrigen,
+          ExpressionAttributeNames: nombresOrigen,
+          ExpressionAttributeValues: valoresOrigen,
+        },
+      };
+
+  try {
+    await documento.send(new TransactWriteCommand({ TransactItems: [actualizarDestino, tocarOrigen] }));
+  } catch (error) {
+    if (error instanceof TransactionCanceledException) {
+      throw new ConflictoDeConcurrenciaError('El libro cambió mientras se trasladaba.');
     }
     throw error;
   }
