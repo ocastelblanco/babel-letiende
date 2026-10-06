@@ -17,12 +17,22 @@
               class="h-10 flex-1 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90">
         Editar
       </button>
+      <button type="button"
+              (click)="cambiarPestana('trasladar')"
+              [class.bg-primary]="pestanaActiva() === 'trasladar'"
+              [class.text-neutral]="pestanaActiva() === 'trasladar'"
+              [class.text-primary]="pestanaActiva() !== 'trasladar'"
+              class="h-10 flex-1 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90">
+        Trasladar
+      </button>
     </div>
   </div>
 
   @if (pestanaActiva() === 'catalogar') {
   <app-catalogar-libro />
-  } @else {
+  } @else if (pestanaActiva() === 'editar') {
   <app-editar-libro />
+  } @else {
+  <app-trasladar-libros />
   }
 </div>

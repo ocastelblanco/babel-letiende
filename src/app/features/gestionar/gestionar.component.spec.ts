@@ -72,6 +72,7 @@ function configurarPrueba(): ComponentFixture<GestionarComponent> {
           cargarInventario: vi.fn().mockResolvedValue(undefined),
           editarLibro: vi.fn(),
           eliminarLibro: vi.fn(),
+          trasladarLibros: vi.fn(),
           // Tarea 3 del lote de duplicados — `CatalogarLibroComponent.ngOnInit`
           // llama `cargarIndice()`.
           indice: signal([]),
@@ -126,5 +127,19 @@ describe('GestionarComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('app-catalogar-libro')).toBeTruthy();
+  });
+
+  it('cambia a la pestaña "Trasladar" al hacer click', () => {
+    const fixture = configurarPrueba();
+
+    const botonTrasladar = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
+      (boton) => boton.textContent?.trim() === 'Trasladar',
+    );
+    botonTrasladar?.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('app-trasladar-libros')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('app-catalogar-libro')).toBeFalsy();
+    expect(fixture.nativeElement.querySelector('app-editar-libro')).toBeFalsy();
   });
 });

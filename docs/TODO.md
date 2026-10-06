@@ -520,12 +520,16 @@ Rama `feature/endpoint-trasladar-libros`. Detalle en `docs/plan-trasladar-libros
 
 Hallazgos: ninguno que cambie el diseño. Decisión menor al implementar: un libro **agotado con ventas** no se fusiona (no tiene ejemplares que sumar) — solo se mueve, aunque haya duplicado en el destino. Verificado de forma independiente: `build:api`, 439 pruebas backend en verde (antes 412+), `serverless print`/`package --stage dev` (el zip de `trasladarLibros` incluye `libros.js`, `fechas.js`, `verificar-token.js` y `dynamodb.js`; descripción de 143 caracteres). Pendiente del usuario: probar `POST /api/libros/trasladar` en `staging` tras el despliegue del PR antes de abrir la Tarea 2.
 
-## Tarea 2 — Pestaña "Trasladar" (`TrasladarLibrosComponent`, frontend) — ACTIVA (bloqueada hasta desplegar la Tarea 1)
+## Tarea 2 — Pestaña "Trasladar" (`TrasladarLibrosComponent`, frontend) — COMPLETA (2026-10-05, PR abierto, pendiente de verificación visual en `staging`)
 
 Rama `feature/pestana-trasladar`. Detalle en `docs/plan-trasladar-libros.md` §5.
 
-- [ ] Tercera pestaña en `GestionarComponent` (`'trasladar'`, título `Trasladar - Le Tiende`).
-- [ ] Origen: Espacio → Mueble → casillas de Ubicaciones (atajo "Todas"); lista filtrada del inventario ya cargado, todos preseleccionados, interruptor "Mostrar agotados", seleccionar todos/ninguno, contador, `appScrollInfinito`.
-- [ ] Botón flotante `moving` (deshabilitado sin selección) → diálogo con cascada de destino + resumen + botón **Trasladar**.
-- [ ] `LibrosService.trasladarLibros`; mensaje de resultado (incluye fusiones y PVP distintos); recarga del inventario y limpieza de la selección.
-- [ ] Pruebas del componente y del servicio; `npm run build -- --configuration=production` y `npm test -- --watch=false` en verde; docs (`PRD.md` §5.3, `MEMORY.md` §2) actualizadas.
+- [x] Tercera pestaña en `GestionarComponent` (`'trasladar'`, título `Trasladar - Le Tiende`).
+- [x] Origen: Espacio → Mueble → casillas de Ubicaciones (atajo "Todas"); lista filtrada del inventario ya cargado, todos preseleccionados, interruptor "Mostrar agotados", seleccionar todos/ninguno, contador, `appScrollInfinito`.
+- [x] Botón flotante `moving` (deshabilitado sin selección) → diálogo con cascada de destino + resumen + botón **Trasladar**.
+- [x] `LibrosService.trasladarLibros`; mensaje de resultado (incluye fusiones y PVP distintos); recarga del inventario y limpieza de la selección.
+- [x] Pruebas del componente y del servicio; `npm run build -- --configuration=production` y `npm test -- --watch=false` en verde; docs (`PRD.md` §5.3, `MEMORY.md` §2) actualizadas.
+
+Notas de implementación: la selección se guarda al revés (`excluidos`, los DESELECCIONADOS) para que todo libro visible quede seleccionado por defecto aunque el inventario llegue tarde o se active "Mostrar agotados" después. Cambiar Espacio/Mueble/Ubicaciones de origen reinicia la selección. El resumen del resultado lista los fusionados con PVP distinto (el destino conserva el suyo → revisar en Editar) y los fallidos con su motivo. Verificado de forma independiente: 461 pruebas frontend en verde (442 + 19 nuevas), `tsc -p tsconfig.spec.json` limpio, `npm run build -- --configuration=production` limpio, `/catalogar` responde `200` con `ng serve`. Pendiente del usuario: probar en `staging` el flujo completo (origen → selección → diálogo → traslado, incluido un duplicado por ISBN) — incluye la primera prueba real de `POST /api/libros/trasladar` con una transacción contra DynamoDB.
+
+**Con esto se cierra el lote "Trasladar" (2026-10-05):** Tarea 1 — PR #141 (fusionado), Tarea 2 — este PR. Sin tareas activas hasta el próximo lote/hotfix del usuario; el backlog pausado (Tareas 2 y 4 de `docs/plan-rendimiento-catalogo.md`) sigue sin fecha.

@@ -1,0 +1,282 @@
+<div class="min-h-screen bg-surface px-4 py-8 pb-28">
+  <div class="mx-auto max-w-xl">
+    <h1 class="mb-6 text-2xl font-bold text-primary">Trasladar libros</h1>
+
+    @if (resumen(); as r) {
+      <div class="mb-4 rounded-2xl bg-white p-4 text-sm shadow-[0_4px_16px_rgba(35,12,0,0.08)]" role="status">
+        <p class="font-semibold text-tertiary">
+          Traslado terminado: {{ r.trasladados }} trasladado{{ r.trasladados === 1 ? '' : 's' }},
+          {{ r.fusionados.length }} fusionado{{ r.fusionados.length === 1 ? '' : 's' }} con un registro existente
+          @if (r.sinCambios > 0) {
+            , {{ r.sinCambios }} ya estaba{{ r.sinCambios === 1 ? '' : 'n' }} en el destino
+          }
+          .
+        </p>
+        @if (pvpDistintos(r.fusionados).length > 0) {
+          <p class="mt-3 font-semibold text-primary">Revisa el PVP en la pestaña Editar (el destino conservó el suyo):</p>
+          <ul class="mt-1 list-disc pl-5 text-primary/80">
+            @for (fusion of pvpDistintos(r.fusionados); track $index) {
+              <li>{{ fusion.titulo }}: destino {{ fusion.pvpDestino | pvp }}, trasladado {{ fusion.pvpTrasladado | pvp }}</li>
+            }
+          </ul>
+        }
+        @if (r.fallidos.length > 0) {
+          <p class="mt-3 font-semibold text-danger">No se pudieron trasladar {{ r.fallidos.length }}:</p>
+          <ul class="mt-1 list-disc pl-5 text-danger">
+            @for (fallo of r.fallidos; track $index) {
+              <li>{{ fallo.titulo }} — {{ fallo.motivo }}</li>
+            }
+          </ul>
+        }
+      </div>
+    }
+
+    <div class="mb-6 flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+      <h2 class="text-sm font-semibold text-primary">Origen: ¿de dónde salen los libros?</h2>
+
+      <div>
+        <label for="origenEspacioId" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
+        <select
+          id="origenEspacioId"
+          [value]="origenEspacioId()"
+          (change)="alCambiarOrigenEspacio($any($event.target).value)"
+          class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+        >
+          <option value="" disabled>Selecciona un espacio</option>
+          @for (espacio of espacios(); track espacio.espacioId) {
+            <option [value]="espacio.espacioId">{{ espacio.nombre }}</option>
+          }
+        </select>
+      </div>
+
+      <div>
+        <label for="origenMuebleId" class="mb-1 block text-sm font-semibold text-primary">Mueble</label>
+        <select
+          id="origenMuebleId"
+          [value]="origenMuebleId()"
+          (change)="alCambiarOrigenMueble($any($event.target).value)"
+          [disabled]="!origenEspacioId()"
+          class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value="" disabled>Selecciona un mueble</option>
+          @for (mueble of origenMuebles(); track mueble.muebleId) {
+            <option [value]="mueble.muebleId">{{ mueble.nombre }}</option>
+          }
+        </select>
+      </div>
+
+      @if (origenMuebleId()) {
+        <fieldset class="flex flex-col gap-2">
+          <legend class="mb-1 text-sm font-semibold text-primary">Ubicaciones</legend>
+          <label class="flex items-center gap-2 text-sm font-semibold text-primary">
+            <input
+              type="checkbox"
+              [checked]="todasLasUbicacionesMarcadas()"
+              (change)="alAlternarTodasLasUbicaciones()"
+              class="h-4 w-4 accent-secondary"
+            />
+            Todas
+          </label>
+          @for (ubicacion of origenUbicaciones(); track ubicacion.ubicacionId) {
+            <label class="flex items-center gap-2 pl-4 text-sm text-primary">
+              <input
+                type="checkbox"
+                [checked]="origenUbicacionIds().has(ubicacion.ubicacionId)"
+                (change)="alAlternarOrigenUbicacion(ubicacion.ubicacionId)"
+                class="h-4 w-4 accent-secondary"
+              />
+              {{ ubicacion.nombre }}
+            </label>
+          }
+        </fieldset>
+
+        <label class="flex items-center gap-2 text-sm text-primary">
+          <input
+            type="checkbox"
+            [checked]="mostrarAgotados()"
+            (change)="alAlternarAgotados()"
+            class="h-4 w-4 accent-secondary"
+          />
+          Mostrar agotados
+        </label>
+      }
+    </div>
+
+    @if (cargandoInventario()) {
+      <p class="text-center text-sm text-primary/60">Cargando inventario…</p>
+    }
+    @if (errorInventario()) {
+      <p class="text-center text-sm text-danger">No se pudo cargar el inventario.</p>
+    }
+
+    @if (origenUbicacionIds().size > 0) {
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p class="text-sm font-semibold text-primary" aria-live="polite">
+          {{ librosSeleccionados().length }} de {{ librosOrigen().length }} seleccionados
+        </p>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            (click)="seleccionarTodos()"
+            class="rounded-xl border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            Seleccionar todos
+          </button>
+          <button
+            type="button"
+            (click)="seleccionarNinguno()"
+            class="rounded-xl border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+          >
+            Ninguno
+          </button>
+        </div>
+      </div>
+
+      @if (librosOrigen().length === 0 && !cargandoInventario()) {
+        <p class="text-center text-sm text-primary/60">No hay libros en las ubicaciones seleccionadas.</p>
+      }
+
+      <ul class="flex flex-col gap-3">
+        @for (libro of librosVisibles(); track libro.bookId) {
+          <li class="rounded-2xl bg-white shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+            <label class="flex cursor-pointer items-start gap-3 p-4">
+              <input
+                type="checkbox"
+                [checked]="estaSeleccionado(libro.bookId)"
+                (change)="alAlternarLibro(libro.bookId)"
+                class="mt-1 h-5 w-5 shrink-0 accent-secondary"
+              />
+              @if (libro.portadaUrl) {
+                <img
+                  [src]="libro.portadaUrl"
+                  [alt]="libro.titulo"
+                  appSinPortadaFallback
+                  class="h-20 w-14 shrink-0 rounded-lg object-cover"
+                />
+              } @else {
+                <div
+                  class="flex h-20 w-14 shrink-0 items-center justify-center rounded-lg bg-neutral text-[10px] text-primary/60"
+                >
+                  Sin portada
+                </div>
+              }
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-primary">{{ libro.titulo }}</p>
+                <p class="text-xs text-primary/70">{{ libro.autor }}</p>
+                @if (libro.isbn) {
+                  <p class="text-xs text-primary/60">ISBN {{ libro.isbn }}</p>
+                }
+                <p class="text-xs text-primary/60">
+                  {{ libro.cantidadDisponible }}/{{ libro.cantidadTotal }} disponibles · {{ libro.pvp | pvp }}
+                  @if (origenUbicaciones().length > 1) {
+                    · {{ nombreUbicacion(libro.ubicacionId) }}
+                  }
+                </p>
+              </div>
+            </label>
+          </li>
+        }
+        @if (limiteRenderizado() < librosOrigen().length) {
+          <li appScrollInfinito (alcanzarFinal)="cargarMasLibros()" class="list-none"></li>
+        }
+      </ul>
+    }
+  </div>
+
+  @if (librosOrigen().length > 0) {
+    <button
+      type="button"
+      (click)="abrirDialogo()"
+      [disabled]="librosSeleccionados().length === 0"
+      aria-label="Trasladar los libros seleccionados"
+      class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-white shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">moving</span>
+    </button>
+  }
+
+  @if (dialogoVisible()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-primary/40 px-4" role="dialog" aria-modal="true" aria-labelledby="tituloDialogoTraslado">
+      <div class="flex max-h-[90vh] w-full max-w-sm flex-col gap-4 overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 id="tituloDialogoTraslado" class="text-lg font-bold text-primary">Trasladar libros</h2>
+        <p class="text-sm text-primary/70">Elige la ubicación destino de los {{ librosSeleccionados().length }} libros seleccionados.</p>
+
+        <div>
+          <label for="destinoEspacioId" class="mb-1 block text-sm font-semibold text-primary">Espacio</label>
+          <select
+            id="destinoEspacioId"
+            [value]="destinoEspacioId()"
+            (change)="alCambiarDestinoEspacio($any($event.target).value)"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+          >
+            <option value="" disabled>Selecciona un espacio</option>
+            @for (espacio of espacios(); track espacio.espacioId) {
+              <option [value]="espacio.espacioId">{{ espacio.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div>
+          <label for="destinoMuebleId" class="mb-1 block text-sm font-semibold text-primary">Mueble</label>
+          <select
+            id="destinoMuebleId"
+            [value]="destinoMuebleId()"
+            (change)="alCambiarDestinoMueble($any($event.target).value)"
+            [disabled]="!destinoEspacioId()"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="" disabled>Selecciona un mueble</option>
+            @for (mueble of destinoMuebles(); track mueble.muebleId) {
+              <option [value]="mueble.muebleId">{{ mueble.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div>
+          <label for="destinoUbicacionId" class="mb-1 block text-sm font-semibold text-primary">Ubicación</label>
+          <select
+            id="destinoUbicacionId"
+            [value]="destinoUbicacionId()"
+            (change)="destinoUbicacionId.set($any($event.target).value)"
+            [disabled]="!destinoMuebleId()"
+            class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="" disabled>Selecciona una ubicación</option>
+            @for (ubicacion of destinoUbicaciones(); track ubicacion.ubicacionId) {
+              <option [value]="ubicacion.ubicacionId">{{ ubicacion.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        @if (destinoUbicacionId()) {
+          <p class="rounded-xl bg-neutral p-3 text-sm text-primary">
+            Vas a trasladar <strong>{{ librosSeleccionados().length }}</strong> libros a <strong>{{ destinoRuta() }}</strong>.
+          </p>
+        }
+
+        @if (errorTraslado()) {
+          <p class="text-sm text-danger" role="alert">{{ errorTraslado() }}</p>
+        }
+
+        <div class="flex flex-col gap-2">
+          <button
+            type="button"
+            (click)="confirmarTraslado()"
+            [disabled]="!destinoUbicacionId() || trasladando()"
+            class="h-12 w-full rounded-2xl bg-primary px-4 text-sm font-semibold text-neutral transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {{ trasladando() ? 'Trasladando…' : 'Trasladar' }}
+          </button>
+          <button
+            type="button"
+            (click)="cerrarDialogo()"
+            [disabled]="trasladando()"
+            class="h-12 w-full rounded-2xl border border-primary/20 px-4 text-sm font-semibold text-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

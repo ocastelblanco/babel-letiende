@@ -2,22 +2,26 @@ import { Component, inject, signal } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { CatalogarLibroComponent } from './catalogar-libro.component';
 import { EditarLibroComponent } from './editar-libro.component';
+import { TrasladarLibrosComponent } from './trasladar-libros.component';
 
-type Pestaña = 'catalogar' | 'editar';
+type Pestaña = 'catalogar' | 'editar' | 'trasladar';
 
-/** Ambas pestañas comparten la ruta `/catalogar` (sin sub-ruta propia), así que el `title:` de la ruta solo cubre la pestaña inicial — el cambio de pestaña debe actualizar el `<title>` a mano. */
+/** Las tres pestañas comparten la ruta `/catalogar` (sin sub-ruta propia), así que el `title:` de la ruta solo cubre la pestaña inicial — el cambio de pestaña debe actualizar el `<title>` a mano. */
 const TITULOS_PESTANA: Record<Pestaña, string> = {
   catalogar: 'Catalogar - Le Tiende',
   editar: 'Editar - Le Tiende',
+  trasladar: 'Trasladar - Le Tiende',
 };
 
 /**
  * Ruta protegida `/catalogar` (`RoleGuard(['vendedor','administrador'])`,
- * `TODO.md`, área "Gestionar") — reemplaza a `/catalogar` y `/libros`. Dos
+ * `TODO.md`, área "Gestionar") — reemplaza a `/catalogar` y `/libros`. Tres
  * pestañas independientes (`pestanaActiva`, mismo patrón de tabs que
  * `GestionUbicacionFisicaComponent`): "Catalogar" (`CatalogarLibroComponent`,
  * movido aquí desde `features/catalogar/`) y "Editar" (`EditarLibroComponent`,
- * nuevo — reemplaza a `ListaLibrosCatalogadosComponent`/`CambiarUbicacionComponent`).
+ * nuevo — reemplaza a `ListaLibrosCatalogadosComponent`/`CambiarUbicacionComponent`)
+ * y "Trasladar" (`TrasladarLibrosComponent`, traslado masivo de libros entre
+ * ubicaciones — `docs/plan-trasladar-libros.md`).
  *
  * Este componente solo resuelve el cambio de pestaña — toda la lógica de
  * cada una vive en su propio componente hijo, cada uno con su propio estado
@@ -25,7 +29,7 @@ const TITULOS_PESTANA: Record<Pestaña, string> = {
  */
 @Component({
   selector: 'app-gestionar',
-  imports: [CatalogarLibroComponent, EditarLibroComponent],
+  imports: [CatalogarLibroComponent, EditarLibroComponent, TrasladarLibrosComponent],
   templateUrl: './gestionar.component.html',
 })
 export class GestionarComponent {
