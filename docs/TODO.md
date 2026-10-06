@@ -507,7 +507,7 @@ Sin tareas activas hasta el próximo lote/hotfix del usuario. El backlog pausado
 
 **Lote nuevo (2026-10-05) — Pestaña "Trasladar" en Catalogar:** el usuario pidió una tercera pestaña en `/catalogar` para trasladar en bloque los libros de un Mueble (una, varias o todas sus Ubicaciones) a otra Ubicación. Plan aprobado por el usuario el 05/10/2026, con 5 decisiones de producto (fusión automática de duplicados por ISBN en el destino, agotados ocultos por defecto, vendedor y administrador, resumen dentro del diálogo, un solo destino). Diseño completo en **`docs/plan-trasladar-libros.md`**. Dos tareas atómicas en secuencia (regla del staging compartido): la Tarea 2 solo se abre cuando la Tarea 1 esté fusionada y desplegada.
 
-## Tarea 1 — Endpoint `POST /api/libros/trasladar` (backend) — COMPLETA (2026-10-05, PR abierto, pendiente de verificación en `staging`)
+## Tarea 1 — Endpoint `POST /api/libros/trasladar` (backend) — COMPLETA (2026-10-05, PR #141 fusionado)
 
 Rama `feature/endpoint-trasladar-libros`. Detalle en `docs/plan-trasladar-libros.md` §4.
 
@@ -518,9 +518,9 @@ Rama `feature/endpoint-trasladar-libros`. Detalle en `docs/plan-trasladar-libros
 - [x] Pruebas: traslado simple, ya en destino, sin ISBN, fusión con y sin historial, duplicados en el lote, condición fallida, 400/401/403, tope de 500.
 - [x] `npm run build:api`, `npm run test:api`, `npx serverless print --stage dev`, `npx serverless package --stage dev` en verde; docs (`tech-specs.md` §5, `MEMORY.md` §2) actualizadas.
 
-Hallazgos: ninguno que cambie el diseño. Decisión menor al implementar: un libro **agotado con ventas** no se fusiona (no tiene ejemplares que sumar) — solo se mueve, aunque haya duplicado en el destino. Verificado de forma independiente: `build:api`, 439 pruebas backend en verde (antes 412+), `serverless print`/`package --stage dev` (el zip de `trasladarLibros` incluye `libros.js`, `fechas.js`, `verificar-token.js` y `dynamodb.js`; descripción de 143 caracteres). Pendiente del usuario: probar `POST /api/libros/trasladar` en `staging` tras el despliegue del PR antes de abrir la Tarea 2.
+Hallazgos: ninguno que cambie el diseño. Decisión menor al implementar: un libro **agotado con ventas** no se fusiona (no tiene ejemplares que sumar) — solo se mueve, aunque haya duplicado en el destino. Verificado de forma independiente: `build:api`, 439 pruebas backend en verde (antes 412+), `serverless print`/`package --stage dev` (el zip de `trasladarLibros` incluye `libros.js`, `fechas.js`, `verificar-token.js` y `dynamodb.js`; descripción de 143 caracteres). Verificado por el usuario en `staging` junto con la Tarea 2.
 
-## Tarea 2 — Pestaña "Trasladar" (`TrasladarLibrosComponent`, frontend) — COMPLETA (2026-10-05, PR abierto, pendiente de verificación visual en `staging`)
+## Tarea 2 — Pestaña "Trasladar" (`TrasladarLibrosComponent`, frontend) — COMPLETA (2026-10-05, PR #142 fusionado)
 
 Rama `feature/pestana-trasladar`. Detalle en `docs/plan-trasladar-libros.md` §5.
 
@@ -530,6 +530,6 @@ Rama `feature/pestana-trasladar`. Detalle en `docs/plan-trasladar-libros.md` §5
 - [x] `LibrosService.trasladarLibros`; mensaje de resultado (incluye fusiones y PVP distintos); recarga del inventario y limpieza de la selección.
 - [x] Pruebas del componente y del servicio; `npm run build -- --configuration=production` y `npm test -- --watch=false` en verde; docs (`PRD.md` §5.3, `MEMORY.md` §2) actualizadas.
 
-Notas de implementación: la selección se guarda al revés (`excluidos`, los DESELECCIONADOS) para que todo libro visible quede seleccionado por defecto aunque el inventario llegue tarde o se active "Mostrar agotados" después. Cambiar Espacio/Mueble/Ubicaciones de origen reinicia la selección. El resumen del resultado lista los fusionados con PVP distinto (el destino conserva el suyo → revisar en Editar) y los fallidos con su motivo. Verificado de forma independiente: 461 pruebas frontend en verde (442 + 19 nuevas), `tsc -p tsconfig.spec.json` limpio, `npm run build -- --configuration=production` limpio, `/catalogar` responde `200` con `ng serve`. Pendiente del usuario: probar en `staging` el flujo completo (origen → selección → diálogo → traslado, incluido un duplicado por ISBN) — incluye la primera prueba real de `POST /api/libros/trasladar` con una transacción contra DynamoDB.
+Notas de implementación: la selección se guarda al revés (`excluidos`, los DESELECCIONADOS) para que todo libro visible quede seleccionado por defecto aunque el inventario llegue tarde o se active "Mostrar agotados" después. Cambiar Espacio/Mueble/Ubicaciones de origen reinicia la selección. El resumen del resultado lista los fusionados con PVP distinto (el destino conserva el suyo → revisar en Editar) y los fallidos con su motivo. Verificado de forma independiente: 461 pruebas frontend en verde (442 + 19 nuevas), `tsc -p tsconfig.spec.json` limpio, `npm run build -- --configuration=production` limpio, `/catalogar` responde `200` con `ng serve`. **Confirmado por el usuario en `staging`: "el flujo funciona completamente"** (origen → selección → diálogo → traslado, incluida la primera prueba real de la transacción de fusión contra DynamoDB).
 
 **Con esto se cierra el lote "Trasladar" (2026-10-05):** Tarea 1 — PR #141 (fusionado), Tarea 2 — este PR. Sin tareas activas hasta el próximo lote/hotfix del usuario; el backlog pausado (Tareas 2 y 4 de `docs/plan-rendimiento-catalogo.md`) sigue sin fecha.

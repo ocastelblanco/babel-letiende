@@ -1,6 +1,6 @@
 # Plan — Pestaña "Trasladar" en Catalogar (traslado masivo de libros)
 
-**Fecha:** 05/10/2026 · **Estado:** aprobado por el usuario, pendiente de implementar (2 tareas en `TODO.md`).
+**Fecha:** 05/10/2026 · **Estado:** COMPLETO (2026-10-05) — Tarea 1 (PR #141) y Tarea 2 (PR #142) fusionadas; flujo probado por el usuario en `staging`.
 
 ## 1. Pedido del usuario
 

@@ -214,7 +214,7 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | Validar libros — revisión asíncrona en bloque de PVP y portada del inventario catalogado | **Completado** (2026-08-19, `docs/plan-validar-libros-async.md`) — ver `TODO.md` |
 | ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | **Completado** (dominio personalizado 31/07/2026, lanzamiento público 03/08/2026) — ver `TODO.md` |
-| Traslado masivo de libros entre ubicaciones (pestaña "Trasladar" en Catalogar) | **Completado** (2026-10-05, `docs/plan-trasladar-libros.md`, PRs #141 y siguiente) — ver `TODO.md` |
+| Traslado masivo de libros entre ubicaciones (pestaña "Trasladar" en Catalogar) | **Completado** (2026-10-05, `docs/plan-trasladar-libros.md`, PRs #141 y #142) — ver `TODO.md` |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
 
 ---
