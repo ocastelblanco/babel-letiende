@@ -133,7 +133,7 @@ Vendedor/Administrador → Busca el libro en la lista de catalogados (filtro por
 
 Un libro cuya cantidad de ejemplares queda en 0 deja de aparecer en el catálogo público, en las búsquedas públicas y no está disponible para la venta (ver §5.4) — pero su ficha (`/libro/:bookId`) sigue siendo accesible directamente (ej. por un enlace ya compartido), mostrando que no hay ejemplares disponibles, sin el botón "Vender".
 
-### 5.3.1 Traslado masivo de libros (pestaña "Trasladar") — planeado
+### 5.3.1 Traslado masivo de libros (pestaña "Trasladar")
 
 Tercera pestaña del área **Gestionar** (`/catalogar`), accesible a vendedor y administrador (diseño en `docs/plan-trasladar-libros.md`).
 
@@ -214,7 +214,7 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | Validar libros — revisión asíncrona en bloque de PVP y portada del inventario catalogado | **Completado** (2026-08-19, `docs/plan-validar-libros-async.md`) — ver `TODO.md` |
 | ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | **Completado** (dominio personalizado 31/07/2026, lanzamiento público 03/08/2026) — ver `TODO.md` |
-| Traslado masivo de libros entre ubicaciones (pestaña "Trasladar" en Catalogar) | **Planeado** (2026-10-05, `docs/plan-trasladar-libros.md`) — ver `TODO.md` |
+| Traslado masivo de libros entre ubicaciones (pestaña "Trasladar" en Catalogar) | **Completado** (2026-10-05, `docs/plan-trasladar-libros.md`, PRs #141 y siguiente) — ver `TODO.md` |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
 
 ---

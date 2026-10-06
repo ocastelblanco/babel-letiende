@@ -232,6 +232,47 @@ describe('LibrosService', () => {
     });
   });
 
+  describe('trasladarLibros', () => {
+    it('devuelve exito: false sin llamar a la API cuando no hay sesión', async () => {
+      const servicio = configurarPrueba(null);
+
+      expect(await servicio.trasladarLibros(['book-1'], 'ubicacion-2')).toEqual({
+        exito: false,
+        error: expect.any(String),
+      });
+    });
+
+    it('envía POST /api/libros/trasladar con el ID Token y recarga el inventario tras un 200', async () => {
+      const servicio = configurarPrueba('token-falso');
+      const cuerpo = { trasladados: ['book-1'], fusionados: [], sinCambios: [], fallidos: [] };
+
+      const promesa = servicio.trasladarLibros(['book-1'], 'ubicacion-2');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/libros/trasladar');
+      expect(peticion.request.method).toBe('POST');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-falso');
+      expect(peticion.request.body).toEqual({ bookIds: ['book-1'], ubicacionIdDestino: 'ubicacion-2' });
+      peticion.flush(cuerpo);
+      await Promise.resolve();
+      await Promise.resolve();
+      httpMock.expectOne('/api/libros/inventario').flush([]);
+
+      expect(await promesa).toEqual({ exito: true, resultado: cuerpo });
+    });
+
+    it('devuelve el mensaje de error del backend (400) sin recargar el inventario', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const promesa = servicio.trasladarLibros(['book-1'], 'no-existe');
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/libros/trasladar')
+        .flush({ error: 'La ubicación indicada no existe.' }, { status: 400, statusText: 'Bad Request' });
+
+      expect(await promesa).toEqual({ exito: false, error: 'La ubicación indicada no existe.' });
+    });
+  });
+
   describe('editarLibro', () => {
     it('devuelve exito: false sin llamar a la API cuando no hay sesión', async () => {
       const servicio = configurarPrueba(null);

@@ -33,6 +33,21 @@ export type ResultadoOperacionLibro = { exito: true } | { exito: false; error: s
 export type ResultadoExportarInventario = { exito: true } | { exito: false; error: string };
 
 /**
+ * Respuesta de `POST /api/libros/trasladar` (`docs/plan-trasladar-libros.md` §4):
+ * `fusionados` trae el PVP de ambos registros para que el vendedor pueda
+ * revisar los que difieren; un fallo por libro (`fallidos`) no aborta el lote.
+ */
+export interface ResultadoTraslado {
+  trasladados: string[];
+  fusionados: { bookId: string; bookIdDestino: string; pvpDestino: number; pvpTrasladado: number }[];
+  sinCambios: string[];
+  fallidos: { bookId: string; motivo: string }[];
+}
+
+/** Resultado de `trasladarLibros` — nunca lanza, mismo patrón que `ResultadoOperacionLibro`. */
+export type ResultadoOperacionTraslado = { exito: true; resultado: ResultadoTraslado } | { exito: false; error: string };
+
+/**
  * Campos mínimos de `GET /api/libros/indice` (Tarea 3 del lote de
  * duplicados, `docs/plan-duplicados-catalogacion.md` §6) — deliberadamente
  * NO es un `Libro` completo (sin `editorial`/`porcentajeDescuentoEditorial`/
@@ -231,6 +246,33 @@ export class LibrosService {
       return { exito: true };
     } catch (error) {
       return { exito: false, error: this.mensajeError(error, 'No se pudo editar el libro. Intenta de nuevo.') };
+    }
+  }
+
+  /**
+   * Llama `POST /api/libros/trasladar` con el ID Token actual — traslada en
+   * bloque los `bookIds` a `ubicacionIdDestino` (pestaña "Trasladar").
+   * Nunca lanza: devuelve `{ exito: false, error }` ante sesión ausente,
+   * `400`/`403`/`401` o error de red. Tras un `200`, recarga `inventario`
+   * con `cargarInventario()`.
+   */
+  async trasladarLibros(bookIds: string[], ubicacionIdDestino: string): Promise<ResultadoOperacionTraslado> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return { exito: false, error: 'No se pudo trasladar los libros. Intenta de nuevo.' };
+    }
+    try {
+      const resultado = await firstValueFrom(
+        this.http.post<ResultadoTraslado>(
+          '/api/libros/trasladar',
+          { bookIds, ubicacionIdDestino },
+          { headers: { Authorization: `Bearer ${idToken}` } },
+        ),
+      );
+      await this.cargarInventario();
+      return { exito: true, resultado };
+    } catch (error) {
+      return { exito: false, error: this.mensajeError(error, 'No se pudo trasladar los libros. Intenta de nuevo.') };
     }
   }
 
