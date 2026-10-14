@@ -325,17 +325,23 @@ export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<A
       return respuestaJson(400, { error: 'Falta el bookId en la ruta.' });
     }
 
-    const libro = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
-    if (!libro) {
+    const libroCrudo = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
+    if (!libroCrudo) {
       return respuestaJson(404, { error: 'El libro no existe.' });
     }
+    // Se normaliza ANTES de `resolverEjemplares`: un libro sin ISBN llega de
+    // DynamoDB sin la clave `isbn` (`undefined`, no `null`), y su
+    // `libro.isbn !== null` haría un `Query` a `isbn-index` con clave
+    // `undefined` — excepción y 500 en la ficha (incidente en producción
+    // 2026-10-14, 11 libros sin ISBN afectados).
+    const libro = normalizarLibro(libroCrudo);
 
     const [ubicacion, ejemplares] = await Promise.all([
       resolverUbicacion(libro.ubicacionId),
       resolverEjemplares(libro),
     ]);
 
-    const libroConEjemplares: LibroConEjemplares = { ...normalizarLibro(libro), ubicacion, ejemplares };
+    const libroConEjemplares: LibroConEjemplares = { ...libro, ubicacion, ejemplares };
 
     return respuestaJson(200, libroConEjemplares);
   } catch {
