@@ -1477,6 +1477,21 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
       expect(cuerpo.ejemplares).toHaveLength(1);
       expect(cuerpo.ejemplares[0]?.['bookId']).toBe(libroFalso.bookId);
     });
+
+    it('sin la clave isbn en el ítem crudo de DynamoDB (así se persiste un libro sin ISBN) responde 200 sin consultar el GSI', async () => {
+      const { isbn: _isbn, ...libroSinClaveIsbn } = libroFalso;
+      obtenerPorClaveMock.mockResolvedValueOnce(libroSinClaveIsbn);
+      mockearUbicacionSiempreIgual();
+
+      const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 200 });
+      expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+      const cuerpo = JSON.parse(respuesta.body as string) as { isbn: unknown; ejemplares: Record<string, unknown>[] };
+      expect(cuerpo.isbn).toBeNull();
+      expect(cuerpo.ejemplares).toHaveLength(1);
+      expect(cuerpo.ejemplares[0]?.['bookId']).toBe(libroFalso.bookId);
+    });
   });
 });
 
