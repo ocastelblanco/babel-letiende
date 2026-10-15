@@ -115,6 +115,7 @@ Vendedor → Panel "Ubicación del libro" (se completa UNA VEZ, no por cada libr
 - **Una coincidencia:** se avisa al vendedor (breve alerta con la ubicación y cantidad disponible actual) y se precarga el formulario completo con esos datos — incluida la ubicación ya asignada, que el vendedor puede cambiar si corresponde (ej. movió el libro de estante). Confirmar equivale a editar ese registro (sumando la cantidad nueva), no a crear uno adicional.
 - **Varias coincidencias** (posible por catalogaciones duplicadas previas a este control, o porque legítimamente hay copias en más de una ubicación): se muestra una lista para elegir cuál de los registros existentes editar, con la opción de descartar la lista y catalogar como una entrada nueva independiente de todos modos.
 - La detección es exclusivamente por ISBN exacto — un libro sin ISBN nunca dispara este control (evita falsos positivos por coincidencia de título/autor).
+- **Planeado (2026-10-15, `docs/plan-duplicados-sin-isbn.md`):** al guardar, si en la **misma ubicación** ya hay un libro con el mismo título y alguno de los dos no tiene ISBN, el sistema avisa sin bloquear: el vendedor elige entre sumar ejemplares al existente, catalogarlo como un libro distinto o cancelar. Revisa a propósito la regla anterior, acotada a la misma ubicación para limitar los falsos positivos.
 
 **Sobre el descuento editorial:** es el porcentaje que la editorial reconoce a Le Tiende sobre el PVP en los libros que deja en consignación — no es un descuento al público, sino el margen que le queda a la librería. El valor típico en el contexto colombiano es 35% (PVP $100.000 → la editorial cobra $65.000, Le Tiende retiene $35.000 de utilidad); el administrador puede configurar modelos distintos para editoriales independientes (ver §5.6). Cuando el libro es propiedad de Le Tiende (no está en consignación con ninguna editorial), el descuento editorial es 100%: no hay costo asociado y toda la venta es utilidad de la librería. Este porcentaje es independiente del descuento que el vendedor pueda aplicar al momento de la venta (ver §5.4).
 
@@ -215,6 +216,7 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | **Completado** (dominio personalizado 31/07/2026, lanzamiento público 03/08/2026) — ver `TODO.md` |
 | Traslado masivo de libros entre ubicaciones (pestaña "Trasladar" en Catalogar) | **Completado** (2026-10-05, `docs/plan-trasladar-libros.md`, PRs #141 y #142) — ver `TODO.md` |
+| Aviso de posibles duplicados sin ISBN al catalogar + corrección de la condición de carrera que los generaba | Alta — **Planeado** (2026-10-15, `docs/plan-duplicados-sin-isbn.md`) — ver `TODO.md` |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
 
 ---
