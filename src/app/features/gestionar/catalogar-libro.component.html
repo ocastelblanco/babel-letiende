@@ -339,6 +339,46 @@
         {{ guardando() ? 'Guardando…' : (duplicadoEnMismaUbicacion() ? 'Editar libro' : 'Catalogar libro') }}
       </button>
 
+      @if (posiblesDuplicados().length > 0) {
+      <div class="rounded-xl border border-secondary/30 bg-secondary/10 px-3 py-3 text-sm text-primary"
+           role="alert">
+        <p class="font-semibold">Ya hay un libro con este título en esta ubicación y alguno de los dos no tiene ISBN.</p>
+        <p class="mt-1 text-xs text-primary/70">Revisa si es el mismo libro antes de catalogarlo de nuevo.</p>
+        <ul class="mt-2 flex flex-col gap-2">
+          @for (candidato of posiblesDuplicados(); track candidato.bookId) {
+          <li class="rounded-xl border border-primary/10 bg-white px-3 py-2">
+            <p class="text-sm font-semibold">{{ candidato.titulo }}</p>
+            <p class="text-xs text-primary/70">{{ candidato.autor }}</p>
+            <p class="text-xs text-primary/70">
+              {{ candidato.isbn ?? 'Sin ISBN' }} · {{ candidato.pvp | pvp }} ·
+              {{ candidato.cantidadDisponible }} disponibles
+            </p>
+            <button type="button"
+                    (click)="sumarEjemplaresAlExistente(candidato)"
+                    [disabled]="guardando()"
+                    class="mt-2 w-full rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-neutral transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+              Es el mismo libro: sumar {{ formulario.controls.cantidadTotal.value }} ejemplares
+            </button>
+          </li>
+          }
+        </ul>
+        <div class="mt-3 flex flex-col gap-2">
+          <button type="button"
+                  (click)="catalogarIgualDeTodosModos()"
+                  [disabled]="guardando()"
+                  class="w-full rounded-xl border border-primary/20 px-3 py-2 text-xs font-semibold text-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+            Es otro libro: catalogar igual
+          </button>
+          <button type="button"
+                  (click)="cancelarAvisoDuplicado()"
+                  [disabled]="guardando()"
+                  class="text-xs font-semibold text-primary underline hover:opacity-90">
+            Cancelar
+          </button>
+        </div>
+      </div>
+      }
+
       @if (mensajeExito()) {
       <p class="text-center text-sm font-semibold text-tertiary">{{ mensajeExito() }}</p>
       }
