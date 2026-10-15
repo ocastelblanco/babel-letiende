@@ -2252,6 +2252,13 @@ resources:
                     - dynamodb:PutItem
                   Resource:
                     - !GetAtt TablaLibros.Arn
+                # Solo el GSI `ubicacion-index`: comprobación de posibles
+                # duplicados sin ISBN antes de catalogar (`buscarPosiblesDuplicados`).
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                  Resource:
+                    - !Sub '${TablaLibros.Arn}/index/ubicacion-index'
                 - Effect: Allow
                   Action:
                     - dynamodb:GetItem
@@ -3244,6 +3251,8 @@ resources:
             AttributeType: S
           - AttributeName: disponibleParaCatalogo
             AttributeType: S
+          - AttributeName: ubicacionId
+            AttributeType: S
         KeySchema:
           - AttributeName: bookId
             KeyType: HASH
@@ -3269,6 +3278,26 @@ resources:
             # `GET /api/libros` de Scan a Query — ese cambio de handler NO
             # ocurre en esta tarea. Sin ProvisionedThroughput, mismo motivo
             # que `isbn-index`.
+          - IndexName: ubicacion-index
+            KeySchema:
+              - AttributeName: ubicacionId
+                KeyType: HASH
+            Projection:
+              ProjectionType: INCLUDE
+              NonKeyAttributes:
+                - titulo
+                - autor
+                - isbn
+                - pvp
+                - cantidadTotal
+                - cantidadDisponible
+            # Solo lo que necesita `buscarPosiblesDuplicados` (`libros.ts`,
+            # `docs/plan-duplicados-sin-isbn.md` §5): los libros de una
+            # ubicación con título/autor/ISBN/PVP/cantidades, para avisar de un
+            # posible duplicado sin ISBN al catalogar. CloudFormation solo
+            # admite UN GSI nuevo por despliegue — no agregar otro en el mismo
+            # cambio. Los libros sin `ubicacionId` (anteriores a la migración
+            # `estanteId`→`ubicacionId`) quedan fuera del índice.
 
     TablaVentas:
       Type: AWS::DynamoDB::Table

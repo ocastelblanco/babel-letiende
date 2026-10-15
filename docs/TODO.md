@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tarea 1 implementada (PR abierto), Tarea 2 activa, Tarea 3 en cola. Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
+**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tarea 1 fusionada, Tarea 2 implementada (PR abierto), Tarea 3 en cola. Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
 
 **Coordinación externa (08/09/2026) — lazy-load de las 11 rutas del router:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0033, en
@@ -557,14 +557,16 @@ Rama `fix/carrera-busqueda-isbn-catalogar`. Detalle en el plan, §4. Falta solo 
 - [x] Verificado: 469 pruebas frontend (461 + 8) y 440 backend en verde, `npm run build` y `npm run build:api` limpios, `/catalogar` responde `200` con `ng serve`.
 - [ ] Verificación del usuario en `staging`: escanear un libro, pulsar "Catalogar libro" de inmediato y comprobar que el formulario queda vacío y no aparece ningún registro duplicado. Al tocar el botón con un ISBN recién escrito y sin buscar, la búsqueda arranca y el botón queda bloqueado un instante: hay que volver a pulsarlo cuando se habilite.
 
-## Tarea 2 — Comprobación de posibles duplicados en `POST /api/libros` (backend) — ACTIVA
+## Tarea 2 — Comprobación de posibles duplicados en `POST /api/libros` (backend) — IMPLEMENTADA, PR abierto (2026-10-15)
 
 Rama `feature/aviso-duplicado-sin-isbn-backend`. Detalle en el plan, §5.
 
-- [ ] GSI `ubicacion-index` (`ubicacionId`, proyección `INCLUDE`) en `serverless.yml`, solo GSI nuevo en ese despliegue.
-- [ ] `handlerCrear` responde `409` con `posiblesDuplicados` si en la misma ubicación hay un libro con el mismo título normalizado y uno de los dos no tiene ISBN (D1); `confirmarLibroDistinto: true` omite la comprobación; si el `Query` falla, cataloga igual (D5).
-- [ ] `dynamodb:Query` sobre el índice solo en el rol de `catalogarLibro`; `npm run build:api` y revisión de `package.patterns`.
-- [ ] Pruebas de la tabla de casos del plan; GSI `ACTIVE` en `staging`; `tech-specs.md` y `PRD.md` §5.2 actualizados.
+- [x] GSI `ubicacion-index` (`ubicacionId`, proyección `INCLUDE`) en `serverless.yml`, único GSI nuevo en ese despliegue.
+- [x] `handlerCrear` → `buscarPosiblesDuplicados`: `Query` al índice por la ubicación del libro nuevo; coincide si el título normalizado (`normalizarParaComparacion`) es igual y alguno de los dos no tiene ISBN (D1). Responde `409 { error, posiblesDuplicados }` (máx. 10) sin escribir; `confirmarLibroDistinto: true` omite la comprobación y no se persiste; si el `Query` falla, cataloga igual y lo registra (D5). Un título vacío al normalizarse nunca coincide.
+- [x] `dynamodb:Query` solo sobre `ubicacion-index` en el rol de `catalogarLibro`; sin módulos nuevos (`package.patterns` sin cambios); `npm run build:api`, `serverless print` y `serverless package --stage dev` verificados.
+- [x] 14 pruebas nuevas (12 del handler, 2 del validador): los 3 casos de coincidencia, los dos con ISBN, otro título, sin libros en la ubicación, título vacío, confirmación, fallo del `Query`, flag no booleano, tope de 10; 7 fallan sin el cambio. 453 pruebas backend en verde.
+- [x] `tech-specs.md` (endpoint e índices de `babel-libros`) y `PRD.md` §5.2 actualizados.
+- [ ] Tras el despliegue a `staging`: comprobar que `ubicacion-index` quedó `ACTIVE`. **Ojo:** hasta que la Tarea 3 esté desplegada, el frontend actual muestra el mensaje del `409` como un error y no ofrece cómo continuar; un libro legítimo sin ISBN con título repetido en la misma ubicación no se puede catalogar desde la app.
 
 ## Tarea 3 — Aviso de posible duplicado en Catalogar (frontend) — EN COLA
 

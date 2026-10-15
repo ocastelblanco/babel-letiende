@@ -461,6 +461,13 @@ export function validarDatosNuevoLibro(cuerpo: unknown): ResultadoValidacion {
     return { valido: false, error: 'La cantidad total debe ser un número entero mayor a 0.' };
   }
 
+  // `confirmarLibroDistinto` NO forma parte de `DatosNuevoLibro` (que se
+  // esparce tal cual en el `Libro` que se persiste): es solo una instrucción
+  // para `handlerCrear`, que lo lee aparte del cuerpo.
+  if (datos['confirmarLibroDistinto'] !== undefined && typeof datos['confirmarLibroDistinto'] !== 'boolean') {
+    return { valido: false, error: 'confirmarLibroDistinto debe ser verdadero o falso.' };
+  }
+
   const isbn = typeof datos['isbn'] === 'string' && datos['isbn'].trim() !== '' ? datos['isbn'] : null;
   const editorial =
     typeof datos['editorial'] === 'string' && datos['editorial'].trim() !== '' ? datos['editorial'] : null;
@@ -481,6 +488,73 @@ export function validarDatosNuevoLibro(cuerpo: unknown): ResultadoValidacion {
       ubicacionId: datos['ubicacionId'],
     },
   };
+}
+
+/** Máximo de candidatos que devuelve el `409` de `POST /api/libros` — el aviso es para que el vendedor compare, no un listado. */
+const MAXIMO_POSIBLES_DUPLICADOS = 10;
+
+/** Atributos que proyecta el GSI `ubicacion-index` de `babel-libros` (más la clave primaria `bookId`, que DynamoDB siempre proyecta). */
+interface LibroCandidatoDuplicado {
+  bookId: string;
+  titulo: string;
+  autor: string;
+  isbn?: string;
+  pvp: number;
+  cantidadTotal: number;
+  cantidadDisponible: number;
+}
+
+/** Un posible duplicado tal como lo ve el cliente: `isbn: null` explícito cuando el registro no tiene ISBN. */
+interface PosibleDuplicado {
+  bookId: string;
+  titulo: string;
+  autor: string;
+  isbn: string | null;
+  pvp: number;
+  cantidadTotal: number;
+  cantidadDisponible: number;
+}
+
+/**
+ * Busca, en la MISMA ubicación del libro que se va a catalogar, registros con
+ * el mismo título normalizado (`normalizarParaComparacion`: sin tildes, sin
+ * mayúsculas ni signos) cuando al menos uno de los dos NO tiene ISBN
+ * (`docs/plan-duplicados-sin-isbn.md` §3, D1). Si ambos tienen ISBN no se
+ * avisa: si el ISBN es el mismo lo cubre el flujo de detección por ISBN del
+ * frontend, y si difiere son ediciones distintas. No se compara el autor: su
+ * formato varía entre fuentes ("Benito Pérez Galdós" / "PEREZ GALDOS,
+ * BENITO"). Un título que queda vacío al normalizarse nunca coincide.
+ *
+ * `Query` al GSI `ubicacion-index` (nunca un `Scan`). Ante CUALQUIER fallo
+ * (índice todavía en creación, permisos, red) devuelve `[]` y lo registra: la
+ * comprobación es un aviso auxiliar y nunca debe impedir catalogar, que es la
+ * ruta crítica del sistema (D5).
+ */
+async function buscarPosiblesDuplicados(datos: DatosNuevoLibro): Promise<PosibleDuplicado[]> {
+  const tituloNormalizado = normalizarParaComparacion(datos.titulo);
+  if (tituloNormalizado === '') {
+    return [];
+  }
+  try {
+    const enLaUbicacion = await consultarPorIndice<LibroCandidatoDuplicado>(
+      nombreTablaLibros(),
+      'ubicacion-index',
+      'ubicacionId',
+      datos.ubicacionId,
+      ['bookId', 'titulo', 'autor', 'isbn', 'pvp', 'cantidadTotal', 'cantidadDisponible'],
+    );
+    return enLaUbicacion
+      .filter(
+        (existente) =>
+          normalizarParaComparacion(existente.titulo) === tituloNormalizado &&
+          (datos.isbn === null || existente.isbn === undefined),
+      )
+      .slice(0, MAXIMO_POSIBLES_DUPLICADOS)
+      .map((existente) => ({ ...existente, isbn: existente.isbn ?? null }));
+  } catch (error) {
+    console.error('No se pudo comprobar si el libro ya existe en la ubicación; se cataloga sin aviso.', error);
+    return [];
+  }
 }
 
 /**
@@ -518,6 +592,22 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
     const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId: datos.ubicacionId });
     if (!ubicacion) {
       return respuestaJson(400, { error: 'La ubicación indicada no existe.' });
+    }
+
+    // Aviso de posible duplicado sin ISBN (`docs/plan-duplicados-sin-isbn.md`
+    // §5): el vendedor decide con `confirmarLibroDistinto: true` (leído aquí
+    // aparte, nunca parte de `datos`/del ítem persistido). Sin escribir nada.
+    const confirmarLibroDistinto = (cuerpo as Record<string, unknown>)['confirmarLibroDistinto'] === true;
+    if (!confirmarLibroDistinto) {
+      const posiblesDuplicados = await buscarPosiblesDuplicados(datos);
+      if (posiblesDuplicados.length > 0) {
+        return respuestaJson(409, {
+          error:
+            'Ya hay un libro con el mismo título en esta ubicación y alguno de los dos no tiene ISBN. ' +
+            'Revisa si es el mismo libro antes de catalogarlo de nuevo.',
+          posiblesDuplicados,
+        });
+      }
     }
 
     const ahora = new Date().toISOString();

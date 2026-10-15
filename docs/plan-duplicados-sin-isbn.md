@@ -1,6 +1,6 @@
 # Plan — Duplicados sin ISBN al catalogar
 
-**Fecha:** 15/10/2026 · **Estado:** decisiones D1-D5 aprobadas (PR #145 fusionado). Tarea 1 implementada (pendiente de verificación en `staging`); Tareas 2 y 3 sin empezar.
+**Fecha:** 15/10/2026 · **Estado:** decisiones D1-D5 aprobadas (PR #145 fusionado). Tarea 1 fusionada (pendiente de verificación en `staging`); Tarea 2 implementada (PR abierto); Tarea 3 sin empezar.
 
 ## 1. Origen: el incidente del 14/10/2026
 
