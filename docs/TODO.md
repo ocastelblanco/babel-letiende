@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tareas 1 y 2 activas, Tarea 3 en cola. Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
+**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tarea 1 implementada (PR abierto), Tarea 2 activa, Tarea 3 en cola. Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
 
 **Coordinación externa (08/09/2026) — lazy-load de las 11 rutas del router:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0033, en
@@ -546,15 +546,16 @@ Notas de implementación: la selección se guarda al revés (`excluidos`, los DE
 
 **Lote nuevo (2026-10-15) — Duplicados sin ISBN al catalogar:** el incidente de arriba mostró que los 7 duplicados no fueron errores de captura. Los causó una **condición de carrera en `CatalogarLibroComponent`**: una búsqueda por ISBN que responde después de guardar vuelve a llenar el formulario recién vaciado, sin ISBN, y el vendedor guarda otra vez. Está confirmada con los registros de CloudWatch de tres casos. Además, la detección de duplicados existente es solo por ISBN, así que el segundo guardado pasó sin aviso. Diseño completo, línea de tiempo del incidente y decisiones propuestas D1-D5 en **`docs/plan-duplicados-sin-isbn.md`**. Las decisiones quedan aprobadas al fusionar el PR del plan. Una rama y un PR por tarea, en secuencia (staging compartido).
 
-## Tarea 1 — Condición de carrera de la búsqueda por ISBN en Catalogar (frontend) — ACTIVA
+## Tarea 1 — Condición de carrera de la búsqueda por ISBN en Catalogar (frontend) — IMPLEMENTADA, PR abierto (2026-10-15)
 
-Rama `fix/carrera-busqueda-isbn-catalogar`. Detalle en el plan, §4.
+Rama `fix/carrera-busqueda-isbn-catalogar`. Detalle en el plan, §4. Falta solo la verificación del usuario en `staging`.
 
-- [ ] Indicador de búsqueda activo desde antes del primer `await` (cierra la ventana blur + click).
-- [ ] Contador de generación: ningún resultado de búsqueda se aplica tras `reiniciarFormulario()` ni si el ISBN del formulario cambió. Lo mismo en `buscarPvpCandidatoSinIsbn` y `seleccionarCandidato`.
-- [ ] El blur no relanza la búsqueda si el ISBN no cambió; `guardar()` no envía nada con una búsqueda en curso.
-- [ ] Pruebas que reproducen las dos líneas de tiempo reales del incidente y fallan sin el arreglo; build y suite completa en verde.
-- [ ] Verificación del usuario en `staging`.
+- [x] `buscandoIsbn`: indicador de búsqueda activo desde antes del primer `await` de `dispararBusquedaPorIsbn` (cierra la ventana blur + click); deshabilita "Catalogar libro" junto con los indicadores existentes.
+- [x] Contador `generacionBusquedaIsbn`: aumenta en cada búsqueda, en `seleccionarCandidato` y en `reiniciarFormulario`. Una respuesta (token, duplicados, metadatos, ficha de Babel, PVP de candidato) solo se aplica si su generación sigue vigente y, en las búsquedas por ISBN, si el campo ISBN todavía muestra el ISBN buscado. Los `finally` solo apagan indicadores de la generación vigente; `reiniciarFormulario` los apaga todos.
+- [x] El blur no relanza la búsqueda si el ISBN no cambió (`ultimoIsbnBuscado`); `guardar()` no envía nada con `buscandoIsbn()`.
+- [x] 8 pruebas nuevas con promesas controladas que reproducen las líneas de tiempo del incidente (variante A, variante B, respuesta posterior al reinicio, ISBN editado, respuesta de duplicados obsoleta, candidato de Babel y PVP de candidato tras reiniciar); las 8 fallan sin el arreglo. El helper `flushBusquedaDuplicados` ahora deja terminar la cadena de búsqueda antes de seguir.
+- [x] Verificado: 469 pruebas frontend (461 + 8) y 440 backend en verde, `npm run build` y `npm run build:api` limpios, `/catalogar` responde `200` con `ng serve`.
+- [ ] Verificación del usuario en `staging`: escanear un libro, pulsar "Catalogar libro" de inmediato y comprobar que el formulario queda vacío y no aparece ningún registro duplicado. Al tocar el botón con un ISBN recién escrito y sin buscar, la búsqueda arranca y el botón queda bloqueado un instante: hay que volver a pulsarlo cuando se habilite.
 
 ## Tarea 2 — Comprobación de posibles duplicados en `POST /api/libros` (backend) — ACTIVA
 

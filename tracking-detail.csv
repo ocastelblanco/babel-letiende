@@ -239,3 +239,4 @@ Backend,14/10/2026 17:58,14/10/2026 18:00,0:02:00,AI,Opus 5.5,Fix del 500 en la 
 Backend,14/10/2026 18:04,14/10/2026 18:25,0:04:00,AI,Opus 5.5,Limpieza en producción de 7 libros duplicados sin ISBN (verificados contra su gemelo con ISBN y sin ventas); 4 libros sin ISBN únicos conservados,Claude Code,cli,low
 Backend,14/10/2026 18:57,14/10/2026 19:03,0:05:00,AI,Opus 5.5,Verificación en producción del fix de libros sin ISBN (4 fichas en 200) tras fusionar el PR 144,Claude Code,cli,low
 Specs definition,15/10/2026 10:00,15/10/2026 10:05,0:05:00,AI,Opus 5.5,Plan del lote Duplicados sin ISBN: causa raíz confirmada en CloudWatch (carrera en Catalogar) y 3 tareas en docs/TODO/MEMORY/PRD,Claude Code,cli,medium
+Frontend,15/10/2026 10:30,15/10/2026 10:34,0:04:00,AI,Sonnet 5.5,Fix de la condición de carrera de la búsqueda por ISBN en Catalogar (generación de búsqueda e indicador síncrono) con 8 pruebas de regresión,Claude Code,cli,medium

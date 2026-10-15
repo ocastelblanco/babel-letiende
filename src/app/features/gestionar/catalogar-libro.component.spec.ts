@@ -202,6 +202,11 @@ async function flushBusquedaDuplicados(
 ): Promise<void> {
   await dejarPasarMicrotareas();
   httpMock.expectOne(`/api/libros/por-isbn/${isbn}`).flush(coincidencias);
+  // Deja terminar la cadena de `dispararBusquedaPorIsbn`: mientras sigue en
+  // curso, `buscandoIsbn()` bloquea `guardar()` (Tarea 1 del lote de
+  // duplicados sin ISBN) — un vendedor real nunca guarda en esa ventana de
+  // microtareas, pero un test que envía el formulario justo después sí.
+  await dejarPasarMicrotareas();
 }
 
 describe('CatalogarLibroComponent', () => {
@@ -1422,6 +1427,263 @@ describe('CatalogarLibroComponent', () => {
         expect(botonGuardar.disabled).toBe(false);
       },
     );
+  });
+
+  describe('condición de carrera de la búsqueda por ISBN (docs/plan-duplicados-sin-isbn.md Tarea 1)', () => {
+    const ISBN_X = '9788446052449';
+    const ISBN_Y = '9788412067989';
+
+    /** Promesa que la prueba resuelve a mano — controla CUÁNDO "responde" `MetadatosService`/`LibrosService`/`buscarPvp`, que es justo lo que decidió el orden de eventos del incidente. */
+    function diferida<T>(): { promesa: Promise<T>; resolver: (valor: T) => void } {
+      let resolver!: (valor: T) => void;
+      const promesa = new Promise<T>((resolve) => {
+        resolver = resolve;
+      });
+      return { promesa, resolver };
+    }
+
+    function escribirIsbnYPerderFoco(fixture: ComponentFixture<CatalogarLibroComponent>, isbn: string): void {
+      const campoIsbn = fixture.nativeElement.querySelector('#isbn') as HTMLInputElement;
+      campoIsbn.value = isbn;
+      campoIsbn.dispatchEvent(new Event('input'));
+      campoIsbn.dispatchEvent(new Event('blur'));
+    }
+
+    function botonGuardar(fixture: ComponentFixture<CatalogarLibroComponent>): HTMLButtonElement {
+      return fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+    }
+
+    function enviar(fixture: ComponentFixture<CatalogarLibroComponent>): void {
+      (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    }
+
+    type Metadatos = {
+      titulo: string | null;
+      autor: string | null;
+      editorial: string | null;
+      portadaUrl: string | null;
+      pvp: number | null;
+    };
+    const metadatosViejos: Metadatos = { ...metadatosVacios, titulo: 'Título de la búsqueda vieja', autor: 'Autor viejo', pvp: 10000 };
+    const metadatosNuevos: Metadatos = { ...metadatosVacios, titulo: 'Título de la búsqueda vigente', autor: 'Autor vigente', pvp: 20000 };
+
+    it('deshabilita "Catalogar libro" y no envía nada desde el mismo tick del blur, antes del primer await (variante A)', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      seleccionarUbicacionPanel(fixture, 'ubicacion-1');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.formulario.patchValue({ titulo: 'Libro', autor: 'Autor', pvp: 45000 });
+
+      escribirIsbnYPerderFoco(fixture, ISBN_X);
+      // Sin ningún await entre el blur y la comprobación: la ventana de la
+      // variante A (el `await obtenerIdToken()` previo a `buscandoDuplicados`).
+      fixture.detectChanges();
+      expect(botonGuardar(fixture).disabled).toBe(true);
+
+      enviar(fixture);
+      await dejarPasarMicrotareas();
+      httpMock.expectNone('/api/libros');
+
+      await flushBusquedaDuplicados(httpMock, ISBN_X, []);
+      fixture.detectChanges();
+      expect(botonGuardar(fixture).disabled).toBe(false);
+    });
+
+    it('un blur con el ISBN sin cambios (tocar "Catalogar libro") no relanza la búsqueda', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+
+      escribirIsbnYPerderFoco(fixture, ISBN_X);
+      await flushBusquedaDuplicados(httpMock, ISBN_X, []);
+
+      escribirIsbnYPerderFoco(fixture, ISBN_X);
+      await dejarPasarMicrotareas();
+      httpMock.expectNone(`/api/libros/por-isbn/${ISBN_X}`);
+    });
+
+    it('la respuesta de metadatos que llega DESPUÉS de reiniciar el formulario no lo vuelve a llenar (línea de tiempo del incidente)', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      const metadatos = diferida<Metadatos>();
+      obtenerMetadatosMock.mockReturnValueOnce(metadatos.promesa);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      escribirIsbnYPerderFoco(fixture, ISBN_X);
+      await flushBusquedaDuplicados(httpMock, ISBN_X, []);
+      expect(obtenerMetadatosMock).toHaveBeenCalledTimes(1);
+
+      // El libro se guarda y el formulario se vacía mientras la búsqueda sigue en vuelo.
+      componente.reiniciarFormulario();
+      expect(componente.formulario.value.titulo).toBe('');
+
+      metadatos.resolver(metadatosViejos);
+      await dejarPasarMicrotareas();
+
+      expect(componente.formulario.value.titulo).toBe('');
+      expect(componente.formulario.value.autor).toBe('');
+      expect(componente.formulario.value.pvp).toBe(0);
+      expect(componente.formulario.value.isbn).toBe('');
+    });
+
+    it('con dos búsquedas superpuestas, la primera no habilita el botón ni llena el formulario al terminar antes (variante B)', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      const primera = diferida<Metadatos>();
+      const segunda = diferida<Metadatos>();
+      obtenerMetadatosMock.mockReturnValueOnce(primera.promesa).mockReturnValueOnce(segunda.promesa);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      escribirIsbnYPerderFoco(fixture, ISBN_X);
+      await flushBusquedaDuplicados(httpMock, ISBN_X, []);
+      escribirIsbnYPerderFoco(fixture, ISBN_Y);
+      await flushBusquedaDuplicados(httpMock, ISBN_Y, []);
+
+      primera.resolver(metadatosViejos);
+      await dejarPasarMicrotareas();
+      fixture.detectChanges();
+
+      // La búsqueda de ISBN_Y sigue en curso: el botón sigue bloqueado y nada de ISBN_X llegó al formulario.
+      expect(botonGuardar(fixture).disabled).toBe(true);
+      expect(componente.formulario.value.titulo).toBe('');
+
+      segunda.resolver(metadatosNuevos);
+      await dejarPasarMicrotareas();
+      fixture.detectChanges();
+
+      expect(componente.formulario.value.titulo).toBe('Título de la búsqueda vigente');
+      expect(botonGuardar(fixture).disabled).toBe(false);
+    });
+
+    it('una respuesta de duplicados de un ISBN anterior no selecciona ese duplicado', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      const libroDeX = {
+        isbn: ISBN_X,
+        bookId: 'libro-x',
+        titulo: 'Libro de X',
+        autor: 'Autor de X',
+        editorial: null,
+        portadaUrl: null,
+        pvp: 50000,
+        porcentajeDescuentoEditorial: 35,
+        costo: 32500,
+        utilidadCatalogo: 17500,
+        cantidadTotal: 1,
+        cantidadDisponible: 1,
+        ubicacionId: 'ubicacion-1',
+        creadoPor: 'vendedor@letiende.co',
+        creadoEn: '2026-01-01T00:00:00.000Z',
+        actualizadoEn: '2026-01-01T00:00:00.000Z',
+        ubicacion: null,
+      } satisfies LibroConUbicacion;
+
+      escribirIsbnYPerderFoco(fixture, ISBN_X);
+      await dejarPasarMicrotareas();
+      const peticionX = httpMock.expectOne(`/api/libros/por-isbn/${ISBN_X}`);
+      escribirIsbnYPerderFoco(fixture, ISBN_Y);
+      await dejarPasarMicrotareas();
+      const peticionY = httpMock.expectOne(`/api/libros/por-isbn/${ISBN_Y}`);
+
+      peticionX.flush([libroDeX]);
+      await dejarPasarMicrotareas();
+      expect(componente.libroDuplicadoSeleccionado()).toBeNull();
+      expect(componente.formulario.value.titulo).toBe('');
+
+      peticionY.flush([]);
+      await dejarPasarMicrotareas();
+    });
+
+    it('si el vendedor edita el ISBN mientras la búsqueda sigue en vuelo, su respuesta no llena el formulario', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      const metadatos = diferida<Metadatos>();
+      obtenerMetadatosMock.mockReturnValueOnce(metadatos.promesa);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      escribirIsbnYPerderFoco(fixture, ISBN_X);
+      await flushBusquedaDuplicados(httpMock, ISBN_X, []);
+
+      // Edita el campo sin perder el foco todavía: no hay búsqueda nueva, pero el ISBN ya no es el buscado.
+      componente.formulario.controls.isbn.setValue(ISBN_Y);
+      metadatos.resolver(metadatosViejos);
+      await dejarPasarMicrotareas();
+
+      expect(componente.formulario.value.titulo).toBe('');
+    });
+
+    it('un candidato de Babel cuya ficha llega después de reiniciar el formulario no se precarga', async () => {
+      const { fixture, obtenerDetalleMock, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      const detalle = diferida<LibroConUbicacion | null>();
+      obtenerDetalleMock.mockReturnValueOnce(detalle.promesa);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      const seleccion = componente.seleccionarCandidato({
+        origen: 'babel',
+        bookId: 'libro-1',
+        titulo: 'Libro de Babel',
+        autor: 'Autor',
+        editorial: null,
+        portadaUrl: null,
+        isbn: ISBN_X,
+      }) as Promise<void>;
+      componente.reiniciarFormulario();
+      detalle.resolver({
+        isbn: ISBN_X,
+        bookId: 'libro-1',
+        titulo: 'Libro de Babel',
+        autor: 'Autor',
+        editorial: null,
+        portadaUrl: null,
+        pvp: 50000,
+        porcentajeDescuentoEditorial: 35,
+        costo: 32500,
+        utilidadCatalogo: 17500,
+        cantidadTotal: 1,
+        cantidadDisponible: 1,
+        ubicacionId: 'ubicacion-1',
+        creadoPor: 'vendedor@letiende.co',
+        creadoEn: '2026-01-01T00:00:00.000Z',
+        actualizadoEn: '2026-01-01T00:00:00.000Z',
+        ubicacion: null,
+      });
+      await seleccion;
+
+      expect(componente.libroDuplicadoSeleccionado()).toBeNull();
+      expect(componente.formulario.value.titulo).toBe('');
+    });
+
+    it('el PVP de un candidato sin ISBN que llega después de reiniciar el formulario no se escribe', async () => {
+      const { fixture, buscarPvpMock, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      const pvp = diferida<number | null>();
+      buscarPvpMock.mockReturnValueOnce(pvp.promesa);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      const seleccion = componente.seleccionarCandidato({
+        origen: 'externo',
+        titulo: 'Libro artesanal',
+        autor: 'Autor',
+        editorial: null,
+        portadaUrl: null,
+        isbn: null,
+      }) as Promise<void>;
+      expect(componente.buscandoPvpCandidato()).toBe(true);
+      componente.reiniciarFormulario();
+      expect(componente.buscandoPvpCandidato()).toBe(false);
+      pvp.resolver(50000);
+      await seleccion;
+
+      expect(componente.formulario.value.pvp).toBe(0);
+    });
   });
 
   describe('panel "Ubicación del libro" (cascada Espacio → Mueble → Ubicación)', () => {
