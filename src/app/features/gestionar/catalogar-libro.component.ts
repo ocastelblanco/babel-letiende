@@ -13,11 +13,23 @@ import { LibrosService, type LibroIndice } from '../../core/api/libros.service';
 import type { LibroConUbicacion } from '../../core/models/libro.model';
 import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
 import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
+import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 
 const PVP_MAXIMO = 5_000_000;
 
 /** Tope de candidatos de Babel mostrados por búsqueda — mismo criterio que `LIMITE_CANDIDATOS` del backend (`metadatos.ts`, búsqueda externa). */
 const LIMITE_CANDIDATOS_BABEL = 20;
+
+/** Un candidato del `409` de `POST /api/libros` — `isbn: null` si el registro existente no tiene ISBN (`docs/plan-duplicados-sin-isbn.md` §3). */
+interface PosibleDuplicado {
+  bookId: string;
+  titulo: string;
+  autor: string;
+  isbn: string | null;
+  pvp: number;
+  cantidadTotal: number;
+  cantidadDisponible: number;
+}
 
 /** Quita tildes y normaliza mayúsculas para comparar nombres de editorial sin distinguir acentos/mayúsculas — mismo criterio que `catalogo-publico.component.ts`. */
 function normalizarTexto(valor: string): string {
@@ -89,7 +101,7 @@ type CandidatoConOrigen =
  */
 @Component({
   selector: 'app-catalogar-libro',
-  imports: [ReactiveFormsModule, SelectorPortadaComponent, SinPortadaFallbackDirective],
+  imports: [ReactiveFormsModule, SelectorPortadaComponent, SinPortadaFallbackDirective, PvpPipe],
   templateUrl: './catalogar-libro.component.html',
 })
 export class CatalogarLibroComponent implements OnInit, OnDestroy {
@@ -127,6 +139,13 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   protected readonly guardando = signal(false);
   protected readonly mensajeExito = signal<string | null>(null);
   protected readonly mensajeError = signal<string | null>(null);
+  /**
+   * Candidatos del `409` de `POST /api/libros` (mismo título en la misma
+   * ubicación y alguno de los dos sin ISBN, `docs/plan-duplicados-sin-isbn.md`
+   * §4). Vacío = sin aviso. Mientras hay aviso el formulario se conserva
+   * intacto: el vendedor elige sumar ejemplares, catalogar igual o cancelar.
+   */
+  protected readonly posiblesDuplicados = signal<PosibleDuplicado[]>([]);
 
   /** `true` mientras se consulta `MetadatosService` tras obtener un ISBN (escaneo o entrada manual). */
   protected readonly buscandoMetadatos = signal(false);
@@ -788,9 +807,10 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected async guardar(): Promise<void> {
+  protected async guardar(confirmarLibroDistinto = false): Promise<void> {
     this.mensajeExito.set(null);
     this.mensajeError.set(null);
+    this.posiblesDuplicados.set([]);
 
     if (this.formulario.invalid) {
       this.formulario.markAllAsTouched();
@@ -873,7 +893,12 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
         const libroCreado = await firstValueFrom(
           this.http.post<{ titulo: string }>(
             '/api/libros',
-            { ...camposComunes, cantidadTotal: valores.cantidadTotal, ubicacionId },
+            {
+              ...camposComunes,
+              cantidadTotal: valores.cantidadTotal,
+              ubicacionId,
+              ...(confirmarLibroDistinto ? { confirmarLibroDistinto: true } : {}),
+            },
             { headers: { Authorization: `Bearer ${idToken}` } },
           ),
         );
@@ -881,10 +906,93 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       }
       this.reiniciarFormulario();
     } catch (error) {
+      const candidatos = this.extraerPosiblesDuplicados(error);
+      if (candidatos.length > 0) {
+        // Aviso, no error: el formulario se conserva y el vendedor decide.
+        this.posiblesDuplicados.set(candidatos);
+        return;
+      }
       const mensaje =
         error instanceof HttpErrorResponse && typeof error.error?.error === 'string'
           ? error.error.error
           : 'No se pudo catalogar el libro. Intenta de nuevo.';
+      this.mensajeError.set(mensaje);
+    } finally {
+      this.guardando.set(false);
+    }
+  }
+
+  /** Candidatos de un `409` de `POST /api/libros`; `[]` si el error es de otro tipo o el cuerpo no trae la lista. */
+  private extraerPosiblesDuplicados(error: unknown): PosibleDuplicado[] {
+    if (!(error instanceof HttpErrorResponse) || error.status !== 409) {
+      return [];
+    }
+    const lista: unknown = error.error?.posiblesDuplicados;
+    return Array.isArray(lista) ? (lista as PosibleDuplicado[]) : [];
+  }
+
+  /** "Cancelar" del aviso: lo cierra sin enviar nada y conserva el formulario. */
+  protected cancelarAvisoDuplicado(): void {
+    this.posiblesDuplicados.set([]);
+  }
+
+  /** "Es otro libro: catalogar igual": reenvía el formulario con `confirmarLibroDistinto`. */
+  protected async catalogarIgualDeTodosModos(): Promise<void> {
+    await this.guardar(true);
+  }
+
+  /**
+   * "Es el mismo libro: sumar ejemplares": suma la cantidad del formulario al
+   * registro existente con `fusionar-duplicado`. Ese endpoint SOBRESCRIBE los
+   * datos del registro, así que se le reenvían los del propio existente
+   * (leídos de la ficha) para no borrarle editorial, portada ni descuento; si
+   * el existente no tenía ISBN y el nuevo sí, se le asigna el nuevo
+   * (`docs/plan-duplicados-sin-isbn.md` D4).
+   */
+  protected async sumarEjemplaresAlExistente(candidato: PosibleDuplicado): Promise<void> {
+    this.mensajeExito.set(null);
+    this.mensajeError.set(null);
+    const valores = this.formulario.getRawValue();
+    const ejemplaresNuevos = valores.cantidadTotal;
+    if (!Number.isInteger(ejemplaresNuevos) || ejemplaresNuevos <= 0) {
+      this.mensajeError.set('La cantidad debe ser un número entero mayor a 0.');
+      return;
+    }
+
+    this.guardando.set(true);
+    try {
+      const idToken = await this.authService.obtenerIdToken();
+      const existente = await this.librosService.obtenerDetalle(candidato.bookId);
+      if (!idToken || !existente) {
+        this.mensajeError.set('No se pudo sumar los ejemplares al libro existente. Intenta de nuevo.');
+        return;
+      }
+      const isbnNuevo = valores.isbn.trim();
+      const libroActualizado = await firstValueFrom(
+        this.http.post<{ titulo: string }>(
+          `/api/libros/${existente.bookId}/fusionar-duplicado`,
+          {
+            isbn: existente.isbn ?? (isbnNuevo === '' ? null : isbnNuevo),
+            titulo: existente.titulo,
+            autor: existente.autor,
+            editorial: existente.editorial ?? null,
+            portadaUrl: existente.portadaUrl ?? null,
+            pvp: existente.pvp,
+            porcentajeDescuentoEditorial: existente.porcentajeDescuentoEditorial,
+            ubicacionId: existente.ubicacionId,
+            ejemplaresNuevos,
+          },
+          { headers: { Authorization: `Bearer ${idToken}` } },
+        ),
+      );
+      this.mensajeExito.set(`«${libroActualizado.titulo}» actualizado — se agregaron ${ejemplaresNuevos} ejemplares nuevos.`);
+      this.posiblesDuplicados.set([]);
+      this.reiniciarFormulario();
+    } catch (error) {
+      const mensaje =
+        error instanceof HttpErrorResponse && typeof error.error?.error === 'string'
+          ? error.error.error
+          : 'No se pudo sumar los ejemplares al libro existente. Intenta de nuevo.';
       this.mensajeError.set(mensaje);
     } finally {
       this.guardando.set(false);
@@ -909,6 +1017,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     // ISBN, `docs/plan-duplicados-sin-isbn.md` §2). Sus `finally` tampoco
     // apagarán los indicadores, así que se apagan aquí.
     this.generacionBusquedaIsbn++;
+    this.posiblesDuplicados.set([]);
     this.ultimoIsbnBuscado = null;
     this.buscandoIsbn.set(false);
     this.buscandoDuplicados.set(false);

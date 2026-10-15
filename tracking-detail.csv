@@ -241,3 +241,4 @@ Backend,14/10/2026 18:57,14/10/2026 19:03,0:05:00,AI,Opus 5.5,Verificación en p
 Specs definition,15/10/2026 10:00,15/10/2026 10:05,0:05:00,AI,Opus 5.5,Plan del lote Duplicados sin ISBN: causa raíz confirmada en CloudWatch (carrera en Catalogar) y 3 tareas en docs/TODO/MEMORY/PRD,Claude Code,cli,medium
 Frontend,15/10/2026 10:30,15/10/2026 10:34,0:04:00,AI,Sonnet 5.5,Fix de la condición de carrera de la búsqueda por ISBN en Catalogar (generación de búsqueda e indicador síncrono) con 8 pruebas de regresión,Claude Code,cli,medium
 Backend,15/10/2026 11:25,15/10/2026 11:29,0:04:00,AI,Sonnet 5.5,Endpoint POST /api/libros avisa con 409 de posibles duplicados por título en la misma ubicación (GSI ubicacion-index) con 14 pruebas,Claude Code,cli,medium
+Frontend,15/10/2026 12:43,15/10/2026 12:46,0:03:00,AI,Sonnet 5.5,Aviso de posible duplicado sin ISBN en Catalogar con tres salidas (sumar ejemplares / catalogar igual / cancelar) y 6 pruebas,Claude Code,cli,medium

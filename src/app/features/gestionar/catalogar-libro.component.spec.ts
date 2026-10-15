@@ -1904,4 +1904,142 @@ describe('CatalogarLibroComponent', () => {
       expect(componente.selectorPortadaVisible()).toBe(false);
     });
   });
+
+  describe('aviso de posible duplicado sin ISBN (409 de POST /api/libros, docs/plan-duplicados-sin-isbn.md Tarea 3)', () => {
+    const candidatoSinIsbn = {
+      bookId: 'libro-existente',
+      titulo: 'Libro de prueba',
+      autor: 'Autor de prueba',
+      isbn: null,
+      pvp: 30000,
+      cantidadTotal: 3,
+      cantidadDisponible: 2,
+    };
+    const existenteCompleto = {
+      bookId: 'libro-existente',
+      titulo: 'Libro de prueba',
+      autor: 'Autor de prueba',
+      isbn: null,
+      editorial: 'Editorial existente',
+      portadaUrl: 'https://ejemplo.com/portada.jpg',
+      pvp: 30000,
+      porcentajeDescuentoEditorial: 25,
+      ubicacionId: 'ubicacion-1',
+      cantidadTotal: 3,
+      cantidadDisponible: 2,
+      ubicacion: null,
+      ejemplares: [],
+    };
+
+    async function provocarAviso(): Promise<ReturnType<typeof configurarPrueba>> {
+      const resultado = configurarPrueba();
+      httpMock = resultado.httpMock;
+      enviarFormulario(resultado.fixture, { ...datosValidos, isbn: '' });
+      await dejarPasarMicrotareas();
+      httpMock.expectOne('/api/libros').flush(
+        { error: 'Ya hay un libro con el mismo título.', posiblesDuplicados: [candidatoSinIsbn] },
+        { status: 409, statusText: 'Conflict' },
+      );
+      await dejarPasarMicrotareas();
+      resultado.fixture.detectChanges();
+      return resultado;
+    }
+
+    it('muestra el aviso con el candidato y conserva el formulario ante un 409 con posiblesDuplicados', async () => {
+      const { fixture } = await provocarAviso();
+      const texto = fixture.nativeElement.textContent as string;
+
+      expect(texto).toContain('Sin ISBN');
+      expect(texto).toContain('Es el mismo libro: sumar 2 ejemplares');
+      expect(texto).toContain('Es otro libro: catalogar igual');
+      expect(texto).not.toContain('Ya hay un libro con el mismo título.');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((fixture.componentInstance as any).formulario.getRawValue().titulo).toBe('Libro de prueba');
+    });
+
+    it('"catalogar igual" reenvía el libro con confirmarLibroDistinto: true', async () => {
+      const { fixture } = await provocarAviso();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      void (fixture.componentInstance as any).catalogarIgualDeTodosModos();
+      await dejarPasarMicrotareas();
+      const peticion = httpMock.expectOne('/api/libros');
+      expect(peticion.request.body.confirmarLibroDistinto).toBe(true);
+      peticion.flush({ titulo: 'Libro de prueba' });
+      await dejarPasarMicrotareas();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('catalogado correctamente');
+      expect(fixture.nativeElement.textContent).not.toContain('Es otro libro');
+    });
+
+    it('"sumar ejemplares" fusiona con los datos del registro existente, sin borrarle editorial ni descuento', async () => {
+      const { fixture, obtenerDetalleMock } = await provocarAviso();
+      obtenerDetalleMock.mockResolvedValue(existenteCompleto);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      void (fixture.componentInstance as any).sumarEjemplaresAlExistente(candidatoSinIsbn);
+      await dejarPasarMicrotareas();
+      const peticion = httpMock.expectOne('/api/libros/libro-existente/fusionar-duplicado');
+      expect(peticion.request.body).toEqual({
+        isbn: null,
+        titulo: 'Libro de prueba',
+        autor: 'Autor de prueba',
+        editorial: 'Editorial existente',
+        portadaUrl: 'https://ejemplo.com/portada.jpg',
+        pvp: 30000,
+        porcentajeDescuentoEditorial: 25,
+        ubicacionId: 'ubicacion-1',
+        ejemplaresNuevos: 2,
+      });
+      peticion.flush({ titulo: 'Libro de prueba' });
+      await dejarPasarMicrotareas();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('se agregaron 2 ejemplares nuevos');
+    });
+
+    it('"sumar ejemplares" asigna el ISBN del formulario si el existente no tenía', async () => {
+      const resultado = configurarPrueba();
+      httpMock = resultado.httpMock;
+      resultado.obtenerDetalleMock.mockResolvedValue(existenteCompleto);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (resultado.fixture.componentInstance as any).formulario.setValue(datosValidos);
+      seleccionarUbicacionPanel(resultado.fixture, 'ubicacion-1');
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      void (resultado.fixture.componentInstance as any).sumarEjemplaresAlExistente(candidatoSinIsbn);
+      await dejarPasarMicrotareas();
+      const peticion = httpMock.expectOne('/api/libros/libro-existente/fusionar-duplicado');
+      expect(peticion.request.body.isbn).toBe('9780000000001');
+      peticion.flush({ titulo: 'Libro de prueba' });
+      await dejarPasarMicrotareas();
+    });
+
+    it('"cancelar" cierra el aviso sin enviar nada y conserva el formulario', async () => {
+      const { fixture } = await provocarAviso();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (fixture.componentInstance as any).cancelarAvisoDuplicado();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).not.toContain('Es otro libro');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((fixture.componentInstance as any).formulario.getRawValue().titulo).toBe('Libro de prueba');
+      httpMock.expectNone('/api/libros');
+    });
+
+    it('un 409 sin posiblesDuplicados muestra el mensaje de error normal', async () => {
+      const resultado = configurarPrueba();
+      httpMock = resultado.httpMock;
+      enviarFormulario(resultado.fixture, datosValidos);
+      await dejarPasarMicrotareas();
+      httpMock.expectOne('/api/libros').flush({ error: 'Conflicto genérico.' }, { status: 409, statusText: 'Conflict' });
+      await dejarPasarMicrotareas();
+      resultado.fixture.detectChanges();
+
+      expect(resultado.fixture.nativeElement.textContent).toContain('Conflicto genérico.');
+      expect(resultado.fixture.nativeElement.textContent).not.toContain('Es otro libro');
+    });
+  });
 });

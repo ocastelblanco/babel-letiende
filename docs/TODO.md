@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tarea 1 fusionada, Tarea 2 implementada (PR abierto), Tarea 3 en cola. Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
+**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tareas 1 y 2 fusionadas, Tarea 3 implementada (PR abierto). Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
 
 **Coordinación externa (08/09/2026) — lazy-load de las 11 rutas del router:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0033, en
@@ -546,7 +546,7 @@ Notas de implementación: la selección se guarda al revés (`excluidos`, los DE
 
 **Lote nuevo (2026-10-15) — Duplicados sin ISBN al catalogar:** el incidente de arriba mostró que los 7 duplicados no fueron errores de captura. Los causó una **condición de carrera en `CatalogarLibroComponent`**: una búsqueda por ISBN que responde después de guardar vuelve a llenar el formulario recién vaciado, sin ISBN, y el vendedor guarda otra vez. Está confirmada con los registros de CloudWatch de tres casos. Además, la detección de duplicados existente es solo por ISBN, así que el segundo guardado pasó sin aviso. Diseño completo, línea de tiempo del incidente y decisiones propuestas D1-D5 en **`docs/plan-duplicados-sin-isbn.md`**. Las decisiones quedan aprobadas al fusionar el PR del plan. Una rama y un PR por tarea, en secuencia (staging compartido).
 
-## Tarea 1 — Condición de carrera de la búsqueda por ISBN en Catalogar (frontend) — IMPLEMENTADA, PR abierto (2026-10-15)
+## Tarea 1 — Condición de carrera de la búsqueda por ISBN en Catalogar (frontend) — FUSIONADA (PR #146, 2026-10-15)
 
 Rama `fix/carrera-busqueda-isbn-catalogar`. Detalle en el plan, §4. Falta solo la verificación del usuario en `staging`.
 
@@ -557,7 +557,7 @@ Rama `fix/carrera-busqueda-isbn-catalogar`. Detalle en el plan, §4. Falta solo 
 - [x] Verificado: 469 pruebas frontend (461 + 8) y 440 backend en verde, `npm run build` y `npm run build:api` limpios, `/catalogar` responde `200` con `ng serve`.
 - [ ] Verificación del usuario en `staging`: escanear un libro, pulsar "Catalogar libro" de inmediato y comprobar que el formulario queda vacío y no aparece ningún registro duplicado. Al tocar el botón con un ISBN recién escrito y sin buscar, la búsqueda arranca y el botón queda bloqueado un instante: hay que volver a pulsarlo cuando se habilite.
 
-## Tarea 2 — Comprobación de posibles duplicados en `POST /api/libros` (backend) — IMPLEMENTADA, PR abierto (2026-10-15)
+## Tarea 2 — Comprobación de posibles duplicados en `POST /api/libros` (backend) — FUSIONADA (PR #147, 2026-10-15)
 
 Rama `feature/aviso-duplicado-sin-isbn-backend`. Detalle en el plan, §5.
 
@@ -568,6 +568,12 @@ Rama `feature/aviso-duplicado-sin-isbn-backend`. Detalle en el plan, §5.
 - [x] `tech-specs.md` (endpoint e índices de `babel-libros`) y `PRD.md` §5.2 actualizados.
 - [ ] Tras el despliegue a `staging`: comprobar que `ubicacion-index` quedó `ACTIVE`. **Ojo:** hasta que la Tarea 3 esté desplegada, el frontend actual muestra el mensaje del `409` como un error y no ofrece cómo continuar; un libro legítimo sin ISBN con título repetido en la misma ubicación no se puede catalogar desde la app.
 
-## Tarea 3 — Aviso de posible duplicado en Catalogar (frontend) — EN COLA
+## Tarea 3 — Aviso de posible duplicado en Catalogar (frontend) — IMPLEMENTADA, PR abierto (2026-10-15)
 
-Rama `feature/aviso-duplicado-sin-isbn-frontend`. Se abre solo con la Tarea 2 fusionada y desplegada. Detalle en el plan, §6: aviso con los candidatos y tres salidas ("sumar ejemplares" vía `fusionar-duplicado` con los datos del registro existente, para no borrar su ISBN — D4; "catalogar igual" con `confirmarLibroDistinto: true`; "Cancelar").
+Rama `feature/aviso-duplicado-sin-isbn-frontend`. Detalle en el plan, §6. Solo frontend: el `409` ya está desplegado (Tarea 2, PR #147).
+
+- [x] `guardar(confirmarLibroDistinto = false)` atiende el `409` con `posiblesDuplicados` como aviso (no como error): conserva el formulario y lista cada candidato (título, autor, ISBN o "Sin ISBN", PVP, disponibles) con las tres salidas. Un `409` sin la lista, o cualquier otro error, sigue mostrando el mensaje de siempre.
+- [x] "Es el mismo libro: sumar N ejemplares" (un botón por candidato): lee la ficha del existente (`LibrosService.obtenerDetalle`, que trae editorial, portada y descuento) y llama a `fusionar-duplicado` con SUS datos, para no borrarle nada; si no tenía ISBN y el formulario sí, le asigna el nuevo (D4).
+- [x] "Es otro libro: catalogar igual" reenvía con `confirmarLibroDistinto: true`; "Cancelar" cierra el aviso sin enviar. Tras guardar, el `reiniciarFormulario()` de siempre.
+- [x] 6 pruebas nuevas (aviso con candidatos, catalogar igual, sumar con datos del existente, ISBN nuevo al existente sin ISBN, cancelar, `409` sin lista). 475 pruebas frontend en verde y `npm run build` limpio.
+- [ ] Verificación del usuario en `staging`: catalogar dos veces, en la misma ubicación, un libro sin ISBN de prueba y comprobar las tres salidas del aviso. Con eso se cierra el lote.

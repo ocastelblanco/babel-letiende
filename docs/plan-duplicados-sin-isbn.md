@@ -1,6 +1,6 @@
 # Plan — Duplicados sin ISBN al catalogar
 
-**Fecha:** 15/10/2026 · **Estado:** decisiones D1-D5 aprobadas (PR #145 fusionado). Tarea 1 fusionada (pendiente de verificación en `staging`); Tarea 2 implementada (PR abierto); Tarea 3 sin empezar.
+**Fecha:** 15/10/2026 · **Estado:** decisiones D1-D5 aprobadas (PR #145 fusionado). Tareas 1 y 2 fusionadas y desplegadas; Tarea 3 implementada (PR abierto, pendiente de verificación en `staging`).
 
 ## 1. Origen: el incidente del 14/10/2026
 
@@ -72,12 +72,12 @@ Rama `feature/aviso-duplicado-sin-isbn-backend`.
 
 Rama `feature/aviso-duplicado-sin-isbn-frontend`. **Solo se abre cuando la Tarea 2 esté fusionada y desplegada** (regla del staging compartido).
 
-- [ ] `guardar()` atiende el `409` con `posiblesDuplicados`: muestra un aviso con mismo estilo que las advertencias de duplicado existentes (`DESIGN.md`). El aviso lista cada candidato (título, autor, ISBN o "sin ISBN", PVP y cantidad) y ofrece tres botones:
-  - **"Es el mismo libro: sumar N ejemplares"** → `fusionar-duplicado` según D4, con los datos del registro existente. Si hay varios candidatos, el vendedor elige primero cuál.
+- [x] `guardar()` atiende el `409` con `posiblesDuplicados`: muestra un aviso con mismo estilo que las advertencias de duplicado existentes (`DESIGN.md`). El aviso lista cada candidato (título, autor, ISBN o "sin ISBN", PVP y cantidad) y ofrece tres botones:
+  - **"Es el mismo libro: sumar N ejemplares"** → `fusionar-duplicado` según D4, con los datos del registro existente. Hay un botón por candidato; el vendedor elige cuál. Los datos del existente (editorial, portada, descuento) se leen de su ficha con `LibrosService.obtenerDetalle`, porque el índice `ubicacion-index` no los proyecta.
   - **"Es otro libro: catalogar igual"** → reenvía `POST /api/libros` con `confirmarLibroDistinto: true`.
   - **"Cancelar"** → cierra el aviso sin enviar nada y conserva el formulario.
-- [ ] Tras cualquiera de los dos guardados, el mismo `reiniciarFormulario()` de siempre, que conserva el panel de ubicación.
-- [ ] Pruebas: aparece el aviso con los candidatos; la fusión envía los datos del existente (y no borra su ISBN); la confirmación reenvía con la bandera; cancelar no envía nada; un `409` sin `posiblesDuplicados` (otro error) sigue mostrando el mensaje de siempre.
+- [x] Tras cualquiera de los dos guardados, el mismo `reiniciarFormulario()` de siempre, que conserva el panel de ubicación.
+- [x] Pruebas: aparece el aviso con los candidatos; la fusión envía los datos del existente (y no borra su ISBN); la confirmación reenvía con la bandera; cancelar no envía nada; un `409` sin `posiblesDuplicados` (otro error) sigue mostrando el mensaje de siempre.
 - [ ] Verificación en `staging` por el usuario con un libro sin ISBN de prueba, catalogado dos veces en la misma ubicación.
 
 ## 7. Orden y motor JIT
