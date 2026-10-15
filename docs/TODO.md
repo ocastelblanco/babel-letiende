@@ -2,7 +2,9 @@
 
 Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** activas. Al completar cualquiera, se elimina, se mueve el resumen a `MEMORY.md` §2, y se calcula la siguiente tarea más prioritaria comparando `PRD.md` (roadmap) contra `MEMORY.md` (estado actual).
 
-**Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2. **El motor JIT sigue sin tareas activas.**
+**Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
+
+**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tareas 1 y 2 activas, Tarea 3 en cola. Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
 
 **Coordinación externa (08/09/2026) — lazy-load de las 11 rutas del router:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0033, en
@@ -533,3 +535,36 @@ Rama `feature/pestana-trasladar`. Detalle en `docs/plan-trasladar-libros.md` §5
 Notas de implementación: la selección se guarda al revés (`excluidos`, los DESELECCIONADOS) para que todo libro visible quede seleccionado por defecto aunque el inventario llegue tarde o se active "Mostrar agotados" después. Cambiar Espacio/Mueble/Ubicaciones de origen reinicia la selección. El resumen del resultado lista los fusionados con PVP distinto (el destino conserva el suyo → revisar en Editar) y los fallidos con su motivo. Verificado de forma independiente: 461 pruebas frontend en verde (442 + 19 nuevas), `tsc -p tsconfig.spec.json` limpio, `npm run build -- --configuration=production` limpio, `/catalogar` responde `200` con `ng serve`. **Confirmado por el usuario en `staging`: "el flujo funciona completamente"** (origen → selección → diálogo → traslado, incluida la primera prueba real de la transacción de fusión contra DynamoDB).
 
 **Con esto se cierra el lote "Trasladar" (2026-10-05):** Tarea 1 — PR #141 (fusionado), Tarea 2 — este PR. Sin tareas activas hasta el próximo lote/hotfix del usuario; el backlog pausado (Tareas 2 y 4 de `docs/plan-rendimiento-catalogo.md`) sigue sin fecha.
+
+---
+
+## Hotfix — 500 en la ficha de libros sin ISBN — COMPLETO (2026-10-14, PR #144 fusionado y verificado en producción)
+
+`handlerDetalle` le pasaba a `resolverEjemplares` el ítem crudo de DynamoDB. En los libros sin ISBN, `isbn` llega ausente (`undefined`), así que se hacía un `Query` a `isbn-index` con clave `undefined` → 500 en 11 fichas. Regresión introducida en `468e5a2` (apilamiento por ISBN, 29/08/2026). Ahora se normaliza el libro antes de resolver los ejemplares, con una prueba de regresión que usa el ítem tal como lo devuelve DynamoDB. Después, con autorización del usuario, se borraron directamente en DynamoDB los 7 duplicados sin ISBN (verificados contra su gemelo con ISBN y sin ventas). Los 4 libros sin ISBN restantes son ediciones artesanales legítimas: no se tocan.
+
+---
+
+**Lote nuevo (2026-10-15) — Duplicados sin ISBN al catalogar:** el incidente de arriba mostró que los 7 duplicados no fueron errores de captura. Los causó una **condición de carrera en `CatalogarLibroComponent`**: una búsqueda por ISBN que responde después de guardar vuelve a llenar el formulario recién vaciado, sin ISBN, y el vendedor guarda otra vez. Está confirmada con los registros de CloudWatch de tres casos. Además, la detección de duplicados existente es solo por ISBN, así que el segundo guardado pasó sin aviso. Diseño completo, línea de tiempo del incidente y decisiones propuestas D1-D5 en **`docs/plan-duplicados-sin-isbn.md`**. Las decisiones quedan aprobadas al fusionar el PR del plan. Una rama y un PR por tarea, en secuencia (staging compartido).
+
+## Tarea 1 — Condición de carrera de la búsqueda por ISBN en Catalogar (frontend) — ACTIVA
+
+Rama `fix/carrera-busqueda-isbn-catalogar`. Detalle en el plan, §4.
+
+- [ ] Indicador de búsqueda activo desde antes del primer `await` (cierra la ventana blur + click).
+- [ ] Contador de generación: ningún resultado de búsqueda se aplica tras `reiniciarFormulario()` ni si el ISBN del formulario cambió. Lo mismo en `buscarPvpCandidatoSinIsbn` y `seleccionarCandidato`.
+- [ ] El blur no relanza la búsqueda si el ISBN no cambió; `guardar()` no envía nada con una búsqueda en curso.
+- [ ] Pruebas que reproducen las dos líneas de tiempo reales del incidente y fallan sin el arreglo; build y suite completa en verde.
+- [ ] Verificación del usuario en `staging`.
+
+## Tarea 2 — Comprobación de posibles duplicados en `POST /api/libros` (backend) — ACTIVA
+
+Rama `feature/aviso-duplicado-sin-isbn-backend`. Detalle en el plan, §5.
+
+- [ ] GSI `ubicacion-index` (`ubicacionId`, proyección `INCLUDE`) en `serverless.yml`, solo GSI nuevo en ese despliegue.
+- [ ] `handlerCrear` responde `409` con `posiblesDuplicados` si en la misma ubicación hay un libro con el mismo título normalizado y uno de los dos no tiene ISBN (D1); `confirmarLibroDistinto: true` omite la comprobación; si el `Query` falla, cataloga igual (D5).
+- [ ] `dynamodb:Query` sobre el índice solo en el rol de `catalogarLibro`; `npm run build:api` y revisión de `package.patterns`.
+- [ ] Pruebas de la tabla de casos del plan; GSI `ACTIVE` en `staging`; `tech-specs.md` y `PRD.md` §5.2 actualizados.
+
+## Tarea 3 — Aviso de posible duplicado en Catalogar (frontend) — EN COLA
+
+Rama `feature/aviso-duplicado-sin-isbn-frontend`. Se abre solo con la Tarea 2 fusionada y desplegada. Detalle en el plan, §6: aviso con los candidatos y tres salidas ("sumar ejemplares" vía `fusionar-duplicado` con los datos del registro existente, para no borrar su ISBN — D4; "catalogar igual" con `confirmarLibroDistinto: true`; "Cancelar").
