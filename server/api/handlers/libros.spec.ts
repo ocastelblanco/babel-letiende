@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import * as XLSX from 'xlsx';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenInvalidoError } from '../lib/verificar-token';
 
 const {
@@ -167,6 +167,19 @@ describe('validarDatosNuevoLibro', () => {
     const resultado = validarDatosNuevoLibro({ ...datosValidos, cantidadTotal: 1.5 });
     expect(resultado.valido).toBe(false);
   });
+
+  it('acepta confirmarLibroDistinto booleano, sin incluirlo en los datos del libro', () => {
+    const resultado = validarDatosNuevoLibro({ ...datosValidos, confirmarLibroDistinto: true });
+    expect(resultado.valido).toBe(true);
+    if (resultado.valido) {
+      expect(resultado.datos).not.toHaveProperty('confirmarLibroDistinto');
+    }
+  });
+
+  it('rechaza un confirmarLibroDistinto que no es booleano', () => {
+    expect(validarDatosNuevoLibro({ ...datosValidos, confirmarLibroDistinto: 'true' }).valido).toBe(false);
+    expect(validarDatosNuevoLibro({ ...datosValidos, confirmarLibroDistinto: 1 }).valido).toBe(false);
+  });
 });
 
 describe('handlerCrear (POST /api/libros)', () => {
@@ -175,6 +188,10 @@ describe('handlerCrear (POST /api/libros)', () => {
     process.env['TABLA_LIBROS'] = 'babel-libros-test';
     process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
     process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    // Sin libros en la ubicación por defecto — las pruebas del aviso de
+    // posible duplicado sin ISBN sobrescriben esta resolución.
+    consultarPorIndiceMock.mockReset();
+    consultarPorIndiceMock.mockResolvedValue([]);
   });
 
   it('responde 401 sin token válido', async () => {
@@ -292,6 +309,157 @@ describe('handlerCrear (POST /api/libros)', () => {
   // la rama "atributo ausente" (`cantidadDisponible === 0`) no es alcanzable
   // desde `handlerCrear` — sí lo es desde `handlerEditar` (ver más abajo),
   // que sí permite bajar la cantidad a 0.
+
+  describe('aviso de posible duplicado sin ISBN (docs/plan-duplicados-sin-isbn.md Tarea 2)', () => {
+    const { isbn: _isbn, ...datosSinIsbn } = datosValidos;
+    const existenteSinIsbn = {
+      bookId: 'existente-1',
+      titulo: 'Cien Años de Soledad',
+      autor: 'GARCIA MARQUEZ, GABRIEL',
+      pvp: 45000,
+      cantidadTotal: 1,
+      cantidadDisponible: 1,
+    };
+    const existenteConIsbn = { ...existenteSinIsbn, bookId: 'existente-2', isbn: '9789999999999' };
+
+    beforeEach(() => {
+      verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+      obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+      obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+    });
+
+    // Un caso que responde antes de la 2.ª lectura (400 por el body) deja la
+    // resolución `Once` de la ubicación sin consumir; `vi.clearAllMocks` no
+    // la descarta y contaminaría la prueba siguiente (y las de otros `describe`).
+    afterEach(() => {
+      obtenerPorClaveMock.mockReset();
+    });
+
+    it('libro nuevo sin ISBN con el mismo título (otra grafía de autor, mayúsculas y tildes distintas) y un existente sin ISBN → 409 sin guardar', async () => {
+      consultarPorIndiceMock.mockResolvedValue([existenteSinIsbn]);
+
+      const respuesta = await handlerCrear(eventoFalso(datosSinIsbn, 'Bearer token'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 409 });
+      expect(guardarMock).not.toHaveBeenCalled();
+      expect(consultarPorIndiceMock).toHaveBeenCalledWith(
+        'babel-libros-test',
+        'ubicacion-index',
+        'ubicacionId',
+        'ubicacion-1',
+        expect.arrayContaining(['bookId', 'titulo', 'isbn']),
+      );
+      const cuerpo = JSON.parse(respuesta.body as string) as { error: string; posiblesDuplicados: unknown[] };
+      expect(cuerpo.posiblesDuplicados).toEqual([{ ...existenteSinIsbn, isbn: null }]);
+      expect(typeof cuerpo.error).toBe('string');
+    });
+
+    it('libro nuevo CON ISBN y un existente sin ISBN con el mismo título → 409', async () => {
+      consultarPorIndiceMock.mockResolvedValue([existenteSinIsbn]);
+
+      const respuesta = await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 409 });
+      expect(guardarMock).not.toHaveBeenCalled();
+    });
+
+    it('libro nuevo sin ISBN y un existente CON ISBN con el mismo título → 409 y el existente conserva su ISBN en la respuesta', async () => {
+      consultarPorIndiceMock.mockResolvedValue([existenteConIsbn]);
+
+      const respuesta = await handlerCrear(eventoFalso(datosSinIsbn, 'Bearer token'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 409 });
+      const cuerpo = JSON.parse(respuesta.body as string) as { posiblesDuplicados: { isbn: string | null }[] };
+      expect(cuerpo.posiblesDuplicados[0]?.isbn).toBe('9789999999999');
+    });
+
+    it('los dos con ISBN (aunque difieran) → 201: no es el caso de este aviso', async () => {
+      consultarPorIndiceMock.mockResolvedValue([existenteConIsbn]);
+
+      const respuesta = await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 201 });
+      expect(guardarMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('misma ubicación con otro título → 201', async () => {
+      consultarPorIndiceMock.mockResolvedValue([{ ...existenteSinIsbn, titulo: 'El amor en los tiempos del cólera' }]);
+
+      const respuesta = await handlerCrear(eventoFalso(datosSinIsbn, 'Bearer token'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 201 });
+    });
+
+    it('sin libros en esa ubicación (el mismo título en OTRA ubicación nunca llega, la consulta es por ubicación) → 201', async () => {
+      consultarPorIndiceMock.mockResolvedValue([]);
+
+      const respuesta = await handlerCrear(eventoFalso(datosSinIsbn, 'Bearer token'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 201 });
+    });
+
+    it('un título que queda vacío al normalizarse nunca coincide', async () => {
+      consultarPorIndiceMock.mockResolvedValue([{ ...existenteSinIsbn, titulo: '¿¡…!?' }]);
+
+      const respuesta = await handlerCrear(
+        eventoFalso({ ...datosSinIsbn, titulo: '¡¿?!' }, 'Bearer token'),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 201 });
+      expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+    });
+
+    it('confirmarLibroDistinto: true cataloga igual sin consultar el índice, y no se persiste', async () => {
+      consultarPorIndiceMock.mockResolvedValue([existenteSinIsbn]);
+
+      const respuesta = await handlerCrear(
+        eventoFalso({ ...datosSinIsbn, confirmarLibroDistinto: true }, 'Bearer token'),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 201 });
+      expect(consultarPorIndiceMock).not.toHaveBeenCalled();
+      const [, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(libroGuardado).not.toHaveProperty('confirmarLibroDistinto');
+    });
+
+    it('si el Query al índice falla, cataloga igual (la comprobación nunca bloquea)', async () => {
+      consultarPorIndiceMock.mockRejectedValue(new Error('ResourceNotFoundException'));
+      const errorMock = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const respuesta = await handlerCrear(eventoFalso(datosSinIsbn, 'Bearer token'), {} as never, {} as never);
+
+      expect(respuesta).toMatchObject({ statusCode: 201 });
+      expect(guardarMock).toHaveBeenCalledTimes(1);
+      expect(errorMock).toHaveBeenCalled();
+      errorMock.mockRestore();
+    });
+
+    it('un confirmarLibroDistinto que no es booleano → 400 sin guardar', async () => {
+      const respuesta = await handlerCrear(
+        eventoFalso({ ...datosSinIsbn, confirmarLibroDistinto: 'si' }, 'Bearer token'),
+        {} as never,
+        {} as never,
+      );
+
+      expect(respuesta).toMatchObject({ statusCode: 400 });
+      expect(guardarMock).not.toHaveBeenCalled();
+    });
+
+    it('devuelve como máximo 10 candidatos', async () => {
+      consultarPorIndiceMock.mockResolvedValue(
+        Array.from({ length: 15 }, (_, i) => ({ ...existenteSinIsbn, bookId: `existente-${i}` })),
+      );
+
+      const respuesta = await handlerCrear(eventoFalso(datosSinIsbn, 'Bearer token'), {} as never, {} as never);
+
+      const cuerpo = JSON.parse(respuesta.body as string) as { posiblesDuplicados: unknown[] };
+      expect(cuerpo.posiblesDuplicados).toHaveLength(10);
+    });
+  });
 });
 
 const datosEditarValidos = {
