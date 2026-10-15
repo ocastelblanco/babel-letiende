@@ -1,6 +1,6 @@
 # Plan — Duplicados sin ISBN al catalogar
 
-**Fecha:** 15/10/2026 · **Estado:** PROPUESTO. Las decisiones D1-D5 (§3) quedan aprobadas cuando el usuario fusione el PR de este documento. Sin código todavía.
+**Fecha:** 15/10/2026 · **Estado:** decisiones D1-D5 aprobadas (PR #145 fusionado). Tarea 1 implementada (pendiente de verificación en `staging`); Tareas 2 y 3 sin empezar.
 
 ## 1. Origen: el incidente del 14/10/2026
 

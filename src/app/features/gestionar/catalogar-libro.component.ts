@@ -157,6 +157,29 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   protected readonly libroDuplicadoSeleccionado = signal<LibroConUbicacion | null>(null);
   /** `true` mientras se consulta `GET /api/libros/por-isbn/:isbn` — el botón "Catalogar libro" se deshabilita también mientras esto o `buscandoMetadatos()` estén en curso, para que no se pueda guardar contra un `bookId` de duplicado ya obsoleto si el vendedor cambió el ISBN y no esperó (corrección de condición de carrera, MEMORY.md). */
   protected readonly buscandoDuplicados = signal(false);
+  /**
+   * `true` desde el MISMO tick en que arranca `dispararBusquedaPorIsbn` (antes
+   * de su primer `await`) hasta que la búsqueda vigente termina — cubre toda
+   * la cadena (token → duplicados → metadatos). `buscandoDuplicados` solo se
+   * activa después de `await obtenerIdToken()`, así que en esa ventana el
+   * botón "Catalogar libro" seguía habilitado: tocarlo quitaba el foco del
+   * campo ISBN, lanzaba una búsqueda nueva y el click guardaba igual
+   * (`docs/plan-duplicados-sin-isbn.md` §2, variante A).
+   */
+  protected readonly buscandoIsbn = signal(false);
+
+  /**
+   * Generación de la búsqueda por ISBN vigente — aumenta en cada
+   * `dispararBusquedaPorIsbn`, en cada `seleccionarCandidato` y en
+   * `reiniciarFormulario`. Una respuesta asíncrona solo toca el formulario o
+   * apaga un indicador si su generación sigue siendo la vigente
+   * (`busquedaVigente`): sin esto, una búsqueda obsoleta que respondía
+   * DESPUÉS de guardar volvía a llenar el formulario recién vaciado, sin ISBN,
+   * y el vendedor guardaba un duplicado (`docs/plan-duplicados-sin-isbn.md` §2).
+   */
+  private generacionBusquedaIsbn = 0;
+  /** ISBN (sin espacios) de la última búsqueda lanzada — `null` tras `reiniciarFormulario`. El blur del campo no relanza la búsqueda si el ISBN no cambió. */
+  private ultimoIsbnBuscado: string | null = null;
 
   /**
    * `true` cuando el duplicado detectado (`libroDuplicadoSeleccionado`) ya
@@ -354,7 +377,23 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
 
   /** Se dispara al perder el foco el campo ISBN cuando se ingresó manualmente (sin cámara). */
   protected alPerderFocoIsbn(): void {
-    void this.dispararBusquedaPorIsbn(this.formulario.controls.isbn.value);
+    const isbn = this.formulario.controls.isbn.value.trim();
+    // Tocar "Catalogar libro" también quita el foco del campo: si el ISBN no
+    // cambió desde la última búsqueda no hay nada nuevo que consultar, y
+    // relanzarla era justo lo que dejaba una respuesta obsoleta rellenando el
+    // formulario después de guardar (`docs/plan-duplicados-sin-isbn.md` §2).
+    if (isbn === this.ultimoIsbnBuscado) {
+      return;
+    }
+    void this.dispararBusquedaPorIsbn(isbn);
+  }
+
+  /** `true` si `generacion` sigue siendo la búsqueda vigente Y el campo ISBN todavía muestra el ISBN buscado — si el vendedor lo editó mientras tanto, la respuesta ya no le corresponde. */
+  private busquedaVigente(generacion: number): boolean {
+    return (
+      generacion === this.generacionBusquedaIsbn &&
+      this.formulario.controls.isbn.value.trim() === this.ultimoIsbnBuscado
+    );
   }
 
   /** Reemplaza `portadaUrl` con la elegida en `SelectorPortadaComponent` y cierra el diálogo. */
@@ -385,15 +424,30 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * obsoleto, corrompiendo un libro sin relación con lo que pensaba guardar.
    */
   private async dispararBusquedaPorIsbn(isbn: string, opciones: { sobrescribir?: boolean } = {}): Promise<void> {
+    // Todo lo síncrono va ANTES del primer `await`: la nueva generación
+    // invalida cualquier búsqueda anterior todavía en vuelo (sus indicadores
+    // se reinician aquí porque su `finally` ya no los apagará) y
+    // `buscandoIsbn` deshabilita "Catalogar libro" desde este mismo tick.
+    const generacion = ++this.generacionBusquedaIsbn;
+    this.ultimoIsbnBuscado = isbn.trim();
     this.libroDuplicadoSeleccionado.set(null);
     this.coincidenciasIsbn.set([]);
     this.metadatosNoEncontrados.set(false);
+    this.buscandoDuplicados.set(false);
+    this.buscandoMetadatos.set(false);
+    this.buscandoIsbn.set(true);
 
-    const huboCoincidenciaEnBabel = await this.buscarDuplicadosPorIsbn(isbn);
-    if (huboCoincidenciaEnBabel) {
-      return;
+    try {
+      const huboCoincidenciaEnBabel = await this.buscarDuplicadosPorIsbn(isbn, generacion);
+      if (huboCoincidenciaEnBabel || !this.busquedaVigente(generacion)) {
+        return;
+      }
+      await this.buscarYPrecargarMetadatos(isbn, generacion, opciones);
+    } finally {
+      if (generacion === this.generacionBusquedaIsbn) {
+        this.buscandoIsbn.set(false);
+      }
     }
-    await this.buscarYPrecargarMetadatos(isbn, opciones);
   }
 
   /**
@@ -416,7 +470,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * editable manualmente: no hay ningún mensaje bloqueante, solo un aviso
    * neutral opcional.
    */
-  private async buscarYPrecargarMetadatos(isbn: string, opciones: { sobrescribir?: boolean } = {}): Promise<void> {
+  private async buscarYPrecargarMetadatos(
+    isbn: string,
+    generacion: number,
+    opciones: { sobrescribir?: boolean } = {},
+  ): Promise<void> {
     const isbnLimpio = isbn.trim();
     if (isbnLimpio === '') {
       return;
@@ -426,6 +484,9 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     this.buscandoMetadatos.set(true);
     try {
       const metadatos = await this.metadatosService.obtenerMetadatos(isbnLimpio);
+      if (!this.busquedaVigente(generacion)) {
+        return;
+      }
       const controles = this.formulario.controls;
 
       if ((sobrescribir || controles.titulo.value.trim() === '') && metadatos.titulo) {
@@ -454,7 +515,9 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
         this.metadatosNoEncontrados.set(true);
       }
     } finally {
-      this.buscandoMetadatos.set(false);
+      if (generacion === this.generacionBusquedaIsbn) {
+        this.buscandoMetadatos.set(false);
+      }
     }
   }
 
@@ -479,14 +542,14 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * vendedor sigue pudiendo catalogar manualmente, cayendo al fallback
    * externo como si Babel no tuviera nada.
    */
-  private async buscarDuplicadosPorIsbn(isbn: string): Promise<boolean> {
+  private async buscarDuplicadosPorIsbn(isbn: string, generacion: number): Promise<boolean> {
     const isbnLimpio = isbn.trim();
     if (isbnLimpio === '') {
       return false;
     }
 
     const idToken = await this.authService.obtenerIdToken();
-    if (!idToken) {
+    if (!idToken || !this.busquedaVigente(generacion)) {
       return false;
     }
 
@@ -497,6 +560,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
           headers: { Authorization: `Bearer ${idToken}` },
         }),
       );
+      // Respuesta de una búsqueda obsoleta (otro ISBN, o el formulario ya se
+      // reinició): se descarta sin tocar nada y sin cortar la cadena.
+      if (!this.busquedaVigente(generacion)) {
+        return false;
+      }
       if (coincidencias.length === 1) {
         this.seleccionarDuplicado(coincidencias[0] as LibroConUbicacion);
         return true;
@@ -509,7 +577,9 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       // Ante cualquier error, sin duplicado detectado — cae al fallback externo.
       return false;
     } finally {
-      this.buscandoDuplicados.set(false);
+      if (generacion === this.generacionBusquedaIsbn) {
+        this.buscandoDuplicados.set(false);
+      }
     }
   }
 
@@ -656,12 +726,17 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * de candidatos tras seleccionar uno, en ambos casos.
    */
   protected async seleccionarCandidato(candidato: CandidatoConOrigen): Promise<void> {
+    // Elegir un candidato es una acción explícita que invalida cualquier
+    // búsqueda por ISBN anterior; si el formulario se reinicia mientras se
+    // resuelve la ficha o el PVP, `generacion` deja de ser la vigente y el
+    // resultado se descarta.
+    const generacion = ++this.generacionBusquedaIsbn;
     this.candidatos.set([]);
     this.candidatosNoEncontrados.set(false);
 
     if (candidato.origen === 'babel') {
       const libro = await this.librosService.obtenerDetalle(candidato.bookId);
-      if (libro) {
+      if (libro && generacion === this.generacionBusquedaIsbn) {
         this.seleccionarDuplicado(libro);
       }
       return;
@@ -687,7 +762,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       return;
     }
 
-    await this.buscarPvpCandidatoSinIsbn(candidato);
+    await this.buscarPvpCandidatoSinIsbn(candidato, generacion);
   }
 
   /**
@@ -699,15 +774,17 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * vendedor); si ninguna fuente encuentra precio, el campo queda como
    * estaba (no hay nada más confiable con qué reemplazarlo).
    */
-  private async buscarPvpCandidatoSinIsbn(candidato: CandidatoLibro): Promise<void> {
+  private async buscarPvpCandidatoSinIsbn(candidato: CandidatoLibro, generacion: number): Promise<void> {
     this.buscandoPvpCandidato.set(true);
     try {
       const pvp = await this.metadatosService.buscarPvp(candidato.titulo, candidato.autor ?? '');
-      if (pvp) {
+      if (pvp && generacion === this.generacionBusquedaIsbn) {
         this.formulario.controls.pvp.setValue(pvp);
       }
     } finally {
-      this.buscandoPvpCandidato.set(false);
+      if (generacion === this.generacionBusquedaIsbn) {
+        this.buscandoPvpCandidato.set(false);
+      }
     }
   }
 
@@ -722,6 +799,12 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     const ubicacionId = this.panelUbicacionId();
     if (!ubicacionId) {
       this.mensajeError.set('Selecciona la ubicación del libro (Espacio, Mueble y Ubicación) antes de guardar.');
+      return;
+    }
+    // Con una búsqueda por ISBN en curso el formulario aún puede cambiar
+    // (duplicado por detectar, metadatos por llegar): el botón ya está
+    // deshabilitado, esto cubre un envío por otra vía (Enter).
+    if (this.buscandoIsbn()) {
       return;
     }
 
@@ -821,6 +904,17 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * propio autocompletado.
    */
   private reiniciarFormulario(): void {
+    // Invalida toda búsqueda todavía en vuelo: su respuesta, si llega ahora,
+    // ya no puede rellenar el formulario vacío (causa de los duplicados sin
+    // ISBN, `docs/plan-duplicados-sin-isbn.md` §2). Sus `finally` tampoco
+    // apagarán los indicadores, así que se apagan aquí.
+    this.generacionBusquedaIsbn++;
+    this.ultimoIsbnBuscado = null;
+    this.buscandoIsbn.set(false);
+    this.buscandoDuplicados.set(false);
+    this.buscandoMetadatos.set(false);
+    this.buscandoPvpCandidato.set(false);
+    this.metadatosNoEncontrados.set(false);
     this.candidatos.set([]);
     this.candidatosNoEncontrados.set(false);
     this.coincidenciasIsbn.set([]);
