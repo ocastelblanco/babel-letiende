@@ -1,4 +1,4 @@
-import { cartaVisibleEnHost, esEmbebido } from './embebido.service';
+import { CARTA_PUBLICADA, cartaVisibleEnHost, esEmbebido } from './embebido.service';
 
 /**
  * Solo se prueba `esEmbebido()` como función pura — toda la lógica real
@@ -39,6 +39,11 @@ describe('cartaVisibleEnHost', () => {
     expect(cartaVisibleEnHost('letiende.co', false)).toBe(false);
     expect(cartaVisibleEnHost('babel.letiende.co', false)).toBe(false);
     expect(cartaVisibleEnHost('', false)).toBe(false);
+  });
+
+  it('la carta está publicada (T-0040 de letiende.co)', () => {
+    expect(CARTA_PUBLICADA).toBe(true);
+    expect(cartaVisibleEnHost('letiende.co')).toBe(true);
   });
 
   it('devuelve true en cualquier host cuando la carta está publicada', () => {

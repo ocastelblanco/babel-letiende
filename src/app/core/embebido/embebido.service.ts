@@ -15,10 +15,10 @@ export function esEmbebido(hostname: string): boolean {
 /**
  * Copia del criterio de letiende.co (ADR-024, `core/carta-visibilidad.ts`
  * de ese repo): `/carta` responde 404 en producción mientras la carta no
- * esté publicada. Al publicarla hay que cambiar esta constante a `true`
- * AQUÍ, en letiende.co y en Ágora.
+ * esté publicada. Publicada el 19/10/2026 (T-0040 de letiende.co): la
+ * constante es `true` aquí, en letiende.co y en Ágora.
  */
-export const CARTA_PUBLICADA = false;
+export const CARTA_PUBLICADA = true;
 
 /** `true` si el enlace "Carta" debe mostrarse: carta publicada, o host de staging/desarrollo. */
 export function cartaVisibleEnHost(hostname: string, publicada: boolean = CARTA_PUBLICADA): boolean {
