@@ -35,7 +35,11 @@ export class BarraNavegacionComponent {
    * el `<header>` completo se reemplaza por la barra común del contenedor
    * (solo el estado sin sesión; el panel autenticado no se toca).
    */
-  protected readonly embebido = inject(EmbebidoService).embebido;
+  private readonly embebidoService = inject(EmbebidoService);
+  protected readonly embebido = this.embebidoService.embebido;
+
+  /** Enlace "Carta" del menú embebido: copia del criterio de letiende.co (ADR-024). */
+  protected readonly cartaVisible = this.embebidoService.cartaVisible;
 
   protected readonly usuario = this.authService.usuario;
 
