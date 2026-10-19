@@ -182,7 +182,11 @@ describe('BarraNavegacionComponent', () => {
 });
 
 /** Configura la barra con `EmbebidoService.embebido` forzado a `true` (override de TestBed), simulando una petición servida a través del proxy de letiende.co. */
-function configurarPruebaEmbebida(usuario: User | null = null, usuarioActual: Usuario | null = null) {
+function configurarPruebaEmbebida(
+  usuario: User | null = null,
+  usuarioActual: Usuario | null = null,
+  cartaVisible = false,
+) {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
@@ -199,7 +203,7 @@ function configurarPruebaEmbebida(usuario: User | null = null, usuarioActual: Us
           usuarioActual: signal(usuarioActual),
         },
       },
-      { provide: EmbebidoService, useValue: { embebido: true } },
+      { provide: EmbebidoService, useValue: { embebido: true, cartaVisible } },
     ],
   });
 
@@ -261,5 +265,39 @@ describe('embebido (letiende.co)', () => {
 
     expect(fixture.nativeElement.querySelector('#panel-menu-movil-embebido')).toBeNull();
     expect(document.activeElement).toBe(botonMenu);
+  });
+});
+
+describe('enlace "Carta" en el menú embebido', () => {
+  function textosEnlaces(fixture: ComponentFixture<BarraNavegacionComponent>, selector: string): string[] {
+    return Array.from(fixture.nativeElement.querySelectorAll(`${selector} a`) as NodeListOf<HTMLAnchorElement>).map(
+      (a) => (a.textContent ?? '').trim(),
+    );
+  }
+
+  it('en staging se muestra entre Librería y Nosotros, en la lista de escritorio y en el panel móvil', () => {
+    const { fixture } = configurarPruebaEmbebida(null, null, true);
+
+    const enlace = fixture.nativeElement.querySelector('a[href="/carta"]') as HTMLAnchorElement;
+    expect(enlace.hasAttribute('routerLink')).toBe(false);
+    expect(textosEnlaces(fixture, 'ul.md\\:flex').slice(0, 4)).toEqual(['Cartelera', 'Librería', 'Carta', 'Nosotros']);
+
+    (fixture.nativeElement.querySelector('button[aria-controls="panel-menu-movil-embebido"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(textosEnlaces(fixture, '#panel-menu-movil-embebido').slice(0, 4)).toEqual([
+      'Cartelera',
+      'Librería',
+      'Carta',
+      'Nosotros',
+    ]);
+  });
+
+  it('en letiende.co (carta no visible) no se muestra en ninguna de las dos listas', () => {
+    const { fixture } = configurarPruebaEmbebida(null, null, false);
+    (fixture.nativeElement.querySelector('button[aria-controls="panel-menu-movil-embebido"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('a[href="/carta"]')).toBeNull();
+    expect((fixture.nativeElement.textContent as string)).not.toContain('Carta');
   });
 });
