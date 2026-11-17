@@ -59,11 +59,11 @@ Partida en tres PRs (no cabía en uno): `T-0011` backend, `T-0012` Catalogar y E
 - [x] `POST`/`PUT /api/libros` aceptan `conocimiento` opcional (ausente = no tocar); `DELETE` lo borra; `GET /api/libros/:bookId/conocimiento` (solo vendedor/administrador) lo lee.
 - [x] Pruebas en verde, `build:api`, `serverless print` y `serverless package --stage dev` verificados; `package.patterns` sin cambios (no hay módulos nuevos).
 
-**`T-0012` — Catalogar y Editar** (A08: nada automático se guarda sin que la persona pueda corregirlo)
+**`T-0012` — Catalogar y Editar (PR abierto, 2026-11-17)** (A08: nada automático se guarda sin que la persona pueda corregirlo)
 
-- [ ] Catalogar muestra la sinopsis, las categorías, el idioma y las páginas que llegan de `GET /api/metadatos/:isbn` como sugerencia editable y las envía en `conocimiento`.
-- [ ] Editar los carga con `GET /api/libros/:bookId/conocimiento` y los guarda.
-- [ ] Sinopsis nunca en el catálogo público.
+- [x] Catalogar muestra la sinopsis, las categorías, el idioma, las páginas y la clasificación por edad que llegan de `GET /api/metadatos/:isbn` como sugerencia editable, con su fuente, y los envía en `conocimiento` al crear un libro nuevo.
+- [x] Editar los carga con `GET /api/libros/:bookId/conocimiento` y los guarda; si no pudo leerlos, no envía nada.
+- [x] Sinopsis nunca en el catálogo público.
 
 **`T-0013` — Carga retroactiva y cobertura**
 

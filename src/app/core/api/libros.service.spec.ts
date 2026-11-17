@@ -90,6 +90,50 @@ describe('LibrosService', () => {
     expect(servicio.cargando()).toBe(false);
   });
 
+  describe('obtenerConocimiento', () => {
+    const conocimientoFalso = {
+      bookId: 'book-1',
+      sinopsis: 'Una sinopsis.',
+      categorias: ['Ficción'],
+      idioma: 'es',
+      paginas: 100,
+      clasificacionEdad: 'NOT_MATURE' as const,
+      fuenteSinopsis: 'manual',
+      actualizadoEn: '2026-11-17T00:00:00.000Z',
+    };
+
+    it('devuelve null, sin llamar a la API, cuando no hay sesión', async () => {
+      const servicio = configurarPrueba(null);
+
+      expect(await servicio.obtenerConocimiento('book-1')).toBeNull();
+      httpMock.expectNone('/api/libros/book-1/conocimiento');
+    });
+
+    it('resuelve el conocimiento con el ID Token real', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const promesa = servicio.obtenerConocimiento('book-1');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/libros/book-1/conocimiento');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-falso');
+      peticion.flush(conocimientoFalso);
+
+      expect(await promesa).toEqual(conocimientoFalso);
+    });
+
+    it('devuelve null, sin lanzar, cuando la API falla (quien llama no debe enviar conocimiento)', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const promesa = servicio.obtenerConocimiento('book-1');
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/libros/book-1/conocimiento')
+        .flush({ error: 'Error interno del servidor.' }, { status: 500, statusText: 'Internal Server Error' });
+
+      expect(await promesa).toBeNull();
+    });
+  });
+
   describe('obtenerLibroCompleto', () => {
     const libroConUbicacionFalso: LibroConUbicacion = {
       ...libroFalso,

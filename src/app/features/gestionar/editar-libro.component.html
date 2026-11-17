@@ -271,6 +271,13 @@
           }
         </div>
 
+        <app-conocimiento-libro
+          [grupo]="conocimiento"
+          [fuente]="fuenteSinopsis()"
+          idPrefijo="edit"
+          (sinopsisEditada)="fuenteSinopsis.set('manual')"
+        />
+
         <div>
           <label for="editCantidadTotal" class="mb-1 block text-sm font-semibold text-primary">Cantidad (ejemplares)</label>
           <input

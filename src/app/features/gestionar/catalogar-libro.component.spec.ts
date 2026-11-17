@@ -68,7 +68,14 @@ const datosValidos = {
   cantidadTotal: 2,
 };
 
-const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null, pvp: null };
+const metadatosVacios = {
+  titulo: null,
+  autor: null,
+  editorial: null,
+  portadaUrl: null,
+  pvp: null,
+  sinopsis: null, categorias: [] as string[], idioma: null, paginas: null, clasificacionEdad: null, fuenteSinopsis: null,
+};
 
 function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
   const cargarEspaciosMock = vi.fn().mockResolvedValue(undefined);
@@ -419,6 +426,7 @@ describe('CatalogarLibroComponent', () => {
 
   describe('autocompletado de metadatos a partir del ISBN', () => {
     const metadatosEncontrados = {
+      ...metadatosVacios,
       titulo: 'Cien años de soledad',
       autor: 'Gabriel García Márquez',
       editorial: 'Sudamericana',
@@ -766,6 +774,7 @@ describe('CatalogarLibroComponent', () => {
       httpMock = mock;
       buscarCandidatosMock.mockResolvedValue([candidatoConIsbn]);
       obtenerMetadatosMock.mockResolvedValue({
+        ...metadatosVacios,
         titulo: 'Cien años de soledad',
         autor: 'Gabriel García Márquez',
         editorial: 'Sudamericana',
@@ -1463,6 +1472,12 @@ describe('CatalogarLibroComponent', () => {
       editorial: string | null;
       portadaUrl: string | null;
       pvp: number | null;
+      sinopsis: string | null;
+      categorias: string[];
+      idioma: string | null;
+      paginas: number | null;
+      clasificacionEdad: 'NOT_MATURE' | 'MATURE' | null;
+      fuenteSinopsis: string | null;
     };
     const metadatosViejos: Metadatos = { ...metadatosVacios, titulo: 'Título de la búsqueda vieja', autor: 'Autor viejo', pvp: 10000 };
     const metadatosNuevos: Metadatos = { ...metadatosVacios, titulo: 'Título de la búsqueda vigente', autor: 'Autor vigente', pvp: 20000 };
@@ -2040,6 +2055,172 @@ describe('CatalogarLibroComponent', () => {
 
       expect(resultado.fixture.nativeElement.textContent).toContain('Conflicto genérico.');
       expect(resultado.fixture.nativeElement.textContent).not.toContain('Es otro libro');
+    });
+  });
+
+  describe('conocimiento para el asistente (ADR-018, asistente-ia Fase 1)', () => {
+    const sugerencia = {
+      ...metadatosVacios,
+      titulo: 'Magnus Chase',
+      autor: 'Rick Riordan',
+      sinopsis: 'Una guía ilustrada de los dioses nórdicos y las criaturas fantásticas de la saga.',
+      categorias: ['Juvenile Fiction', 'Fantasy'],
+      idioma: 'es',
+      paginas: 224,
+      clasificacionEdad: 'NOT_MATURE' as const,
+      fuenteSinopsis: 'sitio:www.tornamesa.co',
+    };
+
+    it('un ISBN escaneado pre-carga la sinopsis y demás datos como sugerencia, con su fuente', async () => {
+      const { fixture, httpMock: mock, obtenerMetadatosMock } = configurarPrueba();
+      httpMock = mock;
+      obtenerMetadatosMock.mockResolvedValue(sugerencia);
+
+      const botonEscanear = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+        (boton) => (boton as HTMLButtonElement).textContent?.trim() === 'Escanear ISBN',
+      ) as HTMLButtonElement;
+      botonEscanear.click();
+      await Promise.resolve();
+      fixture.detectChanges();
+      callbackDecodificacion?.({ getText: () => '9786073155540' });
+      await flushBusquedaDuplicados(httpMock, '9786073155540');
+      await dejarPasarMicrotareas();
+      fixture.detectChanges();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      expect(componente.conocimiento.getRawValue()).toEqual({
+        sinopsis: sugerencia.sinopsis,
+        categorias: 'Juvenile Fiction, Fantasy',
+        idioma: 'es',
+        paginas: 224,
+        clasificacionEdad: 'NOT_MATURE',
+      });
+      expect(componente.fuenteSinopsis()).toBe('sitio:www.tornamesa.co');
+      expect(fixture.nativeElement.textContent).toContain('Fuente: tornamesa.co');
+    });
+
+    it('la sugerencia NO pisa lo que la persona ya escribió, salvo al elegir otro candidato (sobrescribir)', () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.conocimiento.patchValue({ sinopsis: 'La mía, escrita a mano.', idioma: 'en' });
+      componente.fuenteSinopsis.set('manual');
+
+      componente.aplicarConocimientoSugerido(sugerencia, false);
+
+      expect(componente.conocimiento.controls.sinopsis.value).toBe('La mía, escrita a mano.');
+      expect(componente.conocimiento.controls.idioma.value).toBe('en');
+      expect(componente.fuenteSinopsis()).toBe('manual');
+      // Lo que estaba vacío sí se completa.
+      expect(componente.conocimiento.controls.paginas.value).toBe(224);
+
+      componente.aplicarConocimientoSugerido(sugerencia, true);
+
+      expect(componente.conocimiento.controls.sinopsis.value).toBe(sugerencia.sinopsis);
+      expect(componente.fuenteSinopsis()).toBe('sitio:www.tornamesa.co');
+    });
+
+    it('editar la sinopsis a mano cambia su fuente a "manual"', async () => {
+      const { fixture } = configurarPrueba();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.aplicarConocimientoSugerido(sugerencia, false);
+      fixture.detectChanges();
+
+      const textarea = fixture.nativeElement.querySelector('#catSinopsis') as HTMLTextAreaElement;
+      textarea.value = 'Sinopsis corregida por la persona que cataloga.';
+      textarea.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      expect(componente.fuenteSinopsis()).toBe('manual');
+      expect(fixture.nativeElement.textContent).toContain('Fuente: escrita a mano');
+    });
+
+    it('POST /api/libros envía `conocimiento` normalizado cuando hay algo escrito', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.conocimiento.patchValue({
+        sinopsis: '  Una sinopsis de prueba.  ',
+        categorias: 'Fantasía,  Juvenil , Fantasía',
+        idioma: 'ES',
+        paginas: 200,
+        clasificacionEdad: 'NOT_MATURE',
+      });
+      componente.fuenteSinopsis.set('google-books');
+
+      enviarFormulario(fixture, datosValidos);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const peticion = httpMock.expectOne('/api/libros');
+      expect(peticion.request.body.conocimiento).toEqual({
+        sinopsis: 'Una sinopsis de prueba.',
+        categorias: ['Fantasía', 'Juvenil'],
+        idioma: 'es',
+        paginas: 200,
+        clasificacionEdad: 'NOT_MATURE',
+        fuenteSinopsis: 'google-books',
+      });
+      peticion.flush({ titulo: 'Libro de prueba' });
+    });
+
+    it('una sinopsis sin fuente conocida viaja como "manual"', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (fixture.componentInstance as any).conocimiento.patchValue({ sinopsis: 'Escrita por la persona.' });
+
+      enviarFormulario(fixture, datosValidos);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const peticion = httpMock.expectOne('/api/libros');
+      expect(peticion.request.body.conocimiento.fuenteSinopsis).toBe('manual');
+      peticion.flush({ titulo: 'Libro de prueba' });
+    });
+
+    it('un idioma inválido bloquea el guardado y avisa, sin enviar nada', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (fixture.componentInstance as any).conocimiento.patchValue({ idioma: '<script>' });
+
+      enviarFormulario(fixture, datosValidos);
+      await Promise.resolve();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      httpMock.expectNone('/api/libros');
+      expect(fixture.nativeElement.textContent).toContain('Revisa los datos para el asistente');
+      // El error no puede quedar escondido en el bloque plegado.
+      expect((fixture.nativeElement.querySelector('details') as HTMLDetailsElement).open).toBe(true);
+    });
+
+    it('tras guardar, el conocimiento y su fuente se limpian para el libro siguiente', async () => {
+      const { fixture, httpMock: mock } = configurarPrueba();
+      httpMock = mock;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.aplicarConocimientoSugerido(sugerencia, false);
+
+      enviarFormulario(fixture, datosValidos);
+      await Promise.resolve();
+      await Promise.resolve();
+      httpMock.expectOne('/api/libros').flush({ titulo: 'Libro de prueba' });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(componente.conocimiento.getRawValue()).toEqual({
+        sinopsis: '',
+        categorias: '',
+        idioma: '',
+        paginas: null,
+        clasificacionEdad: '',
+      });
+      expect(componente.fuenteSinopsis()).toBeNull();
     });
   });
 });

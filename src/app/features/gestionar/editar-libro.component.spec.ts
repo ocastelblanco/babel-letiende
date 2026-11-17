@@ -89,6 +89,8 @@ function configurarPrueba(
   const editarLibroMock = vi.fn().mockResolvedValue({ exito: true });
   const eliminarLibroMock = vi.fn().mockResolvedValue({ exito: true });
   const buscarPortadasMock = vi.fn().mockResolvedValue([]);
+  // Por defecto el libro no tiene conocimiento guardado (todo vacío) — las pruebas del asistente lo sobrescriben.
+  const obtenerConocimientoMock = vi.fn().mockResolvedValue(null);
   const usuario = opciones.rol ?? null;
 
   TestBed.configureTestingModule({
@@ -105,6 +107,7 @@ function configurarPrueba(
           cargarInventario: cargarInventarioMock,
           editarLibro: editarLibroMock,
           eliminarLibro: eliminarLibroMock,
+          obtenerConocimiento: obtenerConocimientoMock,
         },
       },
       {
@@ -133,6 +136,7 @@ function configurarPrueba(
     editarLibroMock,
     eliminarLibroMock,
     buscarPortadasMock,
+    obtenerConocimientoMock,
   };
 }
 
@@ -659,6 +663,127 @@ describe('EditarLibroComponent', () => {
       fixture.detectChanges();
 
       expect(componente.limiteRenderizado()).toBe(60);
+    });
+  });
+
+  describe('conocimiento para el asistente (ADR-018, asistente-ia Fase 1)', () => {
+    const conocimientoGuardado = {
+      bookId: 'libro-1',
+      sinopsis: 'La historia de la familia Buendía en Macondo, contada en siete generaciones.',
+      categorias: ['Ficción', 'Clásicos'],
+      idioma: 'es',
+      paginas: 471,
+      clasificacionEdad: 'NOT_MATURE' as const,
+      fuenteSinopsis: 'sitio:www.tornamesa.co',
+      actualizadoEn: '2026-11-17T00:00:00.000Z',
+    };
+    const esperaCarga = async (): Promise<void> => {
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+    };
+
+    it('al editar carga el conocimiento guardado en el formulario, con su fuente', async () => {
+      const { fixture, obtenerConocimientoMock } = configurarPrueba();
+      obtenerConocimientoMock.mockResolvedValue(conocimientoGuardado);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+
+      componente.editar(libroFalso);
+      await esperaCarga();
+
+      expect(obtenerConocimientoMock).toHaveBeenCalledWith('libro-1');
+      expect(componente.conocimiento.getRawValue()).toEqual({
+        sinopsis: conocimientoGuardado.sinopsis,
+        categorias: 'Ficción, Clásicos',
+        idioma: 'es',
+        paginas: 471,
+        clasificacionEdad: 'NOT_MATURE',
+      });
+      expect(componente.fuenteSinopsis()).toBe('sitio:www.tornamesa.co');
+      expect(componente.conocimientoCargado()).toBe(true);
+    });
+
+    it('guardar envía `conocimiento` solo si se pudo cargar, y refleja lo que la persona corrigió', async () => {
+      const { fixture, editarLibroMock, obtenerConocimientoMock } = configurarPrueba();
+      obtenerConocimientoMock.mockResolvedValue(conocimientoGuardado);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      await esperaCarga();
+      componente.conocimiento.patchValue({ paginas: 480, categorias: 'Ficción' });
+
+      await componente.guardarEdicion();
+
+      expect(editarLibroMock).toHaveBeenCalledTimes(1);
+      expect(editarLibroMock.mock.calls[0]?.[1].conocimiento).toEqual({
+        sinopsis: conocimientoGuardado.sinopsis,
+        categorias: ['Ficción'],
+        idioma: 'es',
+        paginas: 480,
+        clasificacionEdad: 'NOT_MATURE',
+        fuenteSinopsis: 'sitio:www.tornamesa.co',
+      });
+    });
+
+    it('si el conocimiento NO se pudo cargar, guardar no lo envía (nunca borra lo que no leyó)', async () => {
+      const { fixture, editarLibroMock, obtenerConocimientoMock } = configurarPrueba();
+      obtenerConocimientoMock.mockResolvedValue(null);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      await esperaCarga();
+
+      await componente.guardarEdicion();
+
+      expect(componente.conocimientoCargado()).toBe(false);
+      expect(editarLibroMock.mock.calls[0]?.[1]).not.toHaveProperty('conocimiento');
+    });
+
+    it('una respuesta de otro libro (la edición ya cambió o se cerró) se descarta', async () => {
+      const { fixture, obtenerConocimientoMock } = configurarPrueba();
+      let resolver: (valor: typeof conocimientoGuardado) => void = () => undefined;
+      obtenerConocimientoMock.mockReturnValueOnce(new Promise((resolve) => (resolver = resolve)));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      componente.cancelarEdicion();
+
+      resolver(conocimientoGuardado);
+      await esperaCarga();
+
+      expect(componente.conocimiento.controls.sinopsis.value).toBe('');
+      expect(componente.conocimientoCargado()).toBe(false);
+    });
+
+    it('cancelar la edición limpia el conocimiento', async () => {
+      const { fixture, obtenerConocimientoMock } = configurarPrueba();
+      obtenerConocimientoMock.mockResolvedValue(conocimientoGuardado);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      await esperaCarga();
+
+      componente.cancelarEdicion();
+
+      expect(componente.conocimiento.controls.sinopsis.value).toBe('');
+      expect(componente.fuenteSinopsis()).toBeNull();
+      expect(componente.conocimientoCargado()).toBe(false);
+    });
+
+    it('un idioma inválido bloquea el guardado', async () => {
+      const { fixture, editarLibroMock, obtenerConocimientoMock } = configurarPrueba();
+      obtenerConocimientoMock.mockResolvedValue(conocimientoGuardado);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const componente = fixture.componentInstance as any;
+      componente.editar(libroFalso);
+      await esperaCarga();
+      componente.conocimiento.patchValue({ idioma: '12' });
+
+      await componente.guardarEdicion();
+
+      expect(editarLibroMock).not.toHaveBeenCalled();
+      expect(componente.mensajeError()).toContain('Revisa los datos para el asistente');
     });
   });
 });

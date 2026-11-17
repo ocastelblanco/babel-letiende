@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import type { ClasificacionEdad } from '../models/conocimiento.model';
 
 /**
  * Metadatos bibliográficos de un libro resueltos por ISBN — mismo contrato
@@ -14,6 +15,17 @@ export interface MetadatosLibro {
   editorial: string | null;
   portadaUrl: string | null;
   pvp: number | null;
+  /**
+   * Conocimiento para el asistente (ADR-018): llega como SUGERENCIA editable.
+   * `fuenteSinopsis` dice de dónde salió la sinopsis (`sitio:<dominio>` o
+   * `google-books`).
+   */
+  sinopsis: string | null;
+  categorias: string[];
+  idioma: string | null;
+  paginas: number | null;
+  clasificacionEdad: ClasificacionEdad | null;
+  fuenteSinopsis: string | null;
 }
 
 const METADATOS_VACIOS: MetadatosLibro = {
@@ -22,6 +34,12 @@ const METADATOS_VACIOS: MetadatosLibro = {
   editorial: null,
   portadaUrl: null,
   pvp: null,
+  sinopsis: null,
+  categorias: [],
+  idioma: null,
+  paginas: null,
+  clasificacionEdad: null,
+  fuenteSinopsis: null,
 };
 
 /**
@@ -77,11 +95,14 @@ export class MetadatosService {
     }
 
     try {
-      return await firstValueFrom(
-        this.http.get<MetadatosLibro>(`/api/metadatos/${isbn}`, {
+      const respuesta = await firstValueFrom(
+        this.http.get<Partial<MetadatosLibro>>(`/api/metadatos/${isbn}`, {
           headers: { Authorization: `Bearer ${idToken}` },
         }),
       );
+      // Un backend anterior a la Fase 1 del asistente no trae los campos de
+      // conocimiento: se completan con su valor vacío en vez de dejarlos `undefined`.
+      return { ...METADATOS_VACIOS, ...respuesta };
     } catch {
       return METADATOS_VACIOS;
     }

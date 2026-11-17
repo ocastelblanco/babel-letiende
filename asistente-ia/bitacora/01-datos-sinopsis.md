@@ -1,6 +1,6 @@
 # 01 — Datos: enriquecer el inventario con sinopsis
 
-**Fecha:** 16/11/2026 · **Fase:** 1 · **trace_id:** `T-0011` (backend) · `T-0012` (Catalogar y Editar) · `T-0013` (carga retroactiva) · **Estado:** `T-0011` implementada; `T-0012` y `T-0013` pendientes
+**Fecha:** 16/11/2026 · **Fase:** 1 · **trace_id:** `T-0011` (backend) · `T-0012` (Catalogar y Editar) · `T-0013` (carga retroactiva) · **Estado:** `T-0011` fusionada y verificada en `staging`; `T-0012` implementada (PR abierto); `T-0013` pendiente
 
 ## 1. Objetivo
 
@@ -30,6 +30,14 @@ Catalogar es la ruta crítica de Babel. Guardar el conocimiento del libro es una
 ### Ausente no es lo mismo que vacío
 
 En `PUT /api/libros/:bookId` el campo `conocimiento` es opcional. **Ausente significa "no tocar lo que ya hay guardado"**; presente reemplaza el registro completo. Así un cliente que no conoce el campo (una pestaña abierta con la versión anterior de la aplicación) nunca borra datos por omisión.
+
+### Sugerencia editable, no dato confiable (T-0012)
+
+Todo lo que llega de una fuente externa entra al formulario como **sugerencia editable** (regla A08 de Babel): el vendedor ve la sinopsis, su fuente («Fuente: tornamesa.co») y puede corregirla antes de guardar. Si la edita, la fuente pasa a «escrita a mano» automáticamente, porque ya no es lo que dijo la fuente. Es un patrón útil más allá de este proyecto: un dato derivado de un tercero conserva su procedencia hasta que una persona lo hace suyo.
+
+### «Ausente» y «no pude leerlo» son lo mismo para el servidor
+
+En Editar, la sinopsis se carga con una lectura aparte. Si esa lectura falla (red, sesión caducada) o todavía no termina, el formulario **no envía** `conocimiento` al guardar; el servidor interpreta la ausencia como «no tocar» y conserva lo que haya. La alternativa ingenua (enviar el formulario vacío) borraría la sinopsis de un libro por un error de red. Dos pruebas protegen esto y fallan si se quita la condición.
 
 ## 3. Decisiones
 
@@ -79,6 +87,7 @@ La **cobertura real** de sinopsis sobre el inventario se mide con la carga retro
 - **Una prueba existente codificaba el comportamiento anterior** ("solo se consultan los sitios con precio cuando la información ya está completa"). Cambió a propósito: ahora los sitios `info` se consultan siempre porque la sinopsis de un sitio se prefiere a la de Google. La prueba se reescribió para que afirme el comportamiento nuevo, en lugar de borrarla.
 - **Un bug de la prueba, no del código:** `fuenteSinopsis` salía `google-books` cuando el mock no traía sinopsis, porque `undefined !== null` es verdadero. El código ahora comprueba si la sinopsis tiene contenido en lugar de comparar con `null`.
 
+- **Las pruebas antiguas se rompieron de forma útil.** Al agregar campos a la respuesta de metadatos, las pruebas de Catalogar con mocks incompletos fallaron con un error sobre `categorias` indefinido: el servicio real completa los campos que un backend anterior no manda, pero los mocks no. Se corrigieron los mocks, y el servicio ahora tiene una prueba propia para el caso de un backend sin los campos nuevos (por ejemplo, durante un despliegue a medias).
 - **Un hallazgo de seguridad que ya existía.** Al decidir dónde guardar la sinopsis, la pregunta "¿qué endpoint público devuelve el ítem completo del libro?" llevó a comprobar la ficha pública en `staging`: devolvía `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial`, `cantidadTotal` y el correo de quien catalogó, sin sesión. No tenía relación con el asistente, pero es exactamente la clase de fuga que una herramienta del asistente habría heredado. Se corrigió en un hotfix aparte con una lista blanca y una prueba que falla si reaparece un campo interno; la lección para el asistente (ADR-014) es que **ningún dato llega al modelo ni a un endpoint público por esparcir un ítem de la base de datos**.
 
 ## 7. Esfuerzo

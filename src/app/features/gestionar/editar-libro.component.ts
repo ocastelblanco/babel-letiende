@@ -8,6 +8,12 @@ import { LibrosService } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { UsuariosService } from '../../core/api/usuarios.service';
 import type { Libro } from '../../core/models/libro.model';
+import { ConocimientoLibroComponent } from '../../shared/conocimiento-libro/conocimiento-libro.component';
+import {
+  aDatosConocimiento,
+  aValorFormulario,
+  crearGrupoConocimiento,
+} from '../../shared/conocimiento-libro/conocimiento-libro.formulario';
 import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
 import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
@@ -53,7 +59,14 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-editar-libro',
-  imports: [ReactiveFormsModule, PvpPipe, SelectorPortadaComponent, SinPortadaFallbackDirective, ScrollInfinitoDirective],
+  imports: [
+    ReactiveFormsModule,
+    PvpPipe,
+    SelectorPortadaComponent,
+    SinPortadaFallbackDirective,
+    ScrollInfinitoDirective,
+    ConocimientoLibroComponent,
+  ],
   templateUrl: './editar-libro.component.html',
 })
 export class EditarLibroComponent implements OnInit, OnDestroy {
@@ -167,6 +180,17 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
     pvp: [0, [Validators.required, Validators.min(1), Validators.max(PVP_MAXIMO)]],
     porcentajeDescuentoEditorial: [0, [Validators.required, Validators.min(0), Validators.max(100)]],
   });
+
+  /**
+   * Conocimiento del libro para el asistente (ADR-018). Se carga aparte con
+   * `GET /api/libros/:bookId/conocimiento` al abrir la edición; SOLO si esa
+   * lectura tuvo éxito (`conocimientoCargado`) se envía al guardar. Si falló o
+   * aún no termina, se omite y el backend conserva lo que ya hay: guardar sin
+   * haber leído nunca debe borrar la sinopsis.
+   */
+  protected readonly conocimiento = crearGrupoConocimiento();
+  protected readonly fuenteSinopsis = signal<string | null>(null);
+  protected readonly conocimientoCargado = signal(false);
 
   protected readonly guardando = signal(false);
   protected readonly eliminandoBookId = signal<string | null>(null);
@@ -310,10 +334,29 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
       pvp: libro.pvp,
       porcentajeDescuentoEditorial: libro.porcentajeDescuentoEditorial,
     });
+    void this.cargarConocimiento(libro.bookId);
+  }
+
+  /** Carga el conocimiento del libro que se está editando; una respuesta de otro libro (o de una edición ya cerrada) se descarta. */
+  private async cargarConocimiento(bookId: string): Promise<void> {
+    this.conocimiento.reset(aValorFormulario(null));
+    this.fuenteSinopsis.set(null);
+    this.conocimientoCargado.set(false);
+
+    const guardado = await this.librosService.obtenerConocimiento(bookId);
+    if (!guardado || this.libroEditandoId() !== bookId) {
+      return;
+    }
+    this.conocimiento.reset(aValorFormulario(guardado));
+    this.fuenteSinopsis.set(guardado.fuenteSinopsis);
+    this.conocimientoCargado.set(true);
   }
 
   protected cancelarEdicion(): void {
     this.detenerEscaneoEdicion();
+    this.conocimiento.reset(aValorFormulario(null));
+    this.fuenteSinopsis.set(null);
+    this.conocimientoCargado.set(false);
     this.libroEditandoId.set(null);
     this.editEspacioId.set('');
     this.editMuebleId.set('');
@@ -349,6 +392,11 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
       this.formularioEdicion.markAllAsTouched();
       return;
     }
+    if (this.conocimiento.invalid) {
+      this.conocimiento.markAllAsTouched();
+      this.mensajeError.set('Revisa los datos para el asistente (sinopsis, idioma o páginas).');
+      return;
+    }
     const bookId = this.libroEditandoId();
     const ubicacionId = this.editUbicacionId();
     if (!bookId) {
@@ -372,6 +420,9 @@ export class EditarLibroComponent implements OnInit, OnDestroy {
         cantidadTotal: valores.cantidadTotal,
         pvp: valores.pvp,
         porcentajeDescuentoEditorial: valores.porcentajeDescuentoEditorial,
+        ...(this.conocimientoCargado()
+          ? { conocimiento: aDatosConocimiento(this.conocimiento.getRawValue(), this.fuenteSinopsis()) }
+          : {}),
       });
 
       if (resultado.exito) {
