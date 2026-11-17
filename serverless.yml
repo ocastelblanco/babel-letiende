@@ -24,6 +24,8 @@ package:
   individually: true
 
 custom:
+  # Bucket privado del índice del asistente (T-0022). Nombre global de S3: lleva el servicio y la cuenta de trabajo.
+  bucketIndice: babel-letiende-asistente-indice-${sls:stage}
   nombresTablas:
     libros: babel-libros-${sls:stage}
     ventas: babel-ventas-${sls:stage}
@@ -43,6 +45,11 @@ custom:
   # sin crear una dependencia circular en CloudFormation (ADR-012,
   # docs/plan-validar-libros-async.md §5).
   nombreFuncionValidarLibrosWorker: ${self:service}-${sls:stage}-validarLibrosWorker
+  # Reconstrucción programada del índice del asistente (T-0022). Solo donde hay clave de Gemini:
+  # en producción queda apagada hasta que exista el secreto de ese entorno y se encienda el asistente.
+  indiceProgramado:
+    staging: true
+    production: false
   # Igual que arriba, para la carga retroactiva del asistente (T-0013, ADR-012).
   nombreFuncionCargaConocimientoWorker: ${self:service}-${sls:stage}-cargaConocimientoWorker
 
@@ -2392,6 +2399,56 @@ functions:
           path: /{proxy+}
           method: '*'
 
+  indiceAsistenteReconstruir:
+    handler: dist-server/api/handlers/indice-asistente.handler
+    role: !GetAtt IndiceAsistenteLambdaRole.Arn
+    description: >-
+      Reconstruye de forma incremental el índice de embeddings del asistente (solo libros
+      nuevos o con texto cambiado) y lo guarda en S3. Programada y de invocación manual; sin ruta HTTP.
+    # Hasta 12 minutos de trabajo + escritura: el inventario completo en una corrida lenta.
+    timeout: 900
+    memorySize: 512
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
+      BUCKET_INDICE: ${self:custom.bucketIndice}
+      # Mismo mecanismo que FIREBASE_SERVICE_ACCOUNT_BABEL: secreto de GitHub del entorno, '' si aún no existe.
+      GEMINI_API_KEY: ${env:GEMINI_API_KEY, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/indice-asistente.js'
+        - 'dist-server/api/lib/almacen-indice.js'
+        - 'dist-server/api/lib/gemini.js'
+        - 'dist-server/api/lib/indice-vectorial.js'
+        - 'dist-server/api/lib/proveedor-llm.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+    events:
+      - schedule:
+          rate: rate(6 hours)
+          enabled: ${self:custom.indiceProgramado.${sls:stage}, false}
+
 resources:
   Conditions:
     EsProduccion: !Equals ['${sls:stage}', 'production']
@@ -3540,6 +3597,64 @@ resources:
                     - lambda:InvokeFunction
                   Resource:
                     - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.nombreFuncionCargaConocimientoWorker}'
+
+    # Índice de embeddings del asistente (T-0022): un solo archivo con vectores, sin texto de sinopsis.
+    # Privado, cifrado y sin acceso público; solo lo lee y escribe su Lambda (y, luego, la del asistente).
+    BucketIndiceAsistente:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucketIndice}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+
+    IndiceAsistenteLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-indice-asistente-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lee (Scan) libros y conocimiento: nunca escribe en ninguna tabla (A05).
+          - PolicyName: babel-indice-asistente-role-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                    - !GetAtt TablaConocimiento.Arn
+          # ListBucket hace falta para que un objeto inexistente responda 404 y no 403 (primera corrida).
+          - PolicyName: babel-indice-asistente-role-s3-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:GetObject
+                    - s3:PutObject
+                  Resource:
+                    - !Sub '${BucketIndiceAsistente.Arn}/indice/*'
+                - Effect: Allow
+                  Action:
+                    - s3:ListBucket
+                  Resource:
+                    - !GetAtt BucketIndiceAsistente.Arn
 
     CargaConocimientoWorkerLambdaRole:
       Type: AWS::IAM::Role

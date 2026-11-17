@@ -8,7 +8,8 @@ Registro de lo que se hizo, cómo y por qué, escrito para **consultarlo despué
 |---|---|---|---|
 | 00 | [Planeación y alcance](00-planeacion.md) | 0 | Completa (16/11/2026) |
 | 01 | [Datos: enriquecer el inventario con sinopsis](01-datos-sinopsis.md) | 1 | Completa (`T-0011` a `T-0014` fusionadas; falta correr la carga en producción) |
-| 02 | [Cliente de Gemini detrás de `ProveedorLlm`](02-cliente-gemini.md) | 2 | En curso (`T-0021` implementada; `T-0022` y `T-0023` pendientes) |
+| 02 | [Cliente de Gemini detrás de `ProveedorLlm`](02-cliente-gemini.md) | 2 | En curso (`T-0021` fusionada; `T-0022` implementada; `T-0023` pendiente) |
+| 03 | [Índice de embeddings](03-indice-embeddings.md) | 2 | En curso (`T-0022` implementada, PR abierto) |
 | 02 | Embeddings, índice y asistente mínimo | 2 | Pendiente |
 | 03 | Llamado de herramientas | 3 | Pendiente |
 | 04 | Suite de evaluación y línea base | 4 | Pendiente |
