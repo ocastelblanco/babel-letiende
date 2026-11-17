@@ -101,6 +101,8 @@ jobs:
           GOOGLE_CUSTOM_SEARCH_API_KEY: ${{ secrets.GOOGLE_CUSTOM_SEARCH_API_KEY }}
           GOOGLE_CUSTOM_SEARCH_CX: ${{ secrets.GOOGLE_CUSTOM_SEARCH_CX }}
           API_LETIENDE_BASE_URL: ${{ secrets.API_LETIENDE_BASE_URL }}
+          # Clave de Gemini del entorno (T-0021/T-0022); vacía donde aún no existe el secreto.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Smoke test contra staging recién desplegado
         run: |
@@ -165,3 +167,5 @@ jobs:
           GOOGLE_CUSTOM_SEARCH_API_KEY: ${{ secrets.GOOGLE_CUSTOM_SEARCH_API_KEY }}
           GOOGLE_CUSTOM_SEARCH_CX: ${{ secrets.GOOGLE_CUSTOM_SEARCH_CX }}
           API_LETIENDE_BASE_URL: ${{ secrets.API_LETIENDE_BASE_URL }}
+          # Clave de Gemini del entorno (T-0021/T-0022); vacía donde aún no existe el secreto.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
