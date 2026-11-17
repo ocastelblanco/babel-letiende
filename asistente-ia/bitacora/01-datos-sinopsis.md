@@ -1,12 +1,12 @@
 # 01 — Datos: enriquecer el inventario con sinopsis
 
-**Fecha:** 16/11/2026 · **Fase:** 1 · **trace_id:** `T-0011` (backend) · `T-0012` (Catalogar y Editar) · `T-0013` (carga retroactiva) · **Estado:** `T-0011` fusionada y verificada en `staging`; `T-0012` implementada (PR abierto); `T-0013` pendiente
+**Fecha:** 16/11/2026 · **Fase:** 1 · **trace_id:** `T-0011` (backend) · `T-0012` (Catalogar y Editar) · `T-0013` (carga retroactiva) · **Estado:** `T-0011` y `T-0012` fusionadas; `T-0013` implementada (PR abierto), con las cifras reales de cobertura pendientes de correr la carga
 
 ## 1. Objetivo
 
 Que cada libro del inventario tenga, además de título y precio, lo que un asistente necesita para recomendarlo: **sinopsis, categorías, idioma, páginas y clasificación por edad**. Es la capacidad de "fuentes de conocimiento: estructura, carga y consulta".
 
-**Criterio de terminado de la Fase 1:** los libros nuevos entran con sinopsis; el inventario existente se enriquece con una carga por lotes; hay un reporte de cobertura por idioma y por fuente. Esta entrada cubre `T-0011` (la base de datos y el backend). El resto se agrega al cerrar `T-0012` y `T-0013`.
+**Criterio de terminado de la Fase 1:** los libros nuevos entran con sinopsis; el inventario existente se enriquece con una carga por lotes; hay un reporte de cobertura por idioma y por fuente. Esta entrada cubre `T-0011` (la base de datos y el backend), `T-0012` (Catalogar y Editar) y `T-0013` (la carga retroactiva y el reporte de cobertura).
 
 ## 2. Conceptos y tecnologías
 
@@ -38,6 +38,16 @@ Todo lo que llega de una fuente externa entra al formulario como **sugerencia ed
 ### «Ausente» y «no pude leerlo» son lo mismo para el servidor
 
 En Editar, la sinopsis se carga con una lectura aparte. Si esa lectura falla (red, sesión caducada) o todavía no termina, el formulario **no envía** `conocimiento` al guardar; el servidor interpreta la ausencia como «no tocar» y conserva lo que haya. La alternativa ingenua (enviar el formulario vacío) borraría la sinopsis de un libro por un error de red. Dos pruebas protegen esto y fallan si se quita la condición.
+
+### Una carga masiva que respeta a las fuentes y no destruye nada (T-0013)
+
+El inventario ya catalogado no tiene sinopsis, así que hace falta recorrerlo. Es el mismo problema de «Validar libros» (miles de libros, un límite de 15 minutos por Lambda), y se resolvió con el mismo patrón: una Lambda que procesa un lote, guarda el avance en una tabla y se vuelve a invocar. Lo que cambia es el cuidado con lo que se toca:
+
+- **Ritmo.** Cada libro consulta hasta seis sitios y Google Books. Se procesan **9 libros por invocación, de a 3 a la vez y con 500 ms de pausa entre rondas**, en lugar de lanzar todo en paralelo. Es más lento (un inventario de 3.000 libros toma del orden de una hora), pero es una carga que se corre una vez y no martilla a nadie.
+- **No pisa nada.** Un libro con sinopsis, sea de una fuente o escrita a mano, no se consulta ni se modifica; de los demás solo se llenan los campos vacíos. Una carga se puede repetir sin miedo, y reintentar un lote es inocuo.
+- **Un libro roto no detiene el lote.** Cada libro se procesa con su propio manejo de errores y se cuenta como «error»; la carga sigue.
+- **El reporte no contiene sinopsis.** El ítem de progreso guarda solo contadores y la cobertura por idioma y por fuente (una sinopsis «útil» tiene 200 caracteres o más). Así se puede mostrar en pantalla y citar aquí sin copiar texto de terceros al repositorio.
+- **Una trampa conocida, evitada de antemano.** AWS corta por defecto las cadenas de Lambdas que se auto-invocan a las ~16 llamadas, sin registrar error (incidente de «Validar libros», 320 libros = 16×20). Con lotes de 9 serían 144 libros, así que la función nueva declara `RecursiveLoop: Allow` desde el primer despliegue.
 
 ## 3. Decisiones
 
@@ -77,9 +87,10 @@ El costo de la tabla aparte es una escritura más por catalogación. Con `PAY_PE
 |---|---|---|
 | Sitios cuya descripción es una sinopsis real | 5 de 6 | Fixtures reales de cada sitio, 16/11/2026 |
 | Sitios cuya descripción es solo el título | 1 (Lerner: `"ANIQUILACION"`) | Mismo fixture |
-| Pruebas del backend | 453 → 499 | `npm run test:api` |
+| Pruebas del backend | 453 → 499 (T-0011) → 505 (hotfix) → 529 (T-0013) | `npm run test:api` |
+| Pruebas del frontend | 485 → 528 (T-0012) → 538 (T-0013) | `npm test` |
 
-La **cobertura real** de sinopsis sobre el inventario se mide con la carga retroactiva (`T-0013`) y se agrega aquí.
+La **cobertura real** de sinopsis sobre el inventario se mide corriendo la carga retroactiva en `staging` (pantalla `/admin/carga-conocimiento`) y se agrega aquí. Pendiente: el código ya está, falta correrlo.
 
 ## 6. Qué falló y cómo se corrigió
 

@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, implementada) y `T-0013` (carga retroactiva y cobertura). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, implementada). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -603,12 +603,15 @@ Rama `feature/asistente-sinopsis-catalogar`. Solo frontend: el backend ya está 
 - [x] 528 pruebas frontend (antes 485); las dos de Editar que protegen contra el borrado accidental fallan si se quita la condición (verificado). `npm run build -- --configuration=production` limpio.
 - [ ] Verificación del usuario en `staging`: escanear un ISBN real y comprobar que el bloque trae sinopsis con su fuente; catalogar el libro; abrirlo en Editar y ver que la sinopsis se conservó; corregirla y guardar.
 
-## Tarea 2 — Fase 1, parte 3: carga retroactiva y reporte de cobertura (`T-0013`) — PENDIENTE (empieza cuando la Tarea 1 esté desplegada)
+## Tarea 2 — Fase 1, parte 3: carga retroactiva y reporte de cobertura (`T-0013`) — IMPLEMENTADA, PR abierto (2026-11-17)
 
 Rama `feature/asistente-carga-retroactiva`. Detalle en `asistente-ia/PLAN.md` §3.
 
-- [ ] Lambda que se auto-invoca por lotes (patrón de ADR-012), disparada por el administrador, que rellena `babel-libros-conocimiento` para los libros que aún no tienen, respetando los límites de las fuentes.
-- [ ] Reporte de cobertura (≥ 200 caracteres = sinopsis útil) por idioma y por fuente; cifras agregadas en la bitácora, sin sinopsis en git.
+- [x] Tres funciones nuevas con el patrón de ADR-012 (`server/api/handlers/carga-conocimiento.ts`): `POST /api/carga-conocimiento` (solo administrador, 202), Lambda interna `cargaConocimientoWorker` (sin ruta HTTP, se auto-invoca) y `GET /api/carga-conocimiento/:cargaId` (progreso y cobertura). Tabla nueva `babel-carga-conocimiento` (`PAY_PER_REQUEST`, sin GSIs), 3 roles de mínimo privilegio (ninguno escribe en `babel-libros`) y `RecursiveLoop: Allow` para el worker.
+- [x] Respeta las fuentes: lotes de 9 libros, de a 3 a la vez, con 500 ms de pausa entre rondas. **No pisa nada:** un libro con sinopsis (incluida la escrita a mano) no se toca ni se consulta; solo se llenan campos vacíos; los libros sin ISBN se omiten. Pide los metadatos sin PVP (`resolverMetadatosCompletos(isbn, { conPvp: false })`, ahora exportada).
+- [x] Reporte de cobertura (≥ 200 caracteres = sinopsis útil) por idioma y por fuente, solo cifras agregadas (el ítem de progreso nunca lleva texto de sinopsis). Pantalla `/admin/carga-conocimiento` («Datos del asistente» en el inicio del administrador): botón, barra de avance, contadores y las dos tablas.
+- [x] 24 pruebas backend nuevas (529 en total) y 10 de frontend (538); la que protege «no pisar una sinopsis existente» falla si se quita la condición (verificado). `build:api`, `serverless print`, `serverless package --stage dev` y la carga real de los 3 paquetes (`require` del handler) verificados; build de producción limpio.
+- [ ] Tras el despliegue a `staging`: abrir `/admin/carga-conocimiento` con tu sesión de administrador, iniciar la carga y esperar a que termine; comprobar que las cifras tienen sentido y pasarme el reporte para anotarlo en la bitácora.
 
 Después: Fase 2 (`T-0020`, índice y asistente mínimo; requiere la clave de Gemini del usuario).
 

@@ -54,4 +54,9 @@ describe('AdminInicioComponent', () => {
     const enlace = fixture.nativeElement.querySelector('a[href="/admin/validar-libros"]') as HTMLAnchorElement | null;
     expect(enlace).not.toBeNull();
   });
+
+  it('enlaza la sección Datos del asistente a /admin/carga-conocimiento', () => {
+    const enlace = fixture.nativeElement.querySelector('a[href="/admin/carga-conocimiento"]') as HTMLAnchorElement | null;
+    expect(enlace).not.toBeNull();
+  });
 });
