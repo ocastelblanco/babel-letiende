@@ -321,6 +321,11 @@
         </div>
       </div>
 
+      <app-conocimiento-libro [grupo]="conocimiento"
+                              [fuente]="fuenteSinopsis()"
+                              idPrefijo="cat"
+                              (sinopsisEditada)="fuenteSinopsis.set('manual')" />
+
       <div>
         <label for="cantidadTotal"
                class="mb-1 block text-sm font-semibold text-primary">Cantidad</label>

@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: Fase 1 partida en `T-0011` (backend) y `T-0012` (Catalogar y Editar). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, implementada) y `T-0013` (carga retroactiva y cobertura). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -584,30 +584,37 @@ Rama `feature/aviso-duplicado-sin-isbn-frontend`. Detalle en el plan, §6. Solo 
 
 **Lote nuevo (2026-11-16) — Asistente de recomendación con IA:** chat en el catálogo público que recomienda libros **disponibles** a partir de sus sinopsis, con llamado de herramientas, suite de evaluación, prompts versionados, registro sin datos personales, topes, tablero y comparación con Azure. Subproyecto con documentación y registro de esfuerzo propios en `asistente-ia/` (README, `PLAN.md`, fichas, bitácora; ADR-013 a ADR-017). Plan aprobado por el usuario el 16/11/2026. Una rama y un PR por fase, en secuencia (staging compartido). Al cerrar cada fase: entrada de bitácora, fila en `tracking-detail.csv`, evento de `ai-effort-tracking` (con su `trace_id`), `MEMORY.md` §2 y la siguiente fase de `asistente-ia/PLAN.md` §3 entra aquí.
 
-## Tarea 1 — Fase 1, parte 1: backend de sinopsis y datos del libro (`T-0011`) — IMPLEMENTADA, PR abierto (2026-11-16)
+## Fase 1, parte 1: backend de sinopsis y datos del libro (`T-0011`) — COMPLETA (PR #152 fusionado; verificado en `staging` el 2026-11-17)
 
-Rama `feature/asistente-datos-sinopsis`. Detalle en `asistente-ia/PLAN.md` §3, Fase 1 (partida en `T-0011`, `T-0012` y `T-0013`). **Decisión de diseño:** los datos viven en una tabla aparte, `babel-libros-conocimiento` (ADR-018), y se usan solo internamente; el usuario aceptó el riesgo de los términos de Google Books.
+Detalle en `asistente-ia/PLAN.md` §3 y ADR-018. Tabla `babel-libros-conocimiento` (`PAY_PER_REQUEST`, sin GSIs) `ACTIVE`; las 5 funciones tocadas con su variable y permisos mínimos (verificados con el simulador de IAM); sin errores en los logs. Pendiente solo la prueba autenticada de `GET /api/metadatos/:isbn`, que se hace desde Catalogar con la T-0012.
 
-- [x] ADR-018 (términos de Google, tabla aparte, trazabilidad por fuente).
-- [x] `api-letiende.ts` lee sinopsis (texto plano), categorías, idioma, páginas y clasificación por edad de Google Books; los 6 adaptadores de `scraping.ts` extraen la descripción en texto plano y descartan las que repiten el título o son demasiado cortas.
-- [x] `GET /api/metadatos/:isbn` responde también `sinopsis`, `categorias`, `idioma`, `paginas`, `clasificacionEdad` y `fuenteSinopsis` (sitio con `info` primero, Google de respaldo). Los sitios `info` ahora se consultan siempre (antes solo si faltaba algún dato).
-- [x] Tabla `babel-libros-conocimiento` (`PAY_PER_REQUEST`, sin GSIs), `POST`/`PUT` con `conocimiento` opcional, `DELETE` lo borra, `GET /api/libros/:bookId/conocimiento` (función `conocimientoLibro`, solo lectura); permisos IAM mínimos por función.
-- [x] 499 pruebas backend en verde (antes 453), `build:api`, `serverless print` y `serverless package --stage dev` verificados.
-- [ ] Tras el despliegue a `staging`: comprobar que la tabla quedó `ACTIVE` en `PAY_PER_REQUEST` y que `GET /api/metadatos/:isbn` devuelve los campos nuevos para un ISBN real.
+## Hotfix — Ficha pública sin datos internos — COMPLETO (PR #153 fusionado; verificado en `staging` y en producción el 2026-11-17)
 
-## Tarea 2 — Fase 1, parte 2: sinopsis en Catalogar y Editar (`T-0012`) — PENDIENTE (empieza cuando la Tarea 1 esté desplegada)
+`GET /api/libros/:bookId` devuelve solo la lista blanca `aLibroPublico`; `GET /api/libros/:bookId/completo` (personal) la reemplaza para Catalogar. Detalle al final de este documento y gotcha en `CLAUDE.md` §7.
 
-Rama `feature/asistente-sinopsis-catalogar`. Detalle en `asistente-ia/PLAN.md` §3.
+## Tarea 1 — Fase 1, parte 2: sinopsis en Catalogar y Editar (`T-0012`) — IMPLEMENTADA, PR abierto (2026-11-17)
 
-- [ ] Catalogar: sinopsis, categorías, idioma y páginas sugeridos desde `GET /api/metadatos/:isbn`, editables, enviados en `conocimiento`.
-- [ ] Editar: los carga con `GET /api/libros/:bookId/conocimiento` y los guarda.
-- [ ] Pruebas del componente y del servicio; `npm run build` y `npm test` en verde.
+Rama `feature/asistente-sinopsis-catalogar`. Solo frontend: el backend ya está desplegado (T-0011). Detalle en `asistente-ia/PLAN.md` §3.
 
-Siguientes del lote (se activan en este orden): `T-0013` carga retroactiva y reporte de cobertura, y la Fase 2 (`T-0020`, índice y asistente mínimo; requiere la clave de Gemini del usuario).
+- [x] Componente compartido `ConocimientoLibroComponent` (bloque plegable «Datos para el asistente de recomendación (opcional)»: sinopsis, categorías, idioma, páginas, clasificación por edad) y helpers puros `conocimiento-libro.formulario.ts` (formulario ↔ payload, mismos topes que el backend).
+- [x] Catalogar: pre-carga la sugerencia de `GET /api/metadatos/:isbn` solo en campos vacíos (salvo al elegir otro candidato), muestra la fuente, pasa a «escrita a mano» si la persona edita la sinopsis, la envía en `conocimiento` solo al crear un libro nuevo y solo si hay algo escrito; se limpia tras guardar; se deshabilita cuando el flujo es sumar ejemplares a un duplicado.
+- [x] Editar: carga el conocimiento con `GET /api/libros/:bookId/conocimiento`; **solo lo envía al guardar si la lectura tuvo éxito** (guardar sin haber leído nunca borra la sinopsis); descarta la respuesta de una edición ya cerrada.
+- [x] Un campo inválido (idioma, páginas, sinopsis larga) bloquea el guardado, avisa y abre el bloque plegado. El texto se muestra con interpolación de Angular, nunca como HTML (A03).
+- [x] 528 pruebas frontend (antes 485); las dos de Editar que protegen contra el borrado accidental fallan si se quita la condición (verificado). `npm run build -- --configuration=production` limpio.
+- [ ] Verificación del usuario en `staging`: escanear un ISBN real y comprobar que el bloque trae sinopsis con su fuente; catalogar el libro; abrirlo en Editar y ver que la sinopsis se conservó; corregirla y guardar.
+
+## Tarea 2 — Fase 1, parte 3: carga retroactiva y reporte de cobertura (`T-0013`) — PENDIENTE (empieza cuando la Tarea 1 esté desplegada)
+
+Rama `feature/asistente-carga-retroactiva`. Detalle en `asistente-ia/PLAN.md` §3.
+
+- [ ] Lambda que se auto-invoca por lotes (patrón de ADR-012), disparada por el administrador, que rellena `babel-libros-conocimiento` para los libros que aún no tienen, respetando los límites de las fuentes.
+- [ ] Reporte de cobertura (≥ 200 caracteres = sinopsis útil) por idioma y por fuente; cifras agregadas en la bitácora, sin sinopsis en git.
+
+Después: Fase 2 (`T-0020`, índice y asistente mínimo; requiere la clave de Gemini del usuario).
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
 
-## Hotfix — Ficha pública sin datos internos (2026-11-17) — IMPLEMENTADO, PR abierto
+## Hotfix — Ficha pública sin datos internos (2026-11-17) — detalle
 
 Rama `fix/ficha-publica-sin-datos-internos`. Fuera del roadmap del asistente: decidido por el usuario ("antes de continuar con la siguiente tarea").
 

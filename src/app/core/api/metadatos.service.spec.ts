@@ -16,13 +16,26 @@ vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: vi.fn(),
 }));
 
-const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null, pvp: null };
+const metadatosVacios = {
+  titulo: null,
+  autor: null,
+  editorial: null,
+  portadaUrl: null,
+  pvp: null,
+  sinopsis: null, categorias: [] as string[], idioma: null, paginas: null, clasificacionEdad: null, fuenteSinopsis: null,
+};
 const metadatosEncontrados = {
   titulo: 'Cien años de soledad',
   autor: 'Gabriel García Márquez',
   editorial: 'Sudamericana',
   portadaUrl: 'https://books.google.com/portada.jpg',
   pvp: 65_000,
+  sinopsis: 'Una novela sobre la familia Buendía en Macondo, escrita con suficiente largo.',
+  categorias: ['Ficción', 'Clásicos'],
+  idioma: 'es',
+  paginas: 471,
+  clasificacionEdad: 'NOT_MATURE',
+  fuenteSinopsis: 'sitio:www.tornamesa.co',
 };
 
 describe('MetadatosService', () => {
@@ -63,6 +76,22 @@ describe('MetadatosService', () => {
     peticion.flush(metadatosEncontrados);
 
     expect(await promesa).toEqual(metadatosEncontrados);
+  });
+
+  it('completa con valores vacíos los campos de conocimiento si el backend no los trae (versión anterior)', async () => {
+    const servicio = configurarPrueba('token-valido');
+
+    const promesa = servicio.obtenerMetadatos('9780000000003');
+    await Promise.resolve();
+    httpMock
+      .expectOne('/api/metadatos/9780000000003')
+      .flush({ titulo: 'Solo lo viejo', autor: null, editorial: null, portadaUrl: null, pvp: 1000 });
+
+    const resultado = await promesa;
+    expect(resultado.titulo).toBe('Solo lo viejo');
+    expect(resultado.categorias).toEqual([]);
+    expect(resultado.sinopsis).toBeNull();
+    expect(resultado.fuenteSinopsis).toBeNull();
   });
 
   it('devuelve todos los campos en null, sin lanzar, cuando /api/metadatos/:isbn falla', async () => {

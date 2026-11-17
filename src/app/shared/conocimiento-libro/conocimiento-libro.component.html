@@ -1,0 +1,81 @@
+<details class="rounded-xl border border-primary/20 px-3 py-2"
+         [open]="abiertoPorLaPersona() || hayError()"
+         (toggle)="alAlternar($event)"
+         [formGroup]="grupo()">
+  <summary class="cursor-pointer text-sm font-semibold text-primary">
+    Datos para el asistente de recomendación (opcional)
+  </summary>
+
+  <div class="mt-3 flex flex-col gap-4">
+    <p class="text-xs text-primary/70">
+      Uso interno: el asistente los usa para recomendar libros. No se muestran al público.
+    </p>
+
+    <div>
+      <label [for]="idPrefijo() + 'Sinopsis'"
+             class="mb-1 block text-sm font-semibold text-primary">Sinopsis</label>
+      <textarea [id]="idPrefijo() + 'Sinopsis'"
+                rows="5"
+                formControlName="sinopsis"
+                (input)="sinopsisEditada.emit()"
+                class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary"></textarea>
+      @if (etiquetaFuente()) {
+      <p class="mt-1 text-xs text-primary/70">Fuente: {{ etiquetaFuente() }}. Revísala y corrígela si hace falta.</p>
+      }
+      @if (grupo().controls.sinopsis.invalid && grupo().controls.sinopsis.touched) {
+      <p class="mt-1 text-xs text-danger">La sinopsis no puede superar {{ maximoSinopsis }} caracteres.</p>
+      }
+    </div>
+
+    <div>
+      <label [for]="idPrefijo() + 'Categorias'"
+             class="mb-1 block text-sm font-semibold text-primary">Categorías</label>
+      <input [id]="idPrefijo() + 'Categorias'"
+             type="text"
+             formControlName="categorias"
+             placeholder="Fantasía, Juvenil, Manga"
+             class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary" />
+      <p class="mt-1 text-xs text-primary/70">Separadas por comas (máximo 10).</p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label [for]="idPrefijo() + 'Idioma'"
+               class="mb-1 block text-sm font-semibold text-primary">Idioma</label>
+        <input [id]="idPrefijo() + 'Idioma'"
+               type="text"
+               formControlName="idioma"
+               placeholder="es"
+               maxlength="8"
+               class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary" />
+        @if (grupo().controls.idioma.invalid && grupo().controls.idioma.touched) {
+        <p class="mt-1 text-xs text-danger">Usa un código como «es» o «en».</p>
+        }
+      </div>
+
+      <div>
+        <label [for]="idPrefijo() + 'Paginas'"
+               class="mb-1 block text-sm font-semibold text-primary">Páginas</label>
+        <input [id]="idPrefijo() + 'Paginas'"
+               type="number"
+               formControlName="paginas"
+               class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary" />
+        @if (grupo().controls.paginas.invalid && grupo().controls.paginas.touched) {
+        <p class="mt-1 text-xs text-danger">Debe ser un entero entre 1 y 20.000.</p>
+        }
+      </div>
+    </div>
+
+    <div>
+      <label [for]="idPrefijo() + 'Edad'"
+             class="mb-1 block text-sm font-semibold text-primary">Clasificación por edad</label>
+      <select [id]="idPrefijo() + 'Edad'"
+              formControlName="clasificacionEdad"
+              class="w-full rounded-xl border border-primary/20 px-3 py-2 text-sm text-primary">
+        <option value="">Sin clasificar</option>
+        <option value="NOT_MATURE">Para todo público</option>
+        <option value="MATURE">Para adultos</option>
+      </select>
+    </div>
+  </div>
+</details>

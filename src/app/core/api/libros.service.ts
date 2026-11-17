@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import type { ConocimientoLibro, DatosConocimiento } from '../models/conocimiento.model';
 import { Libro, LibroConEjemplares, LibroConUbicacion } from '../models/libro.model';
 
 /**
@@ -19,6 +20,12 @@ export interface DatosEditarLibro {
   cantidadTotal: number;
   pvp: number;
   porcentajeDescuentoEditorial: number;
+  /**
+   * Conocimiento del libro para el asistente (ADR-018). AUSENTE significa "no
+   * tocar lo ya guardado": solo se envía cuando se cargó antes, para no
+   * borrar datos por omisión.
+   */
+  conocimiento?: DatosConocimiento;
 }
 
 /**
@@ -163,6 +170,29 @@ export class LibrosService {
     try {
       return await firstValueFrom(
         this.http.get<LibroConUbicacion>(`/api/libros/${bookId}/completo`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Llama `GET /api/libros/:bookId/conocimiento` con el ID Token actual: la
+   * sinopsis, categorías, idioma, páginas y clasificación por edad de un
+   * libro (ADR-018). Solo para el personal. Nunca lanza: sin sesión, `403`,
+   * `404` o error de red devuelve `null` — y quien llama NO debe enviar
+   * `conocimiento` al guardar, para no pisar lo que no pudo leer.
+   */
+  async obtenerConocimiento(bookId: string): Promise<ConocimientoLibro | null> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return null;
+    }
+    try {
+      return await firstValueFrom(
+        this.http.get<ConocimientoLibro>(`/api/libros/${bookId}/conocimiento`, {
           headers: { Authorization: `Bearer ${idToken}` },
         }),
       );

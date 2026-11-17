@@ -8,7 +8,14 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { EditorialesDescuentosService } from '../../core/api/editoriales-descuentos.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
-import { MetadatosService, type CandidatoLibro } from '../../core/api/metadatos.service';
+import { MetadatosService, type CandidatoLibro, type MetadatosLibro } from '../../core/api/metadatos.service';
+import { ConocimientoLibroComponent } from '../../shared/conocimiento-libro/conocimiento-libro.component';
+import {
+  aDatosConocimiento,
+  aValorFormulario,
+  conocimientoVacio,
+  crearGrupoConocimiento,
+} from '../../shared/conocimiento-libro/conocimiento-libro.formulario';
 import { LibrosService, type LibroIndice } from '../../core/api/libros.service';
 import type { LibroConUbicacion } from '../../core/models/libro.model';
 import { SelectorPortadaComponent } from '../../shared/selector-portada/selector-portada.component';
@@ -101,7 +108,7 @@ type CandidatoConOrigen =
  */
 @Component({
   selector: 'app-catalogar-libro',
-  imports: [ReactiveFormsModule, SelectorPortadaComponent, SinPortadaFallbackDirective, PvpPipe],
+  imports: [ReactiveFormsModule, SelectorPortadaComponent, SinPortadaFallbackDirective, PvpPipe, ConocimientoLibroComponent],
   templateUrl: './catalogar-libro.component.html',
 })
 export class CatalogarLibroComponent implements OnInit, OnDestroy {
@@ -242,6 +249,17 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
   });
 
   /**
+   * Conocimiento del libro para el asistente (sinopsis, categorías, idioma,
+   * páginas, clasificación por edad — ADR-018). Llega como sugerencia editable
+   * de `GET /api/metadatos/:isbn`; `fuenteSinopsis` guarda de dónde salió y
+   * pasa a `manual` si la persona edita la sinopsis. Solo se envía al
+   * catalogar un libro NUEVO: al sumar ejemplares a uno existente (fusión) el
+   * libro conserva el suyo.
+   */
+  protected readonly conocimiento = crearGrupoConocimiento();
+  protected readonly fuenteSinopsis = signal<string | null>(null);
+
+  /**
    * Reacciona a `duplicadoEnMismaUbicacion()`: en el caso bloqueante,
    * deshabilita todo el formulario salvo `cantidadTotal` y la precarga con
    * el TOTAL existente del duplicado; al salir de ese estado (duplicado
@@ -267,10 +285,12 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       ];
 
       if (mismaUbicacion && duplicado) {
+        this.conocimiento.disable({ emitEvent: false });
         controlesBloqueables.forEach((control) => control.disable());
         controles.cantidadTotal.setValue(duplicado.cantidadTotal);
         this.cantidadReflejaTotalExistente = true;
       } else {
+        this.conocimiento.enable({ emitEvent: false });
         controlesBloqueables.forEach((control) => control.enable());
         if (this.cantidadReflejaTotalExistente) {
           controles.cantidadTotal.setValue(1);
@@ -526,6 +546,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       if ((sobrescribir || controles.pvp.value === 0) && metadatos.pvp) {
         controles.pvp.setValue(metadatos.pvp);
       }
+      this.aplicarConocimientoSugerido(metadatos, sobrescribir);
 
       if (
         !metadatos.titulo && !metadatos.autor && !metadatos.editorial
@@ -537,6 +558,32 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       if (generacion === this.generacionBusquedaIsbn) {
         this.buscandoMetadatos.set(false);
       }
+    }
+  }
+
+  /**
+   * Pre-carga el conocimiento sugerido por la API como valor EDITABLE
+   * (CLAUDE.md A08), campo por campo y con el mismo criterio que el resto del
+   * formulario: solo llena lo que está vacío, salvo `sobrescribir`. La fuente
+   * se anota solo si la sinopsis la puso esta función.
+   */
+  private aplicarConocimientoSugerido(metadatos: MetadatosLibro, sobrescribir: boolean): void {
+    const controles = this.conocimiento.controls;
+    if ((sobrescribir || controles.sinopsis.value.trim() === '') && metadatos.sinopsis) {
+      controles.sinopsis.setValue(metadatos.sinopsis);
+      this.fuenteSinopsis.set(metadatos.fuenteSinopsis ?? null);
+    }
+    if ((sobrescribir || controles.categorias.value.trim() === '') && metadatos.categorias.length > 0) {
+      controles.categorias.setValue(metadatos.categorias.join(', '));
+    }
+    if ((sobrescribir || controles.idioma.value.trim() === '') && metadatos.idioma) {
+      controles.idioma.setValue(metadatos.idioma);
+    }
+    if ((sobrescribir || controles.paginas.value === null) && metadatos.paginas) {
+      controles.paginas.setValue(metadatos.paginas);
+    }
+    if ((sobrescribir || controles.clasificacionEdad.value === '') && metadatos.clasificacionEdad) {
+      controles.clasificacionEdad.setValue(metadatos.clasificacionEdad);
     }
   }
 
@@ -816,6 +863,11 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
       this.formulario.markAllAsTouched();
       return;
     }
+    if (this.conocimiento.invalid) {
+      this.conocimiento.markAllAsTouched();
+      this.mensajeError.set('Revisa los datos para el asistente (sinopsis, idioma o páginas).');
+      return;
+    }
     const ubicacionId = this.panelUbicacionId();
     if (!ubicacionId) {
       this.mensajeError.set('Selecciona la ubicación del libro (Espacio, Mueble y Ubicación) antes de guardar.');
@@ -851,6 +903,9 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
         return;
       }
     }
+
+    // Solo en la catalogación de un libro nuevo; sin nada escrito no se envía.
+    const datosConocimiento = aDatosConocimiento(this.conocimiento.getRawValue(), this.fuenteSinopsis());
 
     const camposComunes = {
       isbn: valores.isbn.trim() === '' ? null : valores.isbn.trim(),
@@ -897,6 +952,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
               ...camposComunes,
               cantidadTotal: valores.cantidadTotal,
               ubicacionId,
+              ...(conocimientoVacio(datosConocimiento) ? {} : { conocimiento: datosConocimiento }),
               ...(confirmarLibroDistinto ? { confirmarLibroDistinto: true } : {}),
             },
             { headers: { Authorization: `Bearer ${idToken}` } },
@@ -1029,6 +1085,8 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     this.coincidenciasIsbn.set([]);
     this.libroDuplicadoSeleccionado.set(null);
     this.descuentoTocadoManualmente.set(false);
+    this.conocimiento.reset(aValorFormulario(null));
+    this.fuenteSinopsis.set(null);
     const porcentajeActual = this.formulario.controls.porcentajeDescuentoEditorial.value;
     this.formulario.reset({
       isbn: '',
