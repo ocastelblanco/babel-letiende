@@ -55,3 +55,6 @@ yarn-error.log*
 /asistente-ia/evals/resultados/*.jsonl
 /asistente-ia/datos/
 __pycache__/
+
+# Documento personal (no versionar nunca)
+docs/ingeniero-de-prompts-y-agentes.md
