@@ -79,6 +79,8 @@ La **cobertura real** de sinopsis sobre el inventario se mide con la carga retro
 - **Una prueba existente codificaba el comportamiento anterior** ("solo se consultan los sitios con precio cuando la información ya está completa"). Cambió a propósito: ahora los sitios `info` se consultan siempre porque la sinopsis de un sitio se prefiere a la de Google. La prueba se reescribió para que afirme el comportamiento nuevo, en lugar de borrarla.
 - **Un bug de la prueba, no del código:** `fuenteSinopsis` salía `google-books` cuando el mock no traía sinopsis, porque `undefined !== null` es verdadero. El código ahora comprueba si la sinopsis tiene contenido en lugar de comparar con `null`.
 
+- **Un hallazgo de seguridad que ya existía.** Al decidir dónde guardar la sinopsis, la pregunta "¿qué endpoint público devuelve el ítem completo del libro?" llevó a comprobar la ficha pública en `staging`: devolvía `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial`, `cantidadTotal` y el correo de quien catalogó, sin sesión. No tenía relación con el asistente, pero es exactamente la clase de fuga que una herramienta del asistente habría heredado. Se corrigió en un hotfix aparte con una lista blanca y una prueba que falla si reaparece un campo interno; la lección para el asistente (ADR-014) es que **ningún dato llega al modelo ni a un endpoint público por esparcir un ítem de la base de datos**.
+
 ## 7. Esfuerzo
 
 Eventos de esta fase en [`../metrics/events/`](../metrics/events/).

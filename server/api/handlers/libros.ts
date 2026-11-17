@@ -267,8 +267,40 @@ interface EjemplarConUbicacion {
 }
 
 /** Respuesta de `handlerDetalle` — extiende `LibroConUbicacion` de forma ADITIVA con `ejemplares`, sin tocar el contrato que también usa `handlerBuscarPorIsbn` (mismo `LibroConUbicacion`, con un significado distinto ahí: duplicados detectados al catalogar). */
-interface LibroConEjemplares extends LibroConUbicacion {
-  ejemplares: EjemplarConUbicacion[];
+/**
+ * Lo ÚNICO que la ficha pública (`GET /api/libros/:bookId`, sin autenticación)
+ * puede mostrar de un libro. Es una lista blanca, no una lista negra: un campo
+ * nuevo de `babel-libros` queda fuera de la ficha pública salvo que alguien lo
+ * agregue aquí a propósito. Quedan fuera `costo`, `utilidadCatalogo`,
+ * `porcentajeDescuentoEditorial` (margen de consignación), `cantidadTotal`
+ * (revela cuánto se ha vendido), `creadoPor` (correo de quien catalogó) y las
+ * fechas internas — hotfix de seguridad A01/A02 (2026-11-17), el detalle
+ * devolvía el ítem completo.
+ */
+interface LibroPublico {
+  bookId: string;
+  isbn: string | null;
+  titulo: string;
+  autor: string;
+  editorial: string | null;
+  portadaUrl: string | null;
+  pvp: number;
+  cantidadDisponible: number;
+  ubicacionId: string;
+}
+
+function aLibroPublico(libro: Libro): LibroPublico {
+  return {
+    bookId: libro.bookId,
+    isbn: libro.isbn ?? null,
+    titulo: libro.titulo,
+    autor: libro.autor,
+    editorial: libro.editorial ?? null,
+    portadaUrl: libro.portadaUrl ?? null,
+    pvp: libro.pvp,
+    cantidadDisponible: libro.cantidadDisponible,
+    ubicacionId: libro.ubicacionId,
+  };
 }
 
 /**
@@ -349,10 +381,53 @@ export const handlerDetalle: APIGatewayProxyHandlerV2 = async (event): Promise<A
       resolverEjemplares(libro),
     ]);
 
-    const libroConEjemplares: LibroConEjemplares = { ...libro, ubicacion, ejemplares };
+    // Solo la lista blanca pública: nunca `{ ...libro }` (hotfix A01/A02).
+    const fichaPublica: LibroPublico & { ubicacion: LibroConUbicacion['ubicacion']; ejemplares: EjemplarConUbicacion[] } = {
+      ...aLibroPublico(libro),
+      ubicacion,
+      ejemplares,
+    };
 
-    return respuestaJson(200, libroConEjemplares);
+    return respuestaJson(200, fichaPublica);
   } catch {
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * `GET /api/libros/:bookId/completo` — el libro con TODOS sus campos (costo,
+ * descuento editorial, etc.) más su ubicación resuelta, para el personal.
+ * Existe porque la ficha pública (`handlerDetalle`) ya no los devuelve: a
+ * Catalogar le hacen falta `porcentajeDescuentoEditorial` y `ubicacionId` al
+ * sumar ejemplares a un libro existente. Exige rol `vendedor` o
+ * `administrador` (CLAUDE.md A01). Un `bookId` inexistente responde `404`.
+ */
+export const handlerCompleto: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para ver el detalle interno de un libro.' });
+    }
+
+    const bookId = event.pathParameters?.['bookId'];
+    if (!bookId) {
+      return respuestaJson(400, { error: 'Falta el bookId en la ruta.' });
+    }
+
+    const libroCrudo = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
+    if (!libroCrudo) {
+      return respuestaJson(404, { error: 'El libro no existe.' });
+    }
+    const libro = normalizarLibro(libroCrudo);
+    const completo: LibroConUbicacion = { ...libro, ubicacion: await resolverUbicacion(libro.ubicacionId) };
+
+    return respuestaJson(200, completo);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
     return respuestaJson(500, { error: 'Error interno del servidor.' });
   }
 };

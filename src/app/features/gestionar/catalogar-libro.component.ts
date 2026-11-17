@@ -726,7 +726,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
    * (`origen: 'babel'`, Tarea 3 del lote de duplicados,
    * `docs/plan-duplicados-catalogacion.md` §6) entra por el MISMO camino de
    * duplicados que la Tarea 1: se resuelve la ficha completa por `bookId`
-   * (`LibrosService.obtenerDetalle`, el índice ligero no trae editorial ni
+   * (`LibrosService.obtenerLibroCompleto`, el índice ligero no trae editorial ni
    * descuento) y se delega a `seleccionarDuplicado` — que a su vez decide,
    * comparando contra el panel, si esto es un caso bloqueante (misma
    * ubicación) o informativo (otra ubicación), igual que un duplicado
@@ -754,7 +754,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     this.candidatosNoEncontrados.set(false);
 
     if (candidato.origen === 'babel') {
-      const libro = await this.librosService.obtenerDetalle(candidato.bookId);
+      const libro = await this.librosService.obtenerLibroCompleto(candidato.bookId);
       if (libro && generacion === this.generacionBusquedaIsbn) {
         this.seleccionarDuplicado(libro);
       }
@@ -962,7 +962,7 @@ export class CatalogarLibroComponent implements OnInit, OnDestroy {
     this.guardando.set(true);
     try {
       const idToken = await this.authService.obtenerIdToken();
-      const existente = await this.librosService.obtenerDetalle(candidato.bookId);
+      const existente = await this.librosService.obtenerLibroCompleto(candidato.bookId);
       if (!idToken || !existente) {
         this.mensajeError.set('No se pudo sumar los ejemplares al libro existente. Intenta de nuevo.');
         return;

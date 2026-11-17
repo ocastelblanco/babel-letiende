@@ -605,4 +605,15 @@ Rama `feature/asistente-sinopsis-catalogar`. Detalle en `asistente-ia/PLAN.md` �
 
 Siguientes del lote (se activan en este orden): `T-0013` carga retroactiva y reporte de cobertura, y la Fase 2 (`T-0020`, índice y asistente mínimo; requiere la clave de Gemini del usuario).
 
-**Hallazgo de seguridad previo, detectado de paso (2026-11-16), sin corregir en este lote:** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
+**Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
+
+## Hotfix — Ficha pública sin datos internos (2026-11-17) — IMPLEMENTADO, PR abierto
+
+Rama `fix/ficha-publica-sin-datos-internos`. Fuera del roadmap del asistente: decidido por el usuario ("antes de continuar con la siguiente tarea").
+
+- [x] `handlerDetalle` devuelve solo la lista blanca `aLibroPublico` (+ `ubicacion` y `ejemplares`); ya no `{ ...libro }`. Verificado contra `staging` que los demás endpoints públicos (`GET /api/libros`) no filtraban nada y que `indice`, `inventario` y `exportar` exigen sesión (401).
+- [x] Endpoint nuevo `GET /api/libros/:bookId/completo` (vendedor/administrador, función `libroCompleto`, solo lectura): Catalogar lo necesita al sumar ejemplares (lee `porcentajeDescuentoEditorial` y `ubicacionId` del libro existente). `LibrosService.obtenerLibroCompleto` lo llama con el ID Token.
+- [x] Pruebas: la de lista blanca falla si reaparece cualquier campo interno (verificado quitando el arreglo: falla); 6 del endpoint nuevo; 3 del servicio. 505 pruebas backend y 484 frontend en verde; `npm run build` de producción, `serverless print` y `serverless package --stage dev` limpios.
+- [ ] Tras el despliegue a `staging`: `curl` a `GET /api/libros/<bookId>` solo debe traer las claves públicas; en Catalogar, escanear un libro ya catalogado y usar "Es el mismo libro: sumar ejemplares" debe seguir funcionando.
+- [ ] Quien tenga una ficha abierta de antes del despliegue puede ver un error al sumar ejemplares hasta recargar la página (la función nueva no existía).
+
