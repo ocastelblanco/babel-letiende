@@ -1,0 +1,52 @@
+# 02 — Cliente de Gemini detrás de `ProveedorLlm`
+
+**Fecha:** 17/11/2026 · **Fase:** 2 · **trace_id:** `T-0021` · **Estado:** implementado, PR abierto
+
+## 1. Objetivo
+
+Que el asistente hable con un modelo de lenguaje a través de una interfaz propia (`ProveedorLlm`), de modo que cambiar de proveedor, de modelo o de API sea escribir otra implementación y no tocar el resto. Esta entrada cubre solo el cliente; el índice (`T-0022`) y el asistente (`T-0023`) vienen después.
+
+## 2. Conceptos y tecnologías
+
+### Verificar el contrato contra la API real, no contra la documentación
+
+La documentación oficial de Gemini cambió: las páginas de generación de texto y de salida JSON ya describen la «Interactions API» y no mencionan `generateContent`. Un cliente escrito de memoria, o solo desde esas páginas, habría supuesto un contrato sin comprobarlo. Por eso el primer paso fue un workflow (`asistente-verificar-gemini.yml`) que llama a la API real con la clave del entorno `staging` y textos sintéticos, e imprime solo estados, nombres de campos, tamaños y cifras de uso, nunca la clave ni el contenido del modelo.
+
+Lo que confirmó el 17/11/2026:
+
+| Hecho | Evidencia |
+|---|---|
+| La clave funciona y ve `gemini-3.5-flash-lite` y `gemini-embedding-2` | `GET /models`: 64 modelos |
+| `embedContent` y `batchEmbedContents` con `output_dimensionality: 768` devuelven vectores de **norma 1,0000**: no hace falta normalizar | norma calculada en el workflow |
+| `batchEmbedContents` devuelve un vector por petición | `embeddings: array(2)` |
+| `generateContent` sigue vivo, acepta `responseMimeType` + `responseSchema` y devuelve JSON válido con las claves del esquema | prueba real |
+| El uso llega en `usageMetadata` (`promptTokenCount`, `candidatesTokenCount`, `totalTokenCount`) | prueba real |
+| La Interactions API también responde, con otro esquema (`steps`, `usage`) | prueba real |
+
+### Por qué `generateContent` y no la Interactions API
+
+La documentación recomienda la Interactions API para proyectos nuevos. Aun así elegí `generateContent` para la v1: está verificado de punta a punta, no aparece deprecado en la página de deprecaciones y el registro de cambios muestra novedades suyas en noviembre de 2026; la Interactions API cambió su esquema en mayo de 2026 (`outputs` → `steps`) y exige fijar una revisión (`Api-Revision`). Es una decisión reversible: todo está detrás de `ProveedorLlm`, y cambiar de API es escribir otra clase.
+
+### `gemini-embedding-2` no usa `task_type`
+
+El modelo anterior distinguía documento de consulta con un parámetro. El actual no lo admite: el rol va como prefijo del texto, `title: … | text: …` para los libros y `task: search result | query: …` para la pregunta del visitante. Y una lista de textos dentro de **un** `content` produce **un solo** vector agregado; por eso el cliente manda una petición por texto dentro del lote y comprueba que vuelvan exactamente tantos vectores como textos (un desajuste desalinearía el índice con los libros sin que nada fallara).
+
+## 3. Decisiones
+
+- **768 dimensiones.** Recomendadas por la documentación, ya normalizadas, y dejan el índice de 3.000 libros en unos 9 MB en `float32`.
+- **Modelo de texto: `gemini-3.5-flash-lite`** (estable, sin fecha de apagado anunciada; entrada US$ 0,30 y salida US$ 2,50 por millón de tokens según la página de precios). `gemini-3.1-flash-lite` tiene apagado anunciado para el 7/5/2027. Los modelos se leen del entorno (`GEMINI_MODELO_TEXTO`, `GEMINI_MODELO_EMBEDDINGS`) para cambiarlos sin código.
+- **Reintentos acotados:** hasta 2 reintentos con pausa creciente, solo ante 429, 5xx o fallo de red; un 400 no se reintenta. Tiempo límite de 20 s por llamada.
+- **La clave solo viaja en la cabecera** `x-goog-api-key`. Los errores conservan el estado HTTP y el código del proveedor, pero nunca el texto del error ni la clave.
+
+## 4. Qué falló y cómo se corrigió
+
+- **Un test fallaba por reutilizar un `Response`.** Un cuerpo de respuesta solo se puede leer una vez; el mock devolvía el mismo objeto en cada reintento, así que el segundo intento no veía el código del error. El cliente estaba bien; el mock ahora crea una respuesta nueva por llamada.
+- **El resumen automático de la documentación mintió dos veces** (dijo que el registro de cambios terminaba en diciembre de 2025 y que no había precios de la familia 3.5). El texto literal decía lo contrario. Por eso las cifras de esta entrada vienen del texto literal o de la prueba real, no de resúmenes.
+
+## 5. Datos y privacidad
+
+Según los términos de Gemini (versión del 23/3/2026), en el nivel gratuito Google puede usar lo enviado para mejorar sus productos y revisores humanos pueden leerlo; en el de pago no. Mientras el proyecto esté en nivel gratuito, solo se envían textos sintéticos o sinopsis; **ninguna pregunta real de un visitante debe pasar por ahí**. El chat público requiere el nivel de pago (ADR-015).
+
+## 6. Esfuerzo
+
+Eventos en [`../metrics/events/`](../metrics/events/).

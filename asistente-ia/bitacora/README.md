@@ -7,7 +7,8 @@ Registro de lo que se hizo, cómo y por qué, escrito para **consultarlo despué
 | # | Entrada | Fase | Estado |
 |---|---|---|---|
 | 00 | [Planeación y alcance](00-planeacion.md) | 0 | Completa (16/11/2026) |
-| 01 | [Datos: enriquecer el inventario con sinopsis](01-datos-sinopsis.md) | 1 | En curso (`T-0011` implementada; `T-0012` y `T-0013` pendientes) |
+| 01 | [Datos: enriquecer el inventario con sinopsis](01-datos-sinopsis.md) | 1 | Completa (`T-0011` a `T-0014` fusionadas; falta correr la carga en producción) |
+| 02 | [Cliente de Gemini detrás de `ProveedorLlm`](02-cliente-gemini.md) | 2 | En curso (`T-0021` implementada; `T-0022` y `T-0023` pendientes) |
 | 02 | Embeddings, índice y asistente mínimo | 2 | Pendiente |
 | 03 | Llamado de herramientas | 3 | Pendiente |
 | 04 | Suite de evaluación y línea base | 4 | Pendiente |
@@ -39,7 +40,7 @@ Se completa a medida que cada evidencia existe. Una capacidad solo se marca como
 | Capacidad | Evidencia | Estado |
 |---|---|---|
 | Comunicar el caso de uso antes de construir | [`../fichas/caso-de-uso.md`](../fichas/caso-de-uso.md) (16/11/2026, antes de cualquier código) | Demostrada |
-| Fuentes de conocimiento: estructura, carga y consulta | Tabla `babel-libros-conocimiento`, adaptadores por fuente y [entrada 01](01-datos-sinopsis.md); falta la carga retroactiva y el reporte de cobertura | En curso |
+| Fuentes de conocimiento: estructura, carga y consulta | Tabla `babel-libros-conocimiento`, adaptadores por fuente y [entrada 01](01-datos-sinopsis.md); carga retroactiva y reporte de cobertura hechos y probados en `staging` | En curso |
 | Recuperación híbrida | Índice, recall@k | Pendiente |
 | Asistente con límites de respuesta | Endpoint, demo en el catálogo | Pendiente |
 | Llamado de herramientas | Herramientas y sus pruebas | Pendiente |
