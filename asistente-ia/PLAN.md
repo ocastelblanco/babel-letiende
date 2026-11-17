@@ -90,6 +90,7 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] Clave en el secreto `GEMINI_API_KEY` del entorno `staging` (creada por el usuario).
 - [x] Contrato verificado con la API real mediante `asistente-verificar-gemini.yml`: embeddings de 768 dimensiones ya normalizados, lote, `generateContent` con esquema JSON y `usageMetadata`.
 - [x] `ProveedorLlm` (`server/api/lib/proveedor-llm.ts`) y `ProveedorGemini` (`gemini.ts`): embeddings de documentos y de consultas, generación con salida JSON, reintentos acotados, errores sin clave. 31 pruebas.
+- [x] `T-0024` — Generación migrada a la Interactions API estable (`POST /v1/interactions`, sin estado, salida JSON con esquema) tras actualizarse las skills de Gemini; verificada con la clave real: variantes de versión y cabecera, conversación de varios turnos, truncado y niveles de pensamiento (detalle en la bitácora 02). 604 pruebas backend.
 - [ ] Clave de producción (prepago) como secreto del entorno `production`: se necesita solo antes de encender el asistente; la Fase 2 sale con el interruptor apagado.
 
 **`T-0022` — Índice de embeddings (implementada, PR abierto 2026-11-17)** · bitácora [`03-indice-embeddings.md`](bitacora/03-indice-embeddings.md)

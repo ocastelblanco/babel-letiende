@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, fusionada y verificada en `staging`) y `T-0014` (idioma de los libros, fusionada y verificada) y `T-0021` (cliente de Gemini, fusionada) y `T-0022` (índice de embeddings, implementada, PR abierto). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, fusionada y verificada en `staging`) y `T-0014` (idioma de los libros, fusionada y verificada) y `T-0021` (cliente de Gemini, fusionada) y `T-0022` (índice de embeddings, fusionada) y `T-0024` (generación con la Interactions API, implementada, PR abierto). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -641,7 +641,15 @@ Rama `feature/asistente-indice-embeddings`. Detalle en `asistente-ia/PLAN.md` §
 - [x] Módulo `indice-vectorial` (texto, huella, cuantización, formato binario, búsqueda con filtro), Lambda `indiceAsistenteReconstruir` (incremental, reanudable), bucket S3 privado, rol de solo lectura sobre tablas, regla de 6 horas (apagada en producción). 31 pruebas nuevas (601).
 - [x] `GEMINI_API_KEY` agregado al despliegue de ambos entornos (vacío si el secreto no existe). `@aws-sdk/client-s3` agregado a las dependencias.
 - [x] Verificado en `staging`: 25 de 25 libros indexados (1,7 s, 6.096 tokens); la segunda corrida no pidió nada ni escribió; archivo de 22.676 bytes en el bucket privado.
-- [ ] Siguiente: `T-0023` (Lambda `asistente`, prompt v1, validador). Antes de escribirla decidir con el usuario si la generación usa `generateContent` (verificado) o la Interactions API (ya estable en `v1` según las skills actualizadas de Gemini).
+- [x] Fusionado (PR #158) y desplegado; verificado en `staging` (25 de 25 libros indexados).
+
+## Tarea 6 — Fase 2, parte 3: generación con la Interactions API (`T-0024`) — IMPLEMENTADA, PR abierto (2026-11-17)
+
+Rama `feature/asistente-interactions-api`. Decidido por el usuario tras actualizar las skills de Gemini. Detalle en `asistente-ia/bitacora/02-cliente-gemini.md`.
+
+- [x] `ProveedorGemini.generarJson` usa `POST /v1/interactions` (sin estado, salida JSON con esquema, `thinking_level` configurable). 604 pruebas backend.
+- [x] Contrato verificado con la clave real (versión y cabecera, multi-turno, truncado, niveles de pensamiento) y la clase real ejercitada de punta a punta en el workflow de verificación (12 comprobaciones).
+- [ ] Siguiente: `T-0023` (Lambda `asistente`, prompt v1, validador).
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
 
