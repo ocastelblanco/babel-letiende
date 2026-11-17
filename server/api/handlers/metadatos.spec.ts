@@ -74,12 +74,14 @@ function crearDiferida<T>(): { promise: Promise<T>; resolve: (valor: T) => void 
   return { promise, resolve };
 }
 
-const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null };
+const conocimientoVacio = { sinopsis: null, categorias: [], idioma: null, paginas: null, clasificacionEdad: null };
+const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null, ...conocimientoVacio };
 const metadatosEncontrados = {
   titulo: 'Cien años de soledad',
   autor: 'Gabriel García Márquez',
   editorial: 'Sudamericana',
   portadaUrl: 'https://books.google.com/portada.jpg',
+  ...conocimientoVacio,
 };
 
 function sitio(datos: Partial<SitioScraping> & { dominio: string; prioridad: number }): SitioScraping {
@@ -161,8 +163,8 @@ describe('handler (/api/metadatos/:isbn)', () => {
   });
 
   it(
-    'cuando api.letiende.co resuelve toda la info, igual dispara scraping en paralelo SOLO para los sitios ' +
-      'con pvp=true (nunca resuelve pvp por sí sola)',
+    'cuando api.letiende.co resuelve toda la info, igual consulta en paralelo los sitios con info=true ' +
+      '(sinopsis, ADR-018) y los de pvp=true (nunca resuelve pvp por sí sola)',
     async () => {
       obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
       const sitioConInfoYPvp = sitio({ dominio: 'con-info-y-pvp.com', info: true, pvp: true, prioridad: 2 });
@@ -185,18 +187,19 @@ describe('handler (/api/metadatos/:isbn)', () => {
         {} as never,
       );
 
-      // El sitio "solo-info.com" no tiene pvp=true y toda la info ya estaba
-      // resuelta por api.letiende.co, así que NUNCA debió consultarse.
-      expect(scrapearSitioMock).not.toHaveBeenCalledWith(sitioSoloInfo, '9780000000001');
+      // Los sitios con info=true se consultan SIEMPRE (la sinopsis de un sitio
+      // se prefiere a la de Google Books, ADR-018), aunque api.letiende.co ya
+      // haya resuelto título/autor/editorial/portada.
+      expect(scrapearSitioMock).toHaveBeenCalledWith(sitioSoloInfo, '9780000000001');
       expect(scrapearSitioMock).toHaveBeenCalledWith(sitioConInfoYPvp, '9780000000001');
       expect(scrapearSitioMock).toHaveBeenCalledWith(sitioSoloPvpMenorPrioridad, '9780000000001');
-      expect(scrapearSitioMock).toHaveBeenCalledTimes(2);
+      expect(scrapearSitioMock).toHaveBeenCalledTimes(3);
 
       // Entre los dos sitios que sí resolvieron pvp, gana el de menor
       // `prioridad` (con-info-y-pvp.com, prioridad 2 < solo-pvp.com, prioridad 3).
       expect(respuesta).toMatchObject({
         statusCode: 200,
-        body: JSON.stringify({ ...metadatosEncontrados, pvp: 50_000 }),
+        body: JSON.stringify({ ...metadatosEncontrados, pvp: 50_000, fuenteSinopsis: null }),
       });
     },
   );
@@ -226,7 +229,9 @@ describe('handler (/api/metadatos/:isbn)', () => {
         autor: 'Autor scrapeado',
         editorial: 'Editorial scrapeada',
         portadaUrl: 'https://unico.com/portada.jpg',
+        ...conocimientoVacio,
         pvp: 70_000,
+        fuenteSinopsis: null,
       }),
     });
   });
@@ -383,6 +388,79 @@ describe('handler (/api/metadatos/:isbn)', () => {
     await promesaHandler;
   });
 
+  describe('sinopsis (ADR-018): sitios primero, Google Books de respaldo', () => {
+    const SINOPSIS_GOOGLE = 'Sinopsis de Google Books suficientemente larga para ser útil al asistente.';
+    const SINOPSIS_SITIO = 'Sinopsis del sitio de librería suficientemente larga para ser útil al asistente.';
+
+    async function llamar(isbn: string): Promise<Record<string, unknown>> {
+      const respuesta = (await handler(
+        eventoFalso({ authorization: 'Bearer token', isbn }),
+        {} as never,
+        {} as never,
+      )) as { body: string };
+      return JSON.parse(respuesta.body) as Record<string, unknown>;
+    }
+
+    it('la sinopsis de un sitio con info=true desplaza a la de Google Books y anota su dominio', async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue({ ...metadatosEncontrados, sinopsis: SINOPSIS_GOOGLE });
+      escanearTodoMock.mockResolvedValue([sitio({ dominio: 'libreria.com', info: true, prioridad: 1 })]);
+      scrapearSitioMock.mockResolvedValue({ sinopsis: SINOPSIS_SITIO });
+
+      const cuerpo = await llamar('9780000000010');
+
+      expect(cuerpo['sinopsis']).toBe(SINOPSIS_SITIO);
+      expect(cuerpo['fuenteSinopsis']).toBe('sitio:libreria.com');
+    });
+
+    it('si ningún sitio trae sinopsis, queda la de Google Books como respaldo', async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue({ ...metadatosEncontrados, sinopsis: SINOPSIS_GOOGLE });
+      escanearTodoMock.mockResolvedValue([sitio({ dominio: 'libreria.com', info: true, prioridad: 1 })]);
+      scrapearSitioMock.mockResolvedValue({});
+
+      const cuerpo = await llamar('9780000000011');
+
+      expect(cuerpo['sinopsis']).toBe(SINOPSIS_GOOGLE);
+      expect(cuerpo['fuenteSinopsis']).toBe('google-books');
+    });
+
+    it('entre dos sitios con sinopsis gana el de menor prioridad', async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
+      escanearTodoMock.mockResolvedValue([
+        sitio({ dominio: 'segundo.com', info: true, prioridad: 2 }),
+        sitio({ dominio: 'primero.com', info: true, prioridad: 1 }),
+      ]);
+      scrapearSitioMock.mockImplementation(async (s: SitioScraping): Promise<ResultadoScraping> => ({
+        sinopsis: `Sinopsis de ${s.dominio}, escrita con suficiente largo para pasar el filtro mínimo.`,
+      }));
+
+      const cuerpo = await llamar('9780000000012');
+
+      expect(cuerpo['fuenteSinopsis']).toBe('sitio:primero.com');
+    });
+
+    it('ignora la sinopsis de un sitio con info=false (solo se usó por su pvp)', async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
+      escanearTodoMock.mockResolvedValue([sitio({ dominio: 'solo-pvp.com', pvp: true, prioridad: 1 })]);
+      scrapearSitioMock.mockResolvedValue({ pvp: 40_000, sinopsis: SINOPSIS_SITIO });
+
+      const cuerpo = await llamar('9780000000013');
+
+      expect(cuerpo['sinopsis']).toBeNull();
+      expect(cuerpo['fuenteSinopsis']).toBeNull();
+      expect(cuerpo['pvp']).toBe(40_000);
+    });
+
+    it('sin sinopsis en ninguna fuente, fuenteSinopsis es null', async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosEncontrados);
+      escanearTodoMock.mockResolvedValue([]);
+
+      const cuerpo = await llamar('9780000000014');
+
+      expect(cuerpo['sinopsis']).toBeNull();
+      expect(cuerpo['fuenteSinopsis']).toBeNull();
+    });
+  });
+
   it('ningún sitio resuelve nada → todo null, sigue 200', async () => {
     obtenerMetadatosPorIsbnMock.mockResolvedValue(metadatosVacios);
     const unicoSitio = sitio({ dominio: 'vacio.com', info: true, pvp: true, prioridad: 1 });
@@ -397,7 +475,7 @@ describe('handler (/api/metadatos/:isbn)', () => {
 
     expect(respuesta).toMatchObject({
       statusCode: 200,
-      body: JSON.stringify({ ...metadatosVacios, pvp: null }),
+      body: JSON.stringify({ ...metadatosVacios, pvp: null, fuenteSinopsis: null }),
     });
   });
 
@@ -414,7 +492,7 @@ describe('handler (/api/metadatos/:isbn)', () => {
     expect(scrapearSitioMock).not.toHaveBeenCalled();
     expect(respuesta).toMatchObject({
       statusCode: 200,
-      body: JSON.stringify({ ...metadatosEncontrados, pvp: null }),
+      body: JSON.stringify({ ...metadatosEncontrados, pvp: null, fuenteSinopsis: null }),
     });
   });
 
@@ -431,7 +509,7 @@ describe('handler (/api/metadatos/:isbn)', () => {
     expect(scrapearSitioMock).not.toHaveBeenCalled();
     expect(respuesta).toMatchObject({
       statusCode: 200,
-      body: JSON.stringify({ ...metadatosEncontrados, pvp: null }),
+      body: JSON.stringify({ ...metadatosEncontrados, pvp: null, fuenteSinopsis: null }),
     });
   });
 });

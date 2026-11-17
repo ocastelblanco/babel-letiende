@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buscarLibrosPorTexto, obtenerMetadatosPorIsbn } from './api-letiende';
 
-const metadatosVacios = { titulo: null, autor: null, editorial: null, portadaUrl: null };
+const metadatosVacios = {
+  titulo: null,
+  autor: null,
+  editorial: null,
+  portadaUrl: null,
+  sinopsis: null,
+  categorias: [],
+  idioma: null,
+  paginas: null,
+  clasificacionEdad: null,
+};
 
 function respuestaGoogleBooks(volumeInfo: Record<string, unknown>) {
   return { items: [{ volumeInfo }] };
@@ -43,8 +53,81 @@ describe('obtenerMetadatosPorIsbn', () => {
       editorial: 'Sudamericana',
       // http:// se reescribe a https:// — mismo recurso en ambos esquemas.
       portadaUrl: 'https://books.google.com/portada.jpg',
+      sinopsis: null,
+      categorias: [],
+      idioma: null,
+      paginas: null,
+      clasificacionEdad: null,
     });
     expect(fetchMock).toHaveBeenCalledWith('https://api.letiende.co/libros?barcode=9780000000001');
+  });
+
+  it('lee sinopsis, categorías, idioma, páginas y clasificación por edad (conocimiento para el asistente)', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve(
+          respuestaGoogleBooks({
+            title: 'Magnus Chase',
+            description: '<p>Una guía ilustrada de los <b>dioses nórdicos</b> &amp; criaturas.</p><p>Segundo párrafo.</p>',
+            categories: ['Juvenile Fiction / Fantasy & Magic', 'Juvenile Fiction / Action & Adventure', 'Fiction / Fantasy / General'],
+            language: 'ES',
+            pageCount: 224,
+            maturityRating: 'NOT_MATURE',
+          }),
+        ),
+    });
+
+    const resultado = await obtenerMetadatosPorIsbn('9786073155540');
+
+    expect(resultado.sinopsis).toBe('Una guía ilustrada de los dioses nórdicos & criaturas.\nSegundo párrafo.');
+    expect(resultado.categorias).toEqual([
+      'Juvenile Fiction',
+      'Fantasy & Magic',
+      'Action & Adventure',
+      'Fiction',
+      'Fantasy',
+      'General',
+    ]);
+    expect(resultado.idioma).toBe('es');
+    expect(resultado.paginas).toBe(224);
+    expect(resultado.clasificacionEdad).toBe('NOT_MATURE');
+  });
+
+  it('descarta valores inválidos del conocimiento en vez de guardarlos (idioma raro, páginas negativas, rating desconocido)', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve(
+          respuestaGoogleBooks({
+            title: 'Libro raro',
+            description: '   ',
+            categories: [42, 'Ficción'],
+            language: '<script>',
+            pageCount: -5,
+            maturityRating: 'OTRA_COSA',
+          }),
+        ),
+    });
+
+    const resultado = await obtenerMetadatosPorIsbn('9780000000099');
+
+    expect(resultado.sinopsis).toBeNull();
+    expect(resultado.categorias).toEqual(['Ficción']);
+    expect(resultado.idioma).toBeNull();
+    expect(resultado.paginas).toBeNull();
+    expect(resultado.clasificacionEdad).toBeNull();
+  });
+
+  it('recorta la sinopsis al tope de caracteres', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(respuestaGoogleBooks({ title: 'Largo', description: 'a'.repeat(9000) })),
+    });
+
+    const resultado = await obtenerMetadatosPorIsbn('9780000000098');
+
+    expect(resultado.sinopsis).toHaveLength(4000);
   });
 
   it('une varios autores con ", "', async () => {

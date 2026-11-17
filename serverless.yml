@@ -34,6 +34,7 @@ custom:
     sitiosScraping: babel-sitios-scraping-${sls:stage}
     usuarios: babel-usuarios-${sls:stage}
     validacionesLibros: babel-validaciones-libros-${sls:stage}
+    conocimiento: babel-libros-conocimiento-${sls:stage}
   # Nombre real de la función `validarLibrosWorker`, calculado por
   # convención (no por !GetAtt) para poder referenciarlo tanto en la
   # variable de entorno `NOMBRE_FUNCION_WORKER` (iniciarValidacionLibros y
@@ -363,6 +364,7 @@ functions:
       (CLAUDE.md A01, A08, ADR-008, TODO.md Tarea 1).
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
       TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
@@ -425,6 +427,7 @@ functions:
       "Editar"). Reemplaza a cambiarUbicacionLibro.
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
       TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
@@ -606,6 +609,7 @@ functions:
       "Gestionar" pestaña "Editar", botón ELIMINAR LIBRO).
     environment:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
     package:
@@ -920,6 +924,67 @@ functions:
     events:
       - httpApi:
           path: /api/libros/por-isbn/{isbn}
+          method: get
+
+  conocimientoLibro:
+    handler: dist-server/api/handlers/libros.handlerConocimiento
+    role: !GetAtt ConocimientoLibroLambdaRole.Arn
+    description: >-
+      GET /api/libros/:bookId/conocimiento — sinopsis, categorías, idioma,
+      páginas y clasificación por edad de un libro (ADR-018), exige rol
+      vendedor/administrador; no es público porque la sinopsis es texto de
+      terceros de uso interno.
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/
+        # exportar — mismo cuidado documentado arriba (MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/libros/{bookId}/conocimiento
           method: get
 
   librosIndice:
@@ -2252,6 +2317,12 @@ resources:
                     - dynamodb:PutItem
                   Resource:
                     - !GetAtt TablaLibros.Arn
+                # Conocimiento del libro para el asistente (ADR-018): solo escritura.
+                - Effect: Allow
+                  Action:
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaConocimiento.Arn
                 # Solo el GSI `ubicacion-index`: comprobación de posibles
                 # duplicados sin ISBN antes de catalogar (`buscarPosiblesDuplicados`).
                 - Effect: Allow
@@ -2295,6 +2366,12 @@ resources:
                     - dynamodb:PutItem
                   Resource:
                     - !GetAtt TablaLibros.Arn
+                # Conocimiento del libro para el asistente (ADR-018): solo escritura.
+                - Effect: Allow
+                  Action:
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaConocimiento.Arn
                 - Effect: Allow
                   Action:
                     - dynamodb:GetItem
@@ -2412,6 +2489,12 @@ resources:
                     - dynamodb:DeleteItem
                   Resource:
                     - !GetAtt TablaLibros.Arn
+                # Borra también el conocimiento del libro (ADR-018).
+                - Effect: Allow
+                  Action:
+                    - dynamodb:DeleteItem
+                  Resource:
+                    - !GetAtt TablaConocimiento.Arn
                 - Effect: Allow
                   Action:
                     - dynamodb:GetItem
@@ -2560,6 +2643,35 @@ resources:
                     - !GetAtt TablaUbicaciones.Arn
                     - !GetAtt TablaMuebles.Arn
                     - !GetAtt TablaEspacios.Arn
+
+    ConocimientoLibroLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-conocimiento-libro-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lectura (GetItem) de babel-libros (existe el bookId), de
+          # babel-libros-conocimiento y de babel-usuarios (rol del token).
+          # Sin permisos de escritura (CLAUDE.md A05, ADR-008, ADR-018).
+          - PolicyName: babel-conocimiento-libro-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                    - !GetAtt TablaConocimiento.Arn
+                    - !GetAtt TablaUsuarios.Arn
 
     LibrosIndiceLambdaRole:
       Type: AWS::IAM::Role
@@ -3407,6 +3519,21 @@ resources:
             AttributeType: S
         KeySchema:
           - AttributeName: validacionId
+            KeyType: HASH
+
+    # Conocimiento del libro para el asistente de recomendación (ADR-018): sinopsis,
+    # categorías, idioma, páginas y clasificación por edad. Tabla aparte de
+    # babel-libros a propósito. PAY_PER_REQUEST, sin GSIs (docs/advertencia-urgente-costos-aws.md).
+    TablaConocimiento:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.conocimiento}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: bookId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: bookId
             KeyType: HASH
 
     # --- Dominio personalizado babel.letiende.co (solo stage production, PRD.md §6) ---

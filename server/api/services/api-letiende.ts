@@ -28,6 +28,19 @@ export interface MetadatosLibro {
   autor: string | null;
   editorial: string | null;
   portadaUrl: string | null;
+  /**
+   * Conocimiento del libro para el asistente de recomendación
+   * (`asistente-ia/PLAN.md`, Fase 1). Es texto de terceros: se guarda para
+   * uso interno, nunca se muestra textual al visitante (ADR-018).
+   * `sinopsis` es SIEMPRE texto plano (sin etiquetas HTML, CLAUDE.md A03).
+   */
+  sinopsis: string | null;
+  categorias: string[];
+  /** Código ISO 639-1 en minúscula (`es`, `en`…), tal como lo entrega Google Books. */
+  idioma: string | null;
+  paginas: number | null;
+  /** `NOT_MATURE` o `MATURE` (`maturityRating` de Google Books). */
+  clasificacionEdad: string | null;
 }
 
 const METADATOS_VACIOS: MetadatosLibro = {
@@ -35,12 +48,60 @@ const METADATOS_VACIOS: MetadatosLibro = {
   autor: null,
   editorial: null,
   portadaUrl: null,
+  sinopsis: null,
+  categorias: [],
+  idioma: null,
+  paginas: null,
+  clasificacionEdad: null,
 };
+
+/** Tope de caracteres de una sinopsis — mismo valor que valida `libros.ts` al guardar. */
+export const MAXIMO_CARACTERES_SINOPSIS = 4000;
+
+const ENTIDADES_HTML: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&nbsp;': ' ',
+};
+
+/**
+ * Convierte el texto de una fuente externa en texto plano: los saltos
+ * de bloque pasan a salto de línea, se eliminan las etiquetas, se
+ * decodifican las entidades más comunes y se descartan los caracteres de
+ * control. Nunca devuelve HTML (CLAUDE.md A03). `null` si queda vacío.
+ * (Existe una copia equivalente en `scraping.ts`: no se importa para no
+ * crear una dependencia de ejecución entre los dos módulos, ver CLAUDE.md §7.)
+ */
+export function aTextoPlano(valor: unknown, maximo = MAXIMO_CARACTERES_SINOPSIS): string | null {
+  if (typeof valor !== 'string') {
+    return null;
+  }
+  const limpio = valor
+    .replace(/<br\s*\/?>|<\/p>|<\/div>|<\/li>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (entidad) => ENTIDADES_HTML[entidad] ?? entidad)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim()
+    .slice(0, maximo)
+    .trim();
+  return limpio === '' ? null : limpio;
+}
 
 interface VolumeInfoGoogleBooks {
   title?: string;
   authors?: string[];
   publisher?: string;
+  description?: string;
+  categories?: string[];
+  language?: string;
+  pageCount?: number;
+  maturityRating?: string;
   imageLinks?: { thumbnail?: string; smallThumbnail?: string };
   industryIdentifiers?: Array<{ type?: string; identifier?: string }>;
 }
@@ -96,6 +157,35 @@ async function intentarFetchLibros(url: string): Promise<IntentoFetch> {
   return { ok: true, respuesta };
 }
 
+/** Google Books entrega categorías como `"Fiction / Fantasy / General"`: se separan por `/`, se limpian y se quitan duplicados (máx. 10). */
+function normalizarCategorias(categorias: unknown): string[] {
+  if (!Array.isArray(categorias)) {
+    return [];
+  }
+  const vistas = new Set<string>();
+  for (const categoria of categorias) {
+    if (typeof categoria !== 'string') {
+      continue;
+    }
+    for (const parte of categoria.split('/')) {
+      const limpia = aTextoPlano(parte, 100);
+      if (limpia) {
+        vistas.add(limpia);
+      }
+    }
+  }
+  return [...vistas].slice(0, 10);
+}
+
+/** Solo acepta códigos de idioma con forma de ISO 639-1/639-2 (`es`, `en`, `pt-BR`); lo demás se descarta. */
+function normalizarIdioma(idioma: unknown): string | null {
+  if (typeof idioma !== 'string') {
+    return null;
+  }
+  const codigo = idioma.trim().toLowerCase();
+  return /^[a-z]{2,3}(-[a-z]{2,4})?$/.test(codigo) ? codigo : null;
+}
+
 export async function obtenerMetadatosPorIsbn(isbn: string): Promise<MetadatosLibro> {
   const urlBase = process.env['API_LETIENDE_BASE_URL'];
   const url = `${urlBase}/libros?barcode=${encodeURIComponent(isbn)}`;
@@ -132,6 +222,17 @@ export async function obtenerMetadatosPorIsbn(isbn: string): Promise<MetadatosLi
     autor: volumeInfo.authors && volumeInfo.authors.length > 0 ? volumeInfo.authors.join(', ') : null,
     editorial: volumeInfo.publisher ?? null,
     portadaUrl: volumeInfo.imageLinks?.thumbnail ? aHttps(volumeInfo.imageLinks.thumbnail) : null,
+    sinopsis: aTextoPlano(volumeInfo.description),
+    categorias: normalizarCategorias(volumeInfo.categories),
+    idioma: normalizarIdioma(volumeInfo.language),
+    paginas:
+      typeof volumeInfo.pageCount === 'number' && Number.isInteger(volumeInfo.pageCount) && volumeInfo.pageCount > 0
+        ? volumeInfo.pageCount
+        : null,
+    clasificacionEdad:
+      volumeInfo.maturityRating === 'NOT_MATURE' || volumeInfo.maturityRating === 'MATURE'
+        ? volumeInfo.maturityRating
+        : null,
   };
 }
 

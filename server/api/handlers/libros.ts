@@ -114,6 +114,14 @@ function nombreTablaLibros(): string {
   return nombre;
 }
 
+function nombreTablaConocimiento(): string {
+  const nombre = process.env['TABLA_CONOCIMIENTO'];
+  if (!nombre) {
+    throw new Error('Falta la variable de entorno TABLA_CONOCIMIENTO.');
+  }
+  return nombre;
+}
+
 function nombreTablaUsuarios(): string {
   const nombre = process.env['TABLA_USUARIOS'];
   if (!nombre) {
@@ -395,6 +403,156 @@ export const handlerBuscarPorIsbn: APIGatewayProxyHandlerV2 = async (event): Pro
   }
 };
 
+// ---------------------------------------------------------------------------
+// Conocimiento del libro para el asistente de recomendación (ADR-018)
+// ---------------------------------------------------------------------------
+
+/** Tope de caracteres de una sinopsis — mismo valor que `MAXIMO_CARACTERES_SINOPSIS` de `api-letiende.ts`. */
+const MAXIMO_CARACTERES_SINOPSIS = 4000;
+const MAXIMO_CATEGORIAS = 10;
+const MAXIMO_CARACTERES_CATEGORIA = 100;
+const MAXIMO_PAGINAS = 20_000;
+
+/**
+ * Datos de un libro que alimentan al asistente (sinopsis, categorías, idioma,
+ * páginas, clasificación por edad). Viven en su PROPIA tabla
+ * (`babel-libros-conocimiento`, clave `bookId`) y no en `babel-libros`, a
+ * propósito (ADR-018): la sinopsis es texto de terceros de uso interno, y así
+ * no puede filtrarse por ningún `{ ...libro }` de los endpoints públicos, no
+ * engorda los `Scan` del inventario (límite de 6 MB de respuesta de Lambda) y
+ * se puede purgar por `fuenteSinopsis` sin tocar el inventario.
+ */
+interface ConocimientoLibro {
+  bookId: string;
+  sinopsis: string | null;
+  categorias: string[];
+  /** ISO 639-1 en minúscula (`es`, `en`). */
+  idioma: string | null;
+  paginas: number | null;
+  /** `NOT_MATURE` o `MATURE`. */
+  clasificacionEdad: 'NOT_MATURE' | 'MATURE' | null;
+  /** `google-books`, `sitio:<dominio>` o `manual`; `null` si no hay sinopsis. */
+  fuenteSinopsis: string | null;
+  actualizadoEn: string;
+}
+
+type DatosConocimiento = Omit<ConocimientoLibro, 'bookId' | 'actualizadoEn'>;
+
+type ResultadoValidacionConocimiento =
+  | { valido: true; datos: DatosConocimiento | undefined }
+  | { valido: false; error: string };
+
+/**
+ * Valida el campo opcional `conocimiento` del body de `POST`/`PUT /api/libros`.
+ * Ausente (`undefined`) significa "no tocar lo que ya haya guardado" — así un
+ * cliente que no conoce este campo nunca borra datos por omisión. Presente,
+ * reemplaza TODO el registro. Nada se confía del cliente más allá de formas y
+ * topes (CLAUDE.md A08): la sinopsis es texto plano acotado, el idioma tiene
+ * forma de código ISO, la fuente solo puede ser una de las tres conocidas.
+ * Exportada para probarla sin invocar el handler.
+ */
+export function validarConocimiento(valor: unknown): ResultadoValidacionConocimiento {
+  if (valor === undefined) {
+    return { valido: true, datos: undefined };
+  }
+  if (typeof valor !== 'object' || valor === null || Array.isArray(valor)) {
+    return { valido: false, error: 'El conocimiento del libro debe ser un objeto.' };
+  }
+  const datos = valor as Record<string, unknown>;
+
+  let sinopsis: string | null = null;
+  if (datos['sinopsis'] !== undefined && datos['sinopsis'] !== null) {
+    if (typeof datos['sinopsis'] !== 'string') {
+      return { valido: false, error: 'La sinopsis debe ser texto.' };
+    }
+    const texto = datos['sinopsis'].trim();
+    if (texto.length > MAXIMO_CARACTERES_SINOPSIS) {
+      return { valido: false, error: `La sinopsis no puede superar ${MAXIMO_CARACTERES_SINOPSIS} caracteres.` };
+    }
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(texto)) {
+      return { valido: false, error: 'La sinopsis contiene caracteres no permitidos.' };
+    }
+    sinopsis = texto === '' ? null : texto;
+  }
+
+  let categorias: string[] = [];
+  if (datos['categorias'] !== undefined && datos['categorias'] !== null) {
+    if (!Array.isArray(datos['categorias']) || datos['categorias'].length > MAXIMO_CATEGORIAS) {
+      return { valido: false, error: `Las categorías deben ser una lista de máximo ${MAXIMO_CATEGORIAS}.` };
+    }
+    for (const categoria of datos['categorias']) {
+      if (typeof categoria !== 'string' || categoria.length > MAXIMO_CARACTERES_CATEGORIA) {
+        return { valido: false, error: 'Cada categoría debe ser texto de máximo 100 caracteres.' };
+      }
+    }
+    categorias = [...new Set((datos['categorias'] as string[]).map((c) => c.trim()).filter((c) => c !== ''))];
+  }
+
+  let idioma: string | null = null;
+  if (datos['idioma'] !== undefined && datos['idioma'] !== null) {
+    if (typeof datos['idioma'] !== 'string' || !/^[a-z]{2,3}(-[a-z]{2,4})?$/.test(datos['idioma'])) {
+      return { valido: false, error: 'El idioma debe ser un código como "es" o "en".' };
+    }
+    idioma = datos['idioma'];
+  }
+
+  let paginas: number | null = null;
+  if (datos['paginas'] !== undefined && datos['paginas'] !== null) {
+    if (
+      typeof datos['paginas'] !== 'number' ||
+      !Number.isInteger(datos['paginas']) ||
+      datos['paginas'] < 1 ||
+      datos['paginas'] > MAXIMO_PAGINAS
+    ) {
+      return { valido: false, error: `Las páginas deben ser un entero entre 1 y ${MAXIMO_PAGINAS}.` };
+    }
+    paginas = datos['paginas'];
+  }
+
+  let clasificacionEdad: 'NOT_MATURE' | 'MATURE' | null = null;
+  if (datos['clasificacionEdad'] !== undefined && datos['clasificacionEdad'] !== null) {
+    if (datos['clasificacionEdad'] !== 'NOT_MATURE' && datos['clasificacionEdad'] !== 'MATURE') {
+      return { valido: false, error: 'La clasificación por edad debe ser NOT_MATURE o MATURE.' };
+    }
+    clasificacionEdad = datos['clasificacionEdad'];
+  }
+
+  let fuenteSinopsis: string | null = null;
+  if (datos['fuenteSinopsis'] !== undefined && datos['fuenteSinopsis'] !== null) {
+    if (
+      typeof datos['fuenteSinopsis'] !== 'string' ||
+      !/^(google-books|manual|sitio:[a-z0-9.-]{3,100})$/.test(datos['fuenteSinopsis'])
+    ) {
+      return { valido: false, error: 'La fuente de la sinopsis no es válida.' };
+    }
+    fuenteSinopsis = datos['fuenteSinopsis'];
+  }
+  // Sin sinopsis no hay fuente; con sinopsis y sin fuente declarada, la escribió una persona.
+  if (sinopsis === null) {
+    fuenteSinopsis = null;
+  } else if (fuenteSinopsis === null) {
+    fuenteSinopsis = 'manual';
+  }
+
+  return { valido: true, datos: { sinopsis, categorias, idioma, paginas, clasificacionEdad, fuenteSinopsis } };
+}
+
+/**
+ * Guarda el conocimiento de un libro. Es un dato DERIVADO y opcional: si falla
+ * no se tumba la catalogación (el libro ya quedó guardado) — se registra el
+ * error y el libro simplemente queda sin conocimiento hasta la próxima edición
+ * o carga retroactiva. Nunca lanza.
+ */
+async function guardarConocimiento(bookId: string, datos: DatosConocimiento): Promise<void> {
+  try {
+    const registro: ConocimientoLibro = { bookId, ...datos, actualizadoEn: new Date().toISOString() };
+    await guardar(nombreTablaConocimiento(), registro);
+  } catch (error) {
+    console.error(`guardarConocimiento: no se pudo guardar el conocimiento de bookId=${bookId}`, error);
+  }
+}
+
 /** Datos aceptados en el body de `POST /api/libros` — el resto lo genera el backend (ver `handlerCrear`). */
 interface DatosNuevoLibro {
   isbn: string | null;
@@ -587,6 +745,13 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
       return respuestaJson(400, { error: validacion.error });
     }
 
+    // `conocimiento` se lee aparte y NUNCA entra en `datos` (que se esparce
+    // en el ítem de `babel-libros`): va a su propia tabla (ADR-018).
+    const conocimiento = validarConocimiento((cuerpo as Record<string, unknown>)['conocimiento']);
+    if (!conocimiento.valido) {
+      return respuestaJson(400, { error: conocimiento.error });
+    }
+
     const { datos } = validacion;
 
     const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId: datos.ubicacionId });
@@ -639,6 +804,10 @@ export const handlerCrear: APIGatewayProxyHandlerV2 = async (event): Promise<API
       ...(libro.cantidadDisponible > 0 ? { disponibleParaCatalogo: 'SI' as const } : {}),
     };
     await guardar(nombreTablaLibros(), omitirCamposNulos(itemAPersistir, ['isbn']));
+
+    if (conocimiento.datos) {
+      await guardarConocimiento(libro.bookId, conocimiento.datos);
+    }
 
     return respuestaJson(201, libro);
   } catch (error) {
@@ -795,6 +964,11 @@ export const handlerEditar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
     if (!validacion.valido) {
       return respuestaJson(400, { error: validacion.error });
     }
+    // Ausente = no tocar el conocimiento ya guardado (ADR-018).
+    const conocimiento = validarConocimiento((cuerpo as Record<string, unknown>)['conocimiento']);
+    if (!conocimiento.valido) {
+      return respuestaJson(400, { error: conocimiento.error });
+    }
     const { datos } = validacion;
 
     const ubicacion = await obtenerPorClave<Ubicacion>(nombreTablaUbicaciones(), { ubicacionId: datos.ubicacionId });
@@ -832,6 +1006,10 @@ export const handlerEditar: APIGatewayProxyHandlerV2 = async (event): Promise<AP
       ...(libroActualizado.cantidadDisponible > 0 ? { disponibleParaCatalogo: 'SI' as const } : {}),
     };
     await guardar(nombreTablaLibros(), omitirCamposNulos(itemAPersistir, ['isbn']));
+
+    if (conocimiento.datos) {
+      await guardarConocimiento(libroActualizado.bookId, conocimiento.datos);
+    }
 
     return respuestaJson(200, libroActualizado);
   } catch (error) {
@@ -1251,6 +1429,53 @@ export const handlerTrasladar: APIGatewayProxyHandlerV2 = async (event): Promise
 };
 
 /**
+ * `GET /api/libros/:bookId/conocimiento` — sinopsis, categorías, idioma,
+ * páginas y clasificación por edad de un libro, para mostrarlos y corregirlos
+ * en Catalogar/Editar (ADR-018). Exige rol `vendedor` o `administrador`
+ * (CLAUDE.md A01): la sinopsis es texto de terceros de uso interno y NO se
+ * sirve en ningún endpoint público. Un libro sin conocimiento responde `200`
+ * con todo vacío (no es un error); un `bookId` que no existe, `404`.
+ */
+export const handlerConocimiento: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+
+    const usuario = await obtenerPorClave<Usuario>(nombreTablaUsuarios(), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return respuestaJson(403, { error: 'Este correo no está autorizado para ver el conocimiento de un libro.' });
+    }
+
+    const bookId = event.pathParameters?.['bookId'];
+    if (!bookId) {
+      return respuestaJson(400, { error: 'Falta el bookId en la ruta.' });
+    }
+
+    const libro = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
+    if (!libro) {
+      return respuestaJson(404, { error: 'El libro no existe.' });
+    }
+
+    const guardado = await obtenerPorClave<ConocimientoLibro>(nombreTablaConocimiento(), { bookId });
+    const vacio: ConocimientoLibro = {
+      bookId,
+      sinopsis: null,
+      categorias: [],
+      idioma: null,
+      paginas: null,
+      clasificacionEdad: null,
+      fuenteSinopsis: null,
+      actualizadoEn: '',
+    };
+    return respuestaJson(200, guardado ?? vacio);
+  } catch (error) {
+    if (error instanceof TokenInvalidoError) {
+      return respuestaJson(401, { error: error.message });
+    }
+    return respuestaJson(500, { error: 'Error interno del servidor.' });
+  }
+};
+
+/**
  * `DELETE /api/libros/:bookId` — elimina un libro catalogado (`TODO.md`,
  * área "Gestionar", pestaña "Editar", botón "ELIMINAR LIBRO"). Exige rol
  * `administrador` EXCLUSIVAMENTE (a diferencia de `PUT`, que acepta también
@@ -1277,6 +1502,13 @@ export const handlerEliminar: APIGatewayProxyHandlerV2 = async (event): Promise<
     }
 
     await eliminar(nombreTablaLibros(), { bookId });
+    // Dato derivado: si no se puede borrar queda huérfano e inofensivo (el
+    // índice del asistente solo toma los `bookId` que existen en `babel-libros`).
+    try {
+      await eliminar(nombreTablaConocimiento(), { bookId });
+    } catch (error) {
+      console.error(`handlerEliminar: no se pudo borrar el conocimiento de bookId=${bookId}`, error);
+    }
 
     return respuestaJson(204, undefined);
   } catch (error) {

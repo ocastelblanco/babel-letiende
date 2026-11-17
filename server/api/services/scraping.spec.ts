@@ -144,6 +144,28 @@ describe('scrapearSitio', () => {
   }
 
   describe('Librería Lerner (VTEX)', () => {
+    it('descarta la "descripción" cuando solo repite el título (Lerner no expone sinopsis real)', async () => {
+      const fixture = JSON.parse(leerFixture('librerialerner-api-encontrado.json'));
+      fetchMock.mockResolvedValue(respuestaJson(fixture));
+
+      const resultado = await scrapearSitio(sitio('www.librerialerner.com.co'), ISBN);
+
+      expect(resultado.sinopsis).toBeUndefined();
+    });
+
+    it('convierte la descripción HTML en texto plano, sin etiquetas ni scripts (A03)', async () => {
+      const fixture = JSON.parse(leerFixture('librerialerner-api-encontrado.json'));
+      fixture[0].description =
+        '<p>Una historia larga sobre una familia en un pueblo mítico.</p><script>alert(1)</script><p>Segundo párrafo &amp; final.</p>';
+      fetchMock.mockResolvedValue(respuestaJson(fixture));
+
+      const resultado = await scrapearSitio(sitio('www.librerialerner.com.co'), ISBN);
+
+      expect(resultado.sinopsis).toContain('Una historia larga sobre una familia');
+      expect(resultado.sinopsis).toContain('Segundo párrafo & final.');
+      expect(resultado.sinopsis).not.toMatch(/<|>/);
+    });
+
     it('extrae título/autor/editorial/portada/pvp desde el fixture real "encontrado"', async () => {
       const fixture = JSON.parse(leerFixture('librerialerner-api-encontrado.json'));
       fetchMock.mockResolvedValue(respuestaJson(fixture));
@@ -184,6 +206,7 @@ describe('scrapearSitio', () => {
         editorial: 'Random House Mondadori Colombia',
         portadaUrl: 'https://b2clibrerianacional.vteximg.com.br/arquivos/ids/244798/Portada.jpg?v=638644376551230000',
         pvp: 79000,
+        sinopsis: expect.stringContaining('Macondo'),
       });
     });
 
@@ -208,6 +231,7 @@ describe('scrapearSitio', () => {
         portadaUrl:
           'https://libreriadelau.vteximg.com.br/arquivos/ids/39823040/Cien-anos-de-soledad.jpg?v=638831461672230000',
         pvp: 86640,
+        sinopsis: expect.stringContaining('Macondo'),
       });
       expect(fetchMock).toHaveBeenCalledWith(
         `https://www.libreriadelau.com/api/catalog_system/pub/products/search?ft=${ISBN}`,
@@ -238,6 +262,7 @@ describe('scrapearSitio', () => {
         editorial: 'ANAGRAMA',
         portadaUrl: '/images/portadas/101759-aniquilacion-edi.jpg',
         pvp: 120000, // "120.000.00" -> 12000000 -> /100 -> 120000
+        sinopsis: expect.stringContaining('Una novela total'),
       });
 
       expect(fetchMock).toHaveBeenNthCalledWith(
@@ -276,6 +301,7 @@ describe('scrapearSitio', () => {
         editorial: 'LITERATURA RANDOM HOUSE',
         portadaUrl: 'https://www.libreriacasatomada.com/imagenes/9786287/978628763871.GIF',
         pvp: 75000, // "75.000.00" -> 7500000 -> /100 -> 75000
+        sinopsis: expect.stringContaining('Muchos años después'),
       });
 
       expect(fetchMock).toHaveBeenNthCalledWith(
@@ -319,6 +345,7 @@ describe('scrapearSitio', () => {
         editorial: 'Anagrama',
         portadaUrl: 'https://images.cdn2.buscalibre.com/fit-in/360x360/20/35/2035a86edb5884eb74455e941e7131ca.jpg',
         pvp: 78000, // "78000.00" -> 7800000 -> /100 -> 78000
+        sinopsis: expect.stringContaining('Una novela total'),
       });
 
       expect(fetchMock).toHaveBeenCalledTimes(2);

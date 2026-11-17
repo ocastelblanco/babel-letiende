@@ -71,6 +71,8 @@ const {
   handlerFusionarDuplicado,
   handlerTrasladar,
   handlerSitemap,
+  handlerConocimiento,
+  validarConocimiento,
   validarDatosNuevoLibro,
   validarDatosEditarLibro,
   validarDatosFusionarDuplicado,
@@ -2096,5 +2098,335 @@ describe('handlerTrasladar (POST /api/libros/trasladar)', () => {
     trasladarLibroAUbicacionMock.mockRejectedValue(new ItemNoExisteError('x'));
     const respuesta = await trasladar(['a']);
     expect(JSON.parse(respuesta.body).fallidos).toEqual([{ bookId: 'a', motivo: 'El libro no existe.' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Conocimiento del libro para el asistente (ADR-018, asistente-ia/PLAN.md Fase 1)
+// ---------------------------------------------------------------------------
+
+const conocimientoValido = {
+  sinopsis: 'Una guía ilustrada de los dioses nórdicos y las criaturas fantásticas de la saga.',
+  categorias: ['Juvenile Fiction', 'Fantasy'],
+  idioma: 'es',
+  paginas: 224,
+  clasificacionEdad: 'NOT_MATURE',
+  fuenteSinopsis: 'sitio:www.tornamesa.co',
+};
+
+describe('validarConocimiento', () => {
+  it('ausente (undefined) significa "no tocar lo ya guardado"', () => {
+    expect(validarConocimiento(undefined)).toEqual({ valido: true, datos: undefined });
+  });
+
+  it('acepta un conocimiento completo y lo devuelve normalizado', () => {
+    expect(validarConocimiento(conocimientoValido)).toEqual({ valido: true, datos: conocimientoValido });
+  });
+
+  it('un objeto vacío es válido: todo en null / lista vacía', () => {
+    expect(validarConocimiento({})).toEqual({
+      valido: true,
+      datos: {
+        sinopsis: null,
+        categorias: [],
+        idioma: null,
+        paginas: null,
+        clasificacionEdad: null,
+        fuenteSinopsis: null,
+      },
+    });
+  });
+
+  it('sin sinopsis no hay fuente, aunque el cliente la envíe', () => {
+    const resultado = validarConocimiento({ sinopsis: '  ', fuenteSinopsis: 'google-books' });
+    expect(resultado).toMatchObject({ valido: true, datos: { sinopsis: null, fuenteSinopsis: null } });
+  });
+
+  it('una sinopsis sin fuente declarada se marca como "manual"', () => {
+    const resultado = validarConocimiento({ sinopsis: 'Escrita a mano por la persona que cataloga.' });
+    expect(resultado).toMatchObject({ valido: true, datos: { fuenteSinopsis: 'manual' } });
+  });
+
+  it('quita categorías repetidas o vacías', () => {
+    const resultado = validarConocimiento({ categorias: ['Fantasy', ' Fantasy ', '', 'Aventura'] });
+    expect(resultado).toMatchObject({ valido: true, datos: { categorias: ['Fantasy', 'Aventura'] } });
+  });
+
+  it.each([
+    ['no es un objeto', 'texto'],
+    ['es un arreglo', []],
+    ['es null', null],
+    ['sinopsis que no es texto', { sinopsis: 5 }],
+    ['sinopsis de más de 4000 caracteres', { sinopsis: 'a'.repeat(4001) }],
+    ['sinopsis con caracteres de control', { sinopsis: 'hola\u0000mundo' }],
+    ['más de 10 categorías', { categorias: Array.from({ length: 11 }, (_, i) => `c${i}`) }],
+    ['categoría que no es texto', { categorias: [1] }],
+    ['categoría de más de 100 caracteres', { categorias: ['a'.repeat(101)] }],
+    ['idioma con forma inválida', { idioma: '<script>' }],
+    ['idioma en mayúscula', { idioma: 'ES' }],
+    ['páginas negativas', { paginas: -1 }],
+    ['páginas decimales', { paginas: 10.5 }],
+    ['páginas por encima del tope', { paginas: 20_001 }],
+    ['clasificación desconocida', { clasificacionEdad: 'ADULTOS' }],
+    ['fuente que no es una de las tres conocidas', { sinopsis: 'x'.repeat(50), fuenteSinopsis: 'otra-cosa' }],
+  ])('rechaza cuando %s', (_motivo, valor) => {
+    expect(validarConocimiento(valor)).toMatchObject({ valido: false });
+  });
+});
+
+describe('conocimiento en handlerCrear / handlerEditar / handlerEliminar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    process.env['TABLA_CONOCIMIENTO'] = 'babel-conocimiento-test';
+    consultarPorIndiceMock.mockReset();
+    consultarPorIndiceMock.mockResolvedValue([]);
+    guardarMock.mockReset();
+    eliminarMock.mockReset();
+    obtenerPorClaveMock.mockReset();
+  });
+
+  function comoVendedorCreando(): void {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+  }
+
+  function comoVendedorEditando(): void {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+    obtenerPorClaveMock.mockResolvedValueOnce(ubicacionFalsa);
+  }
+
+  it('crear: guarda el conocimiento en SU tabla y NO lo mezcla con el ítem de babel-libros', async () => {
+    comoVendedorCreando();
+
+    const respuesta = await handlerCrear(
+      eventoFalso({ ...datosValidos, conocimiento: conocimientoValido }, 'Bearer token'),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 201 });
+    expect(guardarMock).toHaveBeenCalledTimes(2);
+    const [tablaLibro, libroGuardado] = guardarMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(tablaLibro).toBe('babel-libros-test');
+    expect(libroGuardado).not.toHaveProperty('conocimiento');
+    expect(libroGuardado).not.toHaveProperty('sinopsis');
+    const [tablaConocimiento, registro] = guardarMock.mock.calls[1] as [string, Record<string, unknown>];
+    expect(tablaConocimiento).toBe('babel-conocimiento-test');
+    expect(registro).toMatchObject({ ...conocimientoValido, bookId: libroGuardado['bookId'] });
+    expect(typeof registro['actualizadoEn']).toBe('string');
+    // La respuesta HTTP tampoco devuelve la sinopsis.
+    expect(JSON.parse((respuesta as { body: string }).body)).not.toHaveProperty('sinopsis');
+  });
+
+  it('crear: sin `conocimiento` en el body solo escribe el libro', async () => {
+    comoVendedorCreando();
+
+    await handlerCrear(eventoFalso(datosValidos, 'Bearer token'), {} as never, {} as never);
+
+    expect(guardarMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('crear: un conocimiento inválido responde 400 y no escribe nada', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+
+    const respuesta = await handlerCrear(
+      eventoFalso({ ...datosValidos, conocimiento: { idioma: '<script>' } }, 'Bearer token'),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
+  it('crear: si falla la escritura del conocimiento, el libro igual queda catalogado (201)', async () => {
+    comoVendedorCreando();
+    guardarMock.mockResolvedValueOnce(undefined);
+    guardarMock.mockRejectedValueOnce(new Error('DynamoDB no disponible'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const respuesta = await handlerCrear(
+      eventoFalso({ ...datosValidos, conocimiento: conocimientoValido }, 'Bearer token'),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 201 });
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('editar: sin `conocimiento` en el body NO toca lo que ya hay guardado (clientes viejos no borran datos)', async () => {
+    comoVendedorEditando();
+
+    const respuesta = await handlerEditar(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1', body: datosEditarValidos }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    expect(guardarMock).toHaveBeenCalledTimes(1);
+    expect(guardarMock.mock.calls[0]?.[0]).toBe('babel-libros-test');
+  });
+
+  it('editar: con `conocimiento` reemplaza el registro completo en su tabla', async () => {
+    comoVendedorEditando();
+
+    const respuesta = await handlerEditar(
+      eventoConBookId({
+        authorization: 'Bearer token',
+        bookId: 'libro-1',
+        body: { ...datosEditarValidos, conocimiento: { sinopsis: null, categorias: [] } },
+      }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    expect(guardarMock).toHaveBeenCalledTimes(2);
+    const [tabla, registro] = guardarMock.mock.calls[1] as [string, Record<string, unknown>];
+    expect(tabla).toBe('babel-conocimiento-test');
+    expect(registro).toMatchObject({ bookId: 'libro-1', sinopsis: null, categorias: [], fuenteSinopsis: null });
+  });
+
+  it('editar: un conocimiento inválido responde 400 y no escribe nada', async () => {
+    comoVendedorEditando();
+
+    const respuesta = await handlerEditar(
+      eventoConBookId({
+        authorization: 'Bearer token',
+        bookId: 'libro-1',
+        body: { ...datosEditarValidos, conocimiento: { paginas: -3 } },
+      }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 400 });
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
+  it('eliminar: borra también el conocimiento del libro', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-2' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+
+    const respuesta = await handlerEliminar(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 204 });
+    expect(eliminarMock).toHaveBeenCalledWith('babel-libros-test', { bookId: 'libro-1' });
+    expect(eliminarMock).toHaveBeenCalledWith('babel-conocimiento-test', { bookId: 'libro-1' });
+  });
+
+  it('eliminar: si no se puede borrar el conocimiento, el libro igual se elimina (204)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'admin@letiende.co', uid: 'uid-2' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'admin@letiende.co', rol: 'administrador' });
+    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+    eliminarMock.mockResolvedValueOnce(undefined);
+    eliminarMock.mockRejectedValueOnce(new Error('sin permiso'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const respuesta = await handlerEliminar(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 204 });
+    errorSpy.mockRestore();
+  });
+});
+
+describe('handlerConocimiento (GET /api/libros/:bookId/conocimiento)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    obtenerPorClaveMock.mockReset();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_CONOCIMIENTO'] = 'babel-conocimiento-test';
+  });
+
+  it('responde 401 sin token válido (la sinopsis NO es pública)', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerConocimiento(eventoConBookId({ bookId: 'libro-1' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(obtenerPorClaveMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el correo no tiene rol en babel-usuarios', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerConocimiento(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+  });
+
+  it('responde 404 cuando el libro no existe', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerConocimiento(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'no-existe' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 404 });
+  });
+
+  it('un libro sin conocimiento responde 200 con todo vacío (no es un error)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerConocimiento(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    expect(JSON.parse((respuesta as { body: string }).body)).toMatchObject({
+      bookId: 'libro-1',
+      sinopsis: null,
+      categorias: [],
+      fuenteSinopsis: null,
+    });
+  });
+
+  it('devuelve el conocimiento guardado', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(libroFalso);
+    obtenerPorClaveMock.mockResolvedValueOnce({ bookId: 'libro-1', ...conocimientoValido, actualizadoEn: '2026-11-16T00:00:00.000Z' });
+
+    const respuesta = await handlerConocimiento(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(JSON.parse((respuesta as { body: string }).body)).toMatchObject(conocimientoValido);
   });
 });
