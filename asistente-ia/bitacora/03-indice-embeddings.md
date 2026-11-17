@@ -37,11 +37,23 @@ La reconstrucción programada y una invocación manual pueden coincidir. El arch
 - **El rol IAM solo lee** (`Scan`) libros y conocimiento: nunca escribe en tablas.
 - **La clave de Gemini llega como variable de entorno** de la Lambda, igual que `FIREBASE_SERVICE_ACCOUNT_BABEL`. Es el mecanismo ya aceptado en el proyecto; moverlo a un gestor de secretos es una mejora posible y se anota en los riesgos.
 
-## 4. Qué falló y cómo se corrigió
+## 4. Cifras medidas
+
+| Cifra | Valor | Cómo |
+|---|---|---|
+| Libros indexados en `staging` | 25 de 25 | Invocación real de la Lambda, 17/11/2026 |
+| Primera corrida | 1,7 s, 6.096 tokens de entrada (≈ 244 por libro) | Resumen de la propia Lambda |
+| Segunda corrida sin cambios | 94 ms, 0 tokens, sin escribir | Ídem |
+| Tamaño del archivo | 22.676 bytes (25 × 768 de vectores + encabezado) | `HeadObject` |
+| Proyección para 3.000 libros | ≈ 730.000 tokens de entrada y ≈ 2,3 MB | Extrapolación de lo anterior, no medida |
+
+A la tarifa de `gemini-embedding-2` que reporta la documentación (US$ 0,20 por millón de tokens, sin verificar contra la factura), indexar todo el inventario cuesta del orden de US$ 0,15, una sola vez; después solo se paga por los libros que cambian.
+
+## 5. Qué falló y cómo se corrigió
 
 - **Un test del presupuesto de tiempo no probaba lo que decía:** con pausas de 6 minutos el reloj simulado quedaba justo en el límite (12 min no es *mayor que* 12) y la corrida terminaba completa. Se subió la pausa simulada a 7 minutos.
 - **Dos defectos de diseño que encontré antes de probar:** el conteo de «nuevos» y «actualizados» salía mal cuando un lote fallaba a medias, y un libro cuyo texto cambió desaparecía del índice si el proveedor fallaba justo en su lote. Ahora se cuentan por conjuntos de `bookId` y se conserva el vector anterior.
 
-## 5. Esfuerzo
+## 6. Esfuerzo
 
 Eventos en [`../metrics/events/`](../metrics/events/).

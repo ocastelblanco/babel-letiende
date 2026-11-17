@@ -100,7 +100,7 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] Lambda `indiceAsistenteReconstruir` programada cada 6 horas en `staging`; apagada en producción hasta que exista su clave.
 - [x] Búsqueda por similitud con filtro previo (`buscarSimilares`), lista para `T-0023`.
 - [x] 31 pruebas nuevas (601 en total).
-- [ ] Tras el despliegue a `staging`: correr la reconstrucción y comprobar que indexa los 25 libros, que una segunda corrida no pide nada y que el archivo existe en el bucket.
+- [x] Verificado en `staging` (2026-11-17): 25 de 25 libros indexados en 1,7 s con 6.096 tokens de entrada; la segunda corrida conservó los 25, no pidió ningún token ni escribió (94 ms); archivo de 22.676 bytes cifrado (AES256) en un bucket con acceso público bloqueado; regla de 6 horas activa.
 
 - [ ] Clave de Gemini del proyecto propio (secreto de GitHub Actions → variable de entorno; nunca en el repo).
 - [ ] Embeddings de "título + autor + categorías + sinopsis" con el modelo de embeddings vigente de la Gemini API. Los libros sin sinopsis se indexan con lo que tengan y quedan marcados.
