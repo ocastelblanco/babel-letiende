@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "project_id": "<slug-del-proyecto>",
+  "tz_display": "America/Bogota",
+
+  "human_hourly_rate": null,
+  "_human_hourly_rate": "Tarifa facturada o valor de oportunidad, en USD/hora. Preguntar al humano en init. Si queda null, VT se reporta en horas y el punto de equilibrio entre modelos queda deshabilitado. NUNCA asumir un valor.",
+
+  "billing": {
+    "_note": "Una entrada por combinacion provider+surface que uses. Determina que significa cada cifra en dolares.",
+    "anthropic:claude-code-cli": {
+      "regime": "flat_rate",
+      "plan": "<nombre-del-plan>",
+      "monthly_usd": null,
+      "allocation": "token_share"
+    },
+    "deepseek:custom-api-client": {
+      "regime": "metered_api",
+      "monthly_usd": null,
+      "allocation": null
+    }
+  },
+
+  "review_gap_max_s": 900,
+  "_review_gap_max_s": "Por encima de este hueco, el tiempo cuenta como human_wait_s y no como human_review_s. Relevante en sesiones cloud y movil, donde un hueco largo es ausencia y no revision.",
+
+  "stages_extra": [],
+  "_stages_extra": "Etapas propias del proyecto, ademas del enum estandar de schema.md.",
+
+  "report": {
+    "lead_with": ["OR", "VT", "CPAC"],
+    "stratify_by": ["capture_level", "provider"]
+  }
+}

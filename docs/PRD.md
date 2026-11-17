@@ -194,6 +194,12 @@ Cualquier persona puede ver el catálogo completo y buscar/filtrar por nombre, a
 
 Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información completa — título, autor, editorial, PVP, portada y su Espacio/Mueble/Ubicación como datos independientes (no como un solo texto combinado) — indexable y enlazable directamente. Un usuario autenticado (vendedor o administrador) ve además, en esa misma ficha, un botón para vender el libro (§5.4).
 
+### 5.8 Asistente de recomendación con IA (planeado)
+
+Chat en el catálogo público, sin autenticación, donde un visitante pide en lenguaje natural lo que busca ("un libro para mi hijo adolescente al que le gusta el manga") y recibe de 3 a 5 libros **disponibles en el inventario**, cada uno con una explicación basada en su sinopsis, su precio y su Espacio/Mueble/Ubicación, o un "no tengo nada así" cuando no hay nada adecuado. También responde preguntas de servicio citando las políticas de la librería. Solo lee: no vende, no aparta y nunca revela costos, márgenes ni descuentos. El administrador lo puede apagar al instante y ve su desempeño y su costo en un tablero. Para habilitarlo, el inventario se enriquece con sinopsis, categorías, idioma, páginas y clasificación por edad, que Catalogar también propone como sugerencia editable.
+
+Subproyecto con documentación propia en `asistente-ia/` (README, plan por fases, ficha de caso de uso, ficha de riesgos, bitácora y registro de esfuerzo).
+
 ---
 
 ## 6. Roadmap
@@ -216,7 +222,8 @@ Cada libro tiene una **ficha propia** (`/libro/:bookId`) con su información com
 | ~~Modo offline / cola de sincronización para catalogación sin señal~~ | **Cancelado** (2026-07-27, decisión del usuario) — ver §9 |
 | Primer despliegue a producción | **Completado** (dominio personalizado 31/07/2026, lanzamiento público 03/08/2026) — ver `TODO.md` |
 | Traslado masivo de libros entre ubicaciones (pestaña "Trasladar" en Catalogar) | **Completado** (2026-10-05, `docs/plan-trasladar-libros.md`, PRs #141 y #142) — ver `TODO.md` |
-| Aviso de posibles duplicados sin ISBN al catalogar + corrección de la condición de carrera que los generaba | Alta — **Implementado, en verificación** (2026-10-15, `docs/plan-duplicados-sin-isbn.md`) — ver `TODO.md` |
+| Aviso de posibles duplicados sin ISBN al catalogar + corrección de la condición de carrera que los generaba | Alta — **Implementado y fusionado** (PRs #146, #147 y #148; verificación final del usuario en `staging` pendiente) (2026-10-15, `docs/plan-duplicados-sin-isbn.md`) — ver `TODO.md` |
+| Asistente de recomendación con IA en el catálogo público + enriquecimiento del inventario con sinopsis (§5.8) | Alta — **Planeado** (2026-11-16, `asistente-ia/PLAN.md`; meta: en producción la semana del 30/11/2026) — ver `TODO.md` |
 | Empaquetado nativo (Capacitor) si el uso como PWA resulta insuficiente | Baja, fuera del alcance actual (`CLAUDE.md` §2) |
 
 ---

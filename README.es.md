@@ -366,6 +366,7 @@ El código, los commits, los comentarios y los identificadores de base de datos 
 | [`TODO.md`](./docs/TODO.md) | Backlog JIT — máximo dos tareas atómicas en cualquier momento |
 | [`MEMORY.md`](./docs/MEMORY.md) | Estado acumulado del proyecto e historial de tareas completadas |
 | [`advertencia-urgente-costos-aws.md`](./docs/advertencia-urgente-costos-aws.md) | Documento obligatorio de pre-vuelo de costos para cualquier trabajo de infraestructura AWS |
+| [`asistente-ia/`](./asistente-ia/README.md) | Asistente de recomendación de libros con IA (en curso): README, plan por fases, fichas de caso de uso y de riesgos, bitácora y registro de esfuerzo propios |
 | [`tracking-detail.csv`](./tracking-detail.csv) | Instrumentación de tiempo por tarea — 149 filas, la fuente de cada métrica de esta página |
 
 ---

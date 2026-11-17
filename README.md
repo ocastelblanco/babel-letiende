@@ -366,6 +366,7 @@ Code, commits, comments and database identifiers are written in **Spanish**; the
 | [`TODO.md`](./docs/TODO.md) | JIT backlog — at most two atomic tasks at any time |
 | [`MEMORY.md`](./docs/MEMORY.md) | Accumulated project state and completed-task history |
 | [`advertencia-urgente-costos-aws.md`](./docs/advertencia-urgente-costos-aws.md) | Mandatory pre-flight cost document for any AWS infrastructure work |
+| [`asistente-ia/`](./asistente-ia/README.md) | AI book-recommendation assistant (in progress): its own README, phased plan, use-case and risk sheets, engineering log and effort tracking |
 | [`tracking-detail.csv`](./tracking-detail.csv) | Per-task time instrumentation — 149 rows, the source of every metric on this page |
 
 ---

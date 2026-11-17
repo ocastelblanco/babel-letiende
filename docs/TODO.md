@@ -4,7 +4,9 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (15/10/2026):** lote "Duplicados sin ISBN" — Tareas 1 y 2 fusionadas, Tarea 3 implementada (PR abierto). Ver el final de este documento y `docs/plan-duplicados-sin-isbn.md`.
+**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: Fase 1 (datos) y Fase 2 (índice y asistente mínimo). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+
+**Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
 **Coordinación externa (08/09/2026) — lazy-load de las 11 rutas del router:** pedido **externo** al
 roadmap de este repositorio, coordinado desde el proyecto contenedor `letiende.co` (T-0033, en
@@ -568,7 +570,7 @@ Rama `feature/aviso-duplicado-sin-isbn-backend`. Detalle en el plan, §5.
 - [x] `tech-specs.md` (endpoint e índices de `babel-libros`) y `PRD.md` §5.2 actualizados.
 - [ ] Tras el despliegue a `staging`: comprobar que `ubicacion-index` quedó `ACTIVE`. **Ojo:** hasta que la Tarea 3 esté desplegada, el frontend actual muestra el mensaje del `409` como un error y no ofrece cómo continuar; un libro legítimo sin ISBN con título repetido en la misma ubicación no se puede catalogar desde la app.
 
-## Tarea 3 — Aviso de posible duplicado en Catalogar (frontend) — IMPLEMENTADA, PR abierto (2026-10-15)
+## Tarea 3 — Aviso de posible duplicado en Catalogar (frontend) — FUSIONADA (PR #148, 2026-10-15)
 
 Rama `feature/aviso-duplicado-sin-isbn-frontend`. Detalle en el plan, §6. Solo frontend: el `409` ya está desplegado (Tarea 2, PR #147).
 
@@ -577,3 +579,30 @@ Rama `feature/aviso-duplicado-sin-isbn-frontend`. Detalle en el plan, §6. Solo 
 - [x] "Es otro libro: catalogar igual" reenvía con `confirmarLibroDistinto: true`; "Cancelar" cierra el aviso sin enviar. Tras guardar, el `reiniciarFormulario()` de siempre.
 - [x] 6 pruebas nuevas (aviso con candidatos, catalogar igual, sumar con datos del existente, ISBN nuevo al existente sin ISBN, cancelar, `409` sin lista). 475 pruebas frontend en verde y `npm run build` limpio.
 - [ ] Verificación del usuario en `staging`: catalogar dos veces, en la misma ubicación, un libro sin ISBN de prueba y comprobar las tres salidas del aviso. Con eso se cierra el lote.
+
+---
+
+**Lote nuevo (2026-11-16) — Asistente de recomendación con IA:** chat en el catálogo público que recomienda libros **disponibles** a partir de sus sinopsis, con llamado de herramientas, suite de evaluación, prompts versionados, registro sin datos personales, topes, tablero y comparación con Azure. Subproyecto con documentación y registro de esfuerzo propios en `asistente-ia/` (README, `PLAN.md`, fichas, bitácora; ADR-013 a ADR-017). Plan aprobado por el usuario el 16/11/2026. Una rama y un PR por fase, en secuencia (staging compartido). Al cerrar cada fase: entrada de bitácora, fila en `tracking-detail.csv`, evento de `ai-effort-tracking` (con su `trace_id`), `MEMORY.md` §2 y la siguiente fase de `asistente-ia/PLAN.md` §3 entra aquí.
+
+## Tarea 1 — Fase 1: enriquecer el inventario con sinopsis (`T-0010`) — PENDIENTE
+
+Rama `feature/asistente-datos-sinopsis`. Detalle y DoD en `asistente-ia/PLAN.md` §3, Fase 1. Si no cabe en un PR, se parte en `T-0011` (backend) y `T-0012` (Catalogar).
+
+- [ ] Revisar los términos de uso de Google Books API sobre guardar y mostrar descripciones; conclusión en la bitácora (entrada 01).
+- [ ] Campos opcionales nuevos en `babel-libros`: `sinopsis`, `categorias`, `idioma`, `paginas`, `clasificacionEdad`, `fuenteSinopsis`.
+- [ ] `obtenerMetadatosPorIsbn` los lee de `volumeInfo`; respaldo de sinopsis con los sitios `info` (ADR-010/011), solo texto plano.
+- [ ] Catalogar y Editar muestran la sinopsis como sugerencia editable (A08).
+- [ ] Carga retroactiva con el patrón de ADR-012, disparada por el administrador, respetando los límites de las fuentes.
+- [ ] Reporte de cobertura por idioma y por fuente (cifras agregadas en la bitácora, sin sinopsis en git).
+- [ ] Pruebas en verde, `npm run build:api` y `package.patterns` revisados (gotcha de `CLAUDE.md` §7), `tech-specs.md` §4.3 y §5.1 actualizados.
+
+## Tarea 2 — Fase 2: índice de embeddings y asistente mínimo (`T-0020`) — PENDIENTE (empieza cuando la Tarea 1 esté desplegada)
+
+Rama `feature/asistente-indice-minimo`. Detalle y DoD en `asistente-ia/PLAN.md` §3, Fase 2. **Requiere del usuario:** proyecto de AI Studio de Babel y su clave como secreto de GitHub Actions (ADR-015).
+
+- [ ] Consultar la documentación oficial vigente de la Gemini API: modelo de embeddings y dimensiones, modelo de generación, salida estructurada, límites del nivel gratuito.
+- [ ] Índice en un archivo en un bucket S3 privado + función programada de reconstrucción incremental (ADR-013).
+- [ ] Lambda `asistente` (`POST /api/asistente`), interruptor apagado en producción, conversación sin estado con límites de entrada.
+- [ ] Búsqueda híbrida (filtros → coseno → top-k), salida estructurada y validador determinista (ADR-014).
+- [ ] `asistente-ia/prompts/asistente-v1.md` + `CHANGELOG.md`.
+- [ ] Pruebas del índice, del validador y del handler con el modelo simulado; tabla nueva `PAY_PER_REQUEST` si aplica.

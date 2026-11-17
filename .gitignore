@@ -46,3 +46,12 @@ yarn-error.log*
 
 # Archivos de macOS
 .DS_Store
+# Registro de esfuerzo (ai-effort-tracking): estado temporal de los hooks
+/metrics/.state/
+/.claude/skills/ai-effort-tracking/.omc/
+
+# Asistente IA: material de terceros o de clientes que no se publica (repo público)
+/asistente-ia/evals/snapshots/
+/asistente-ia/evals/resultados/*.jsonl
+/asistente-ia/datos/
+__pycache__/

@@ -1,0 +1,83 @@
+{
+  "_comment": "Bloque para el .claude/settings.json DEL REPOSITORIO, nunca ~/.claude/settings.json. El ambito de usuario no viaja a sesiones cloud: un hook instalado alli funciona en la CLI y falla en silencio en web y movil. Fusiona este bloque con el settings.json existente en vez de sobrescribirlo.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/skills/ai-effort-tracking/scripts/adapters/claude-code-hooks/session.mjs start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/skills/ai-effort-tracking/scripts/adapters/claude-code-hooks/review-window.mjs close",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/skills/ai-effort-tracking/scripts/adapters/claude-code-hooks/review-window.mjs open",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/skills/ai-effort-tracking/scripts/adapters/claude-code-hooks/tool-activity.mjs edit",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/skills/ai-effort-tracking/scripts/adapters/claude-code-hooks/tool-activity.mjs error",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/skills/ai-effort-tracking/scripts/adapters/claude-code-hooks/tool-activity.mjs denied",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/skills/ai-effort-tracking/scripts/adapters/claude-code-hooks/session.mjs end",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
