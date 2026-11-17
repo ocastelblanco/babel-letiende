@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { Libro, LibroConEjemplares } from '../models/libro.model';
+import { Libro, LibroConEjemplares, LibroConUbicacion } from '../models/libro.model';
 
 /**
  * Datos editables de un libro ya catalogado — mismo contrato que
@@ -136,14 +136,36 @@ export class LibrosService {
    * `cargarCatalogo`), sin distinguir la causa exacta ante el visitante.
    *
    * Devuelve `LibroConEjemplares` (Tarea 4 del lote de duplicados,
-   * `docs/plan-duplicados-catalogacion.md` §7) — extiende `LibroConUbicacion`
-   * de forma aditiva con `ejemplares`, así que sigue siendo válido pasar el
-   * resultado a cualquier función que espere `LibroConUbicacion` (ej.
-   * `CatalogarLibroComponent.seleccionarDuplicado`, Tarea 3).
+   * `docs/plan-duplicados-catalogacion.md` §7): SOLO los campos públicos más
+   * `ubicacion` y `ejemplares`. No trae costo ni descuento editorial (hotfix
+   * de seguridad, 2026-11-17): para eso, `obtenerLibroCompleto`.
    */
   async obtenerDetalle(bookId: string): Promise<LibroConEjemplares | null> {
     try {
       return await firstValueFrom(this.http.get<LibroConEjemplares>(`/api/libros/${bookId}`));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Llama `GET /api/libros/:bookId/completo` con el ID Token actual — el libro
+   * con TODOS sus campos (costo, descuento editorial, ubicación) para el
+   * personal. La ficha pública (`obtenerDetalle`) ya no los trae. Lo usa
+   * Catalogar al elegir o sumar ejemplares a un libro existente. Nunca
+   * lanza: sin sesión, `403`, `404` o error de red devuelve `null`.
+   */
+  async obtenerLibroCompleto(bookId: string): Promise<LibroConUbicacion | null> {
+    const idToken = await this.authService.obtenerIdToken();
+    if (!idToken) {
+      return null;
+    }
+    try {
+      return await firstValueFrom(
+        this.http.get<LibroConUbicacion>(`/api/libros/${bookId}/completo`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }),
+      );
     } catch {
       return null;
     }

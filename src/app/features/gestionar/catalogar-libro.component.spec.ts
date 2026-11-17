@@ -95,7 +95,7 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
   // búsqueda en Babel poblar el índice antes de llamar `buscarCandidatos()`.
   const cargarIndiceMock = vi.fn().mockResolvedValue(undefined);
   const indiceSignalDePrueba = signal<LibroIndice[]>([]);
-  const obtenerDetalleMock = vi.fn().mockResolvedValue(null);
+  const obtenerLibroCompletoMock = vi.fn().mockResolvedValue(null);
 
   TestBed.configureTestingModule({
     providers: [
@@ -136,7 +136,7 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
         useValue: {
           cargarIndice: cargarIndiceMock,
           indice: indiceSignalDePrueba.asReadonly(),
-          obtenerDetalle: obtenerDetalleMock,
+          obtenerLibroCompleto: obtenerLibroCompletoMock,
         },
       },
     ],
@@ -160,7 +160,7 @@ function configurarPrueba(descuentos: DescuentoEditorial[] = []) {
     buscarPortadasMock,
     cargarIndiceMock,
     indiceSignalDePrueba,
-    obtenerDetalleMock,
+    obtenerLibroCompletoMock,
   };
 }
 
@@ -879,7 +879,7 @@ describe('CatalogarLibroComponent', () => {
       cantidadDisponible: 3,
     };
 
-    /** `LibroConUbicacion` completo que resuelve `LibrosService.obtenerDetalle(libroIndiceFalso.bookId)` — mismos campos base que `libroIndiceFalso`, más los que el índice no trae. */
+    /** `LibroConUbicacion` completo que resuelve `LibrosService.obtenerLibroCompleto(libroIndiceFalso.bookId)` — mismos campos base que `libroIndiceFalso`, más los que el índice no trae. */
     const libroCompletoFalso: LibroConUbicacion = {
       bookId: 'libro-indice-1',
       isbn: '9780000000002',
@@ -976,9 +976,9 @@ describe('CatalogarLibroComponent', () => {
     });
 
     it('seleccionar un candidato de Babel en la MISMA ubicación resuelve la ficha completa y entra por el flujo bloqueante de la Tarea 1', async () => {
-      const { fixture, indiceSignalDePrueba, obtenerDetalleMock } = configurarPrueba();
+      const { fixture, indiceSignalDePrueba, obtenerLibroCompletoMock } = configurarPrueba();
       indiceSignalDePrueba.set([libroIndiceFalso]);
-      obtenerDetalleMock.mockResolvedValue(libroCompletoFalso);
+      obtenerLibroCompletoMock.mockResolvedValue(libroCompletoFalso);
       seleccionarUbicacionPanel(fixture, 'ubicacion-1'); // misma ubicación de libroCompletoFalso
 
       escribirCampo(fixture, 'titulo', 'cien años');
@@ -993,7 +993,7 @@ describe('CatalogarLibroComponent', () => {
       await Promise.resolve();
       fixture.detectChanges();
 
-      expect(obtenerDetalleMock).toHaveBeenCalledWith('libro-indice-1');
+      expect(obtenerLibroCompletoMock).toHaveBeenCalledWith('libro-indice-1');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
       expect(componente.duplicadoEnMismaUbicacion()).toBe(true);
@@ -1004,9 +1004,9 @@ describe('CatalogarLibroComponent', () => {
     });
 
     it('seleccionar un candidato de Babel en OTRA ubicación entra por el flujo informativo, sin sobrescribir el panel', async () => {
-      const { fixture, indiceSignalDePrueba, obtenerDetalleMock } = configurarPrueba();
+      const { fixture, indiceSignalDePrueba, obtenerLibroCompletoMock } = configurarPrueba();
       indiceSignalDePrueba.set([libroIndiceFalso]);
-      obtenerDetalleMock.mockResolvedValue(libroCompletoFalso); // su ubicación real es 'ubicacion-1'
+      obtenerLibroCompletoMock.mockResolvedValue(libroCompletoFalso); // su ubicación real es 'ubicacion-1'
       seleccionarUbicacionPanel(fixture, 'ubicacion-2'); // el vendedor ya eligió una ubicación DISTINTA
 
       escribirCampo(fixture, 'titulo', 'cien años');
@@ -1618,10 +1618,10 @@ describe('CatalogarLibroComponent', () => {
     });
 
     it('un candidato de Babel cuya ficha llega después de reiniciar el formulario no se precarga', async () => {
-      const { fixture, obtenerDetalleMock, httpMock: mock } = configurarPrueba();
+      const { fixture, obtenerLibroCompletoMock, httpMock: mock } = configurarPrueba();
       httpMock = mock;
       const detalle = diferida<LibroConUbicacion | null>();
-      obtenerDetalleMock.mockReturnValueOnce(detalle.promesa);
+      obtenerLibroCompletoMock.mockReturnValueOnce(detalle.promesa);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const componente = fixture.componentInstance as any;
 
@@ -1974,8 +1974,8 @@ describe('CatalogarLibroComponent', () => {
     });
 
     it('"sumar ejemplares" fusiona con los datos del registro existente, sin borrarle editorial ni descuento', async () => {
-      const { fixture, obtenerDetalleMock } = await provocarAviso();
-      obtenerDetalleMock.mockResolvedValue(existenteCompleto);
+      const { fixture, obtenerLibroCompletoMock } = await provocarAviso();
+      obtenerLibroCompletoMock.mockResolvedValue(existenteCompleto);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       void (fixture.componentInstance as any).sumarEjemplaresAlExistente(candidatoSinIsbn);
@@ -2002,7 +2002,7 @@ describe('CatalogarLibroComponent', () => {
     it('"sumar ejemplares" asigna el ISBN del formulario si el existente no tenía', async () => {
       const resultado = configurarPrueba();
       httpMock = resultado.httpMock;
-      resultado.obtenerDetalleMock.mockResolvedValue(existenteCompleto);
+      resultado.obtenerLibroCompletoMock.mockResolvedValue(existenteCompleto);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (resultado.fixture.componentInstance as any).formulario.setValue(datosValidos);
       seleccionarUbicacionPanel(resultado.fixture, 'ubicacion-1');

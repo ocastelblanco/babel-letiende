@@ -72,6 +72,7 @@ const {
   handlerTrasladar,
   handlerSitemap,
   handlerConocimiento,
+  handlerCompleto,
   validarConocimiento,
   validarDatosNuevoLibro,
   validarDatosEditarLibro,
@@ -1511,6 +1512,47 @@ describe('handlerDetalle (GET /api/libros/:bookId)', () => {
     expect(obtenerPorClaveMock).toHaveBeenNthCalledWith(4, 'babel-espacios-test', { espacioId: muebleFalso.espacioId });
   });
 
+  it('la ficha pública devuelve SOLO la lista blanca: nada de costo, margen, utilidad, cantidad total ni correo (hotfix A01/A02)', async () => {
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ ...libroFalso, disponibleParaCatalogo: 'SI', campoNuevoInterno: 'secreto' })
+      .mockResolvedValueOnce(ubicacionFalsa)
+      .mockResolvedValueOnce(muebleFalso)
+      .mockResolvedValueOnce(espacioFalso);
+
+    const respuesta = await handlerDetalle(eventoDetalle('libro-1'), {} as never, {} as never);
+
+    const cuerpo = JSON.parse(respuesta.body as string) as Record<string, unknown>;
+    expect(Object.keys(cuerpo).sort()).toEqual(
+      [
+        'autor',
+        'bookId',
+        'cantidadDisponible',
+        'ejemplares',
+        'editorial',
+        'isbn',
+        'portadaUrl',
+        'pvp',
+        'titulo',
+        'ubicacion',
+        'ubicacionId',
+      ].sort(),
+    );
+    for (const prohibido of [
+      'costo',
+      'utilidadCatalogo',
+      'porcentajeDescuentoEditorial',
+      'cantidadTotal',
+      'creadoPor',
+      'creadoEn',
+      'actualizadoEn',
+      'disponibleParaCatalogo',
+      'campoNuevoInterno',
+    ]) {
+      expect(cuerpo).not.toHaveProperty(prohibido);
+    }
+    expect(JSON.stringify(cuerpo)).not.toContain('vendedor@letiende.co');
+  });
+
   it('responde 200 con ubicacion: null (sin 500) para un libro catalogado antes de la migración a ubicacionId', async () => {
     const { ubicacionId: _ubicacionId, ...libroSinUbicacionId } = libroFalso;
     obtenerPorClaveMock.mockResolvedValueOnce({ ...libroSinUbicacionId, ubicacionId: undefined });
@@ -2428,5 +2470,97 @@ describe('handlerConocimiento (GET /api/libros/:bookId/conocimiento)', () => {
     );
 
     expect(JSON.parse((respuesta as { body: string }).body)).toMatchObject(conocimientoValido);
+  });
+});
+
+describe('handlerCompleto (GET /api/libros/:bookId/completo)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    obtenerPorClaveMock.mockReset();
+    process.env['TABLA_LIBROS'] = 'babel-libros-test';
+    process.env['TABLA_USUARIOS'] = 'babel-usuarios-test';
+    process.env['TABLA_UBICACIONES'] = 'babel-ubicaciones-test';
+    process.env['TABLA_MUEBLES'] = 'babel-muebles-test';
+    process.env['TABLA_ESPACIOS'] = 'babel-espacios-test';
+  });
+
+  it('responde 401 sin token válido: los campos internos no son públicos', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el header.'));
+
+    const respuesta = await handlerCompleto(eventoConBookId({ bookId: 'libro-1' }), {} as never, {} as never);
+
+    expect(respuesta).toMatchObject({ statusCode: 401 });
+    expect(obtenerPorClaveMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 403 cuando el correo no tiene rol en babel-usuarios', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'sin-rol@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerCompleto(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 403 });
+  });
+
+  it('responde 404 cuando el libro no existe', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerCompleto(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'no-existe' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 404 });
+  });
+
+  it('responde 200 con el libro completo y su ubicación para un vendedor', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
+      .mockResolvedValueOnce(libroFalso)
+      .mockResolvedValueOnce(ubicacionFalsa)
+      .mockResolvedValueOnce(muebleFalso)
+      .mockResolvedValueOnce(espacioFalso);
+
+    const respuesta = await handlerCompleto(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(respuesta).toMatchObject({ statusCode: 200 });
+    const cuerpo = JSON.parse((respuesta as { body: string }).body) as Record<string, unknown>;
+    expect(cuerpo['porcentajeDescuentoEditorial']).toBe(libroFalso.porcentajeDescuentoEditorial);
+    expect(cuerpo['costo']).toBe(libroFalso.costo);
+    expect(cuerpo['ubicacionId']).toBe(libroFalso.ubicacionId);
+    expect(cuerpo['ubicacion']).toEqual({
+      espacio: espacioFalso.nombre,
+      mueble: muebleFalso.nombre,
+      ubicacion: ubicacionFalsa.nombre,
+    });
+  });
+
+  it('un libro sin ISBN responde isbn: null (no undefined)', async () => {
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'uid-1' });
+    const { isbn: _isbn, ...sinIsbn } = libroFalso;
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ email: 'vendedor@letiende.co', rol: 'vendedor' })
+      .mockResolvedValueOnce(sinIsbn)
+      .mockResolvedValueOnce(undefined);
+
+    const respuesta = await handlerCompleto(
+      eventoConBookId({ authorization: 'Bearer token', bookId: 'libro-1' }),
+      {} as never,
+      {} as never,
+    );
+
+    expect(JSON.parse((respuesta as { body: string }).body)).toHaveProperty('isbn', null);
   });
 });

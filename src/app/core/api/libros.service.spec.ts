@@ -90,6 +90,44 @@ describe('LibrosService', () => {
     expect(servicio.cargando()).toBe(false);
   });
 
+  describe('obtenerLibroCompleto', () => {
+    const libroConUbicacionFalso: LibroConUbicacion = {
+      ...libroFalso,
+      ubicacion: { espacio: 'Sala principal', mueble: 'Biblioteca 1', ubicacion: 'Estante 2' },
+    };
+
+    it('devuelve null, sin llamar a la API, cuando no hay sesión', async () => {
+      const servicio = configurarPrueba(null);
+
+      expect(await servicio.obtenerLibroCompleto('book-1')).toBeNull();
+      httpMock.expectNone('/api/libros/book-1/completo');
+    });
+
+    it('resuelve el libro completo con el ID Token real', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const promesa = servicio.obtenerLibroCompleto('book-1');
+      await Promise.resolve();
+      const peticion = httpMock.expectOne('/api/libros/book-1/completo');
+      expect(peticion.request.headers.get('Authorization')).toBe('Bearer token-falso');
+      peticion.flush(libroConUbicacionFalso);
+
+      expect(await promesa).toEqual(libroConUbicacionFalso);
+    });
+
+    it('devuelve null, sin lanzar, cuando responde 403 o 404', async () => {
+      const servicio = configurarPrueba('token-falso');
+
+      const promesa = servicio.obtenerLibroCompleto('book-1');
+      await Promise.resolve();
+      httpMock
+        .expectOne('/api/libros/book-1/completo')
+        .flush({ error: 'No autorizado.' }, { status: 403, statusText: 'Forbidden' });
+
+      expect(await promesa).toBeNull();
+    });
+  });
+
   describe('obtenerDetalle', () => {
     const libroConUbicacionFalso: LibroConUbicacion = {
       ...libroFalso,

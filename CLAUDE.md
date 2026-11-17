@@ -204,6 +204,9 @@ Mismo hallazgo que en Comandante: añadir siempre `referrerpolicy="no-referrer"`
 ### Un módulo nuevo del backend debe agregarse al `package.patterns` de cada función que lo importe
 Cada función de `serverless.yml` empaqueta solo los archivos listados (`'!**'` + allowlist). Si un handler importa un módulo nuevo (p. ej. `server/api/lib/fechas.ts`) y no se agrega `dist-server/api/lib/<modulo>.js` a **todas** las funciones que cargan ese handler, el build y las pruebas pasan pero la Lambda revienta al iniciar con `Runtime.ImportModuleError` (500 en staging, PR #137). Antes de abrir el PR: `npm run build:api` y revisar que el módulo nuevo esté en los patterns de cada función afectada. Ojo: `libros.js` lo cargan 12 funciones y `ventas.js` 3.
 
+### Ficha pública: lista blanca, nunca `{ ...libro }`
+`GET /api/libros/:bookId` no requiere sesión. Durante meses devolvió el ítem completo de `babel-libros` (`costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial`, `cantidadTotal`, correo de quien catalogó) y nadie lo notó, porque el frontend solo pinta lo que necesita. Se encontró el 2026-11-17 al diseñar el asistente. Desde el hotfix devuelve solo la lista blanca de `aLibroPublico` (`libros.ts`), con una prueba que falla si aparece cualquier campo fuera de ella. Regla: **en un endpoint público nunca se esparce el ítem de la base de datos**; cada campo público se agrega a propósito. Para el personal existe `GET /api/libros/:bookId/completo`.
+
 ### Fechas: UTC en datos, hora de Bogotá en reportes
 Las fechas se guardan siempre en ISO UTC. Al presentarlas en reportes se convierten a hora de Bogotá (UTC-5 fijo, sin horario de verano) con `formatearFechaBogota`; los filtros por día se calculan con `-05:00` y se convierten a ISO UTC (el backend compara `vendidoEn` como texto). Nunca escribir un ISO UTC crudo en un reporte.
 

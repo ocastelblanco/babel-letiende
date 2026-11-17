@@ -60,14 +60,28 @@ export interface EjemplarConUbicacion {
 }
 
 /**
- * Contrato de `GET /api/libros/:bookId` (ficha pública) — extiende
- * `LibroConUbicacion` de forma ADITIVA con todos los ejemplares del mismo
- * ISBN (Tarea 4, `docs/plan-duplicados-catalogacion.md` §7): un libro sin
- * ISBN solo tiene un ejemplar posible, él mismo (decisión **D2** — el
- * apilamiento es SOLO por ISBN, nunca por título). Los campos heredados
+ * Lo único que la ficha pública (`GET /api/libros/:bookId`, sin autenticación)
+ * devuelve de un libro: una lista blanca. NO incluye `costo`,
+ * `utilidadCatalogo`, `porcentajeDescuentoEditorial`, `cantidadTotal`,
+ * `creadoPor` ni las fechas internas (hotfix de seguridad, 2026-11-17); el
+ * personal los obtiene con `GET /api/libros/:bookId/completo`
+ * (`LibrosService.obtenerLibroCompleto`).
+ */
+export type LibroPublico = Pick<
+  Libro,
+  'bookId' | 'isbn' | 'titulo' | 'autor' | 'editorial' | 'portadaUrl' | 'pvp' | 'cantidadDisponible' | 'ubicacionId'
+>;
+
+/**
+ * Contrato de `GET /api/libros/:bookId` (ficha pública) — `LibroPublico`
+ * más la ubicación resuelta y todos los ejemplares del mismo ISBN (Tarea 4,
+ * `docs/plan-duplicados-catalogacion.md` §7): un libro sin ISBN solo tiene
+ * un ejemplar posible, él mismo (decisión **D2** — el apilamiento es SOLO
+ * por ISBN, nunca por título). Los campos de `LibroPublico`
  * (`titulo`/`autor`/`portadaUrl`/etc.) describen el `bookId` puntual que
  * pidió la ruta, no un agregado de todos los ejemplares.
  */
-export interface LibroConEjemplares extends LibroConUbicacion {
+export interface LibroConEjemplares extends LibroPublico {
+  ubicacion: LibroConUbicacion['ubicacion'];
   ejemplares: EjemplarConUbicacion[];
 }

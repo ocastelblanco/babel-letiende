@@ -987,6 +987,69 @@ functions:
           path: /api/libros/{bookId}/conocimiento
           method: get
 
+  libroCompleto:
+    handler: dist-server/api/handlers/libros.handlerCompleto
+    role: !GetAtt LibroCompletoLambdaRole.Arn
+    description: >-
+      GET /api/libros/:bookId/completo — el libro con todos sus campos
+      internos (costo, descuento editorial) y su ubicación, para el personal;
+      exige rol vendedor/administrador. La ficha pública ya no los devuelve
+      (hotfix A01/A02, 2026-11-17).
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/libros.js'
+        - 'dist-server/api/lib/fechas.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # Misma función (libros.ts) que GET/POST/PUT/DELETE/inventario/
+        # exportar — mismo cuidado documentado arriba (MEMORY.md §7).
+        - 'node_modules/**'
+        # Recorta paquetes solo-frontend/dev-tooling — lista completa y
+        # razón de cada exclusión documentada en la función `usuariosMe`
+        # (MEMORY.md §7, incidente de tamaño de EstantesLambdaFunction).
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/libros/{bookId}/completo
+          method: get
+
   librosIndice:
     handler: dist-server/api/handlers/libros.handlerIndice
     role: !GetAtt LibrosIndiceLambdaRole.Arn
@@ -2672,6 +2735,36 @@ resources:
                     - !GetAtt TablaLibros.Arn
                     - !GetAtt TablaConocimiento.Arn
                     - !GetAtt TablaUsuarios.Arn
+
+    LibroCompletoLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-libro-completo-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lectura (GetItem): el libro, el rol del token y la cadena
+          # Ubicación → Mueble → Espacio. Sin escritura (CLAUDE.md A05, ADR-008).
+          - PolicyName: babel-libro-completo-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                    - !GetAtt TablaUsuarios.Arn
+                    - !GetAtt TablaUbicaciones.Arn
+                    - !GetAtt TablaMuebles.Arn
+                    - !GetAtt TablaEspacios.Arn
 
     LibrosIndiceLambdaRole:
       Type: AWS::IAM::Role
