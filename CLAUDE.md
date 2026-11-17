@@ -46,6 +46,7 @@ El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000
 
 - **Idioma del código:** Variables, funciones, clases, tablas de base de datos, commits y comentarios **en español** (ej. `libro`, `ServicioCatalogacion`, `obtenerLibrosPendientes`).
 - **Idioma de interfaz:** Español (Colombia) en toda la interfaz, documentación y comunicación con el usuario final.
+- **Trato con el usuario:** todo agente IA le habla a Oliver **siempre de tú**, en español colombiano (nunca "usted", nunca voseo). Aplica al chat, a los resúmenes de cierre y a los textos dirigidos a él en los documentos.
 - **Patrones reactivos:** Uso preferencial de **Angular Signals** para el manejo de estado en lugar de `BehaviorSubject`.
 - **Estructura de componentes:** Componentes Standalone obligatorios. Estilos y plantillas en línea para componentes muy pequeños (< 100 líneas); archivos separados (`.html`, `.css`) para componentes grandes.
 - **Tipado:** TypeScript estricto. Prohibido el uso de `any`.
