@@ -83,6 +83,15 @@ La corrida de `T-0013` en `staging` dejó los 23 libros con idioma «desconocido
 
 ### Fase 2 — Índice y asistente mínimo · `T-0020` · capacidades: recuperación, asistente con límites, prompts versionados
 
+Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verificado contra la API real), `T-0022` índice de embeddings en S3 con reconstrucción incremental, `T-0023` Lambda `asistente`, prompt v1 y validador.
+
+**`T-0021` — Cliente de Gemini (implementado, PR abierto 2026-11-17)** · bitácora [`02-cliente-gemini.md`](bitacora/02-cliente-gemini.md)
+
+- [x] Clave en el secreto `GEMINI_API_KEY` del entorno `staging` (creada por el usuario).
+- [x] Contrato verificado con la API real mediante `asistente-verificar-gemini.yml`: embeddings de 768 dimensiones ya normalizados, lote, `generateContent` con esquema JSON y `usageMetadata`.
+- [x] `ProveedorLlm` (`server/api/lib/proveedor-llm.ts`) y `ProveedorGemini` (`gemini.ts`): embeddings de documentos y de consultas, generación con salida JSON, reintentos acotados, errores sin clave. 31 pruebas.
+- [ ] Clave de producción (prepago) como secreto del entorno `production`: se necesita solo antes de encender el asistente; la Fase 2 sale con el interruptor apagado.
+
 - [ ] Clave de Gemini del proyecto propio (secreto de GitHub Actions → variable de entorno; nunca en el repo).
 - [ ] Embeddings de "título + autor + categorías + sinopsis" con el modelo de embeddings vigente de la Gemini API. Los libros sin sinopsis se indexan con lo que tengan y quedan marcados.
 - [ ] Índice en un solo archivo en un bucket S3 privado (vectores de dimensión reducida y cuantizados; 3.000 × 768 en float32 ≈ 9 MB, en int8 ≈ 2,3 MB). Reconstrucción incremental programada (EventBridge): solo los libros con `actualizadoEn` posterior al índice.
