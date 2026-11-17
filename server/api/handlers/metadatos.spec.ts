@@ -199,7 +199,7 @@ describe('handler (/api/metadatos/:isbn)', () => {
       // `prioridad` (con-info-y-pvp.com, prioridad 2 < solo-pvp.com, prioridad 3).
       expect(respuesta).toMatchObject({
         statusCode: 200,
-        body: JSON.stringify({ ...metadatosEncontrados, pvp: 50_000, fuenteSinopsis: null }),
+        body: JSON.stringify({ ...metadatosEncontrados, idioma: 'en', pvp: 50_000, fuenteSinopsis: null }), // idioma inferido del ISBN 978-0 (T-0014)
       });
     },
   );
@@ -230,6 +230,7 @@ describe('handler (/api/metadatos/:isbn)', () => {
         editorial: 'Editorial scrapeada',
         portadaUrl: 'https://unico.com/portada.jpg',
         ...conocimientoVacio,
+        idioma: 'en', // inferido del ISBN 978-0 (T-0014)
         pvp: 70_000,
         fuenteSinopsis: null,
       }),
@@ -459,6 +460,24 @@ describe('handler (/api/metadatos/:isbn)', () => {
       expect(cuerpo['sinopsis']).toBeNull();
       expect(cuerpo['fuenteSinopsis']).toBeNull();
     });
+
+    it('sin idioma en ninguna fuente, lo infiere del grupo del ISBN (T-0014)', async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue({ ...metadatosEncontrados, idioma: null });
+      escanearTodoMock.mockResolvedValue([]);
+
+      const cuerpo = await llamar('9789586390125');
+
+      expect(cuerpo['idioma']).toBe('es');
+    });
+
+    it('un idioma que sí vino de una fuente no se pisa con la inferencia', async () => {
+      obtenerMetadatosPorIsbnMock.mockResolvedValue({ ...metadatosEncontrados, idioma: 'en' });
+      escanearTodoMock.mockResolvedValue([]);
+
+      const cuerpo = await llamar('9789586390125');
+
+      expect(cuerpo['idioma']).toBe('en');
+    });
   });
 
   it('ningún sitio resuelve nada → todo null, sigue 200', async () => {
@@ -492,7 +511,7 @@ describe('handler (/api/metadatos/:isbn)', () => {
     expect(scrapearSitioMock).not.toHaveBeenCalled();
     expect(respuesta).toMatchObject({
       statusCode: 200,
-      body: JSON.stringify({ ...metadatosEncontrados, pvp: null, fuenteSinopsis: null }),
+      body: JSON.stringify({ ...metadatosEncontrados, idioma: 'en', pvp: null, fuenteSinopsis: null }),
     });
   });
 
@@ -509,7 +528,7 @@ describe('handler (/api/metadatos/:isbn)', () => {
     expect(scrapearSitioMock).not.toHaveBeenCalled();
     expect(respuesta).toMatchObject({
       statusCode: 200,
-      body: JSON.stringify({ ...metadatosEncontrados, pvp: null, fuenteSinopsis: null }),
+      body: JSON.stringify({ ...metadatosEncontrados, idioma: 'en', pvp: null, fuenteSinopsis: null }),
     });
   });
 });

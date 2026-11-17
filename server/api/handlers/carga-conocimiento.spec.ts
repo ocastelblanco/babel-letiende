@@ -167,6 +167,35 @@ describe('procesarLibro', () => {
     expect(guardarMock).not.toHaveBeenCalled();
   });
 
+  it('a un libro con sinopsis y sin idioma le infiere el idioma sin consultar fuentes ni tocar lo demás', async () => {
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ bookId: 'a', isbn: '9789586390125' })
+      .mockResolvedValueOnce(conocimiento({ idioma: null }));
+    const resultado = await procesarLibro('a');
+    expect(resultado.tipo).toBe('yaTenia');
+    expect(resolverMock).not.toHaveBeenCalled();
+    expect(guardarMock).toHaveBeenCalledWith(
+      'conocimiento',
+      expect.objectContaining({ idioma: 'es', sinopsis: SINOPSIS_UTIL, fuenteSinopsis: 'sitio:tornamesa.co', categorias: ['Fantasía'] }),
+    );
+  });
+
+  it('nunca cambia un idioma que ya estaba', async () => {
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ bookId: 'a', isbn: '9780140449136' })
+      .mockResolvedValueOnce(conocimiento({ idioma: 'fr' }));
+    await procesarLibro('a');
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
+  it('si el idioma no es inferible, no escribe', async () => {
+    obtenerPorClaveMock
+      .mockResolvedValueOnce({ bookId: 'a', isbn: '9789999999999' })
+      .mockResolvedValueOnce(conocimiento({ idioma: null }));
+    await procesarLibro('a');
+    expect(guardarMock).not.toHaveBeenCalled();
+  });
+
   it('un libro sin ISBN se omite sin consultar', async () => {
     obtenerPorClaveMock.mockResolvedValueOnce({ bookId: 'a', isbn: null }).mockResolvedValueOnce(undefined);
     expect((await procesarLibro('a')).tipo).toBe('sinIsbn');

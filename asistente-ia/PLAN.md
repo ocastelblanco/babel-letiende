@@ -69,7 +69,17 @@ Partida en tres PRs (no cabía en uno): `T-0011` backend, `T-0012` Catalogar y E
 
 - [x] Carga del inventario existente con el patrón de ADR-012 (Lambda que se auto-invoca por lotes, progreso en tabla, disparada por el administrador), respetando los límites de las fuentes (PR abierto, 2026-11-17).
 - [x] Reporte de cobertura: libros con sinopsis útil (≥ 200 caracteres), por idioma y por fuente; libros sin nada. Solo cifras agregadas.
-- [ ] Correr la carga en `staging`/producción y anotar las cifras reales en la bitácora (sin sinopsis en git).
+- [x] Corrida en `staging` (2026-11-17): 23 libros, los 23 con sinopsis útil; fuentes: Librería Nacional 9, Tornamesa 8, Casa Tomada 5, Librería del Au 1; ninguna de Google Books. Cifras en la bitácora.
+- [ ] Correr la carga en producción (tras el paso a producción de la semana del 30/11) y anotar las cifras reales en la bitácora (sin sinopsis en git).
+
+**`T-0014` — Idioma de los libros (implementada, PR abierto 2026-11-17)**
+
+La corrida de `T-0013` en `staging` dejó los 23 libros con idioma «desconocido»: ninguna librería lo entrega y Google Books no aportó nada. El asistente necesita el idioma para los filtros de la Fase 2.
+
+- [x] Inferencia en dos pasos, en `server/api/lib/idioma.ts`: primero el grupo de registro del ISBN (978/979); si no es concluyente, las palabras funcionales de la sinopsis; si tampoco, queda vacío.
+- [x] `resolverMetadatosCompletos` la aplica solo cuando ninguna fuente trajo idioma, así que Catalogar y Editar también la reciben como sugerencia editable.
+- [x] La carga retroactiva completa el idioma de los libros que ya tenían sinopsis sin consultar fuentes externas; nunca cambia un idioma existente.
+- [ ] Volver a pulsar «Iniciar carga» en `staging` y confirmar que el reporte por idioma ya no dice «desconocido».
 
 ### Fase 2 — Índice y asistente mínimo · `T-0020` · capacidades: recuperación, asistente con límites, prompts versionados
 
