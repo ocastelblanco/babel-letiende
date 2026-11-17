@@ -2,6 +2,7 @@ import type {
   APIGatewayProxyHandlerV2,
   APIGatewayProxyResultV2,
 } from 'aws-lambda';
+import { inferirIdioma } from '../lib/idioma';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import { buscarLibrosPorTexto, obtenerMetadatosPorIsbn } from '../services/api-letiende';
 import { obtenerPorClave, escanearTodo } from '../services/dynamodb';
@@ -109,6 +110,16 @@ export async function resolverMetadatosCompletos(
   isbn: string,
   opciones: { conPvp?: boolean } = {},
 ): Promise<MetadatosCompletos> {
+  const resultado = await consultarFuentes(isbn, opciones);
+  // Ninguna fuente suele entregar el idioma: se infiere del ISBN y, si no basta, de la sinopsis (T-0014).
+  // Solo llena el vacío; un idioma que sí vino de una fuente nunca se toca.
+  if (!resultado.idioma) {
+    resultado.idioma = inferirIdioma(isbn, resultado.sinopsis);
+  }
+  return resultado;
+}
+
+async function consultarFuentes(isbn: string, opciones: { conPvp?: boolean }): Promise<MetadatosCompletos> {
   const conPvp = opciones.conPvp ?? true;
   const infoBase = await obtenerMetadatosPorIsbn(isbn);
   const resultado: MetadatosCompletos = {

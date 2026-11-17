@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyHandlerV2, APIGatewayProxyResultV2, Handler } from 'aws-lambda';
+import { inferirIdioma } from '../lib/idioma';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
 import { escanearProyeccion, guardar, obtenerPorClave } from '../services/dynamodb';
 import { resolverMetadatosCompletos } from './metadatos';
@@ -211,6 +212,16 @@ export async function procesarLibro(bookId: string): Promise<ResultadoLibro> {
     }
     const existente = (await obtenerPorClave<ConocimientoGuardado>(variable('TABLA_CONOCIMIENTO'), { bookId })) ?? null;
     if (existente?.sinopsis) {
+      // Ya tiene sinopsis: no se consulta ninguna fuente. Solo se completa el idioma si falta,
+      // y es una inferencia local (ISBN o texto), sin peticiones salientes (T-0014).
+      if (!existente.idioma) {
+        const idioma = inferirIdioma(libro.isbn, existente.sinopsis);
+        if (idioma) {
+          const conIdioma = { ...existente, idioma, actualizadoEn: new Date().toISOString() };
+          await guardar(variable('TABLA_CONOCIMIENTO'), conIdioma);
+          return { tipo: 'yaTenia', conocimiento: conIdioma };
+        }
+      }
       return { tipo: 'yaTenia', conocimiento: existente };
     }
     if (!libro.isbn) {

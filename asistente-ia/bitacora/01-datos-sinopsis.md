@@ -87,10 +87,27 @@ El costo de la tabla aparte es una escritura más por catalogación. Con `PAY_PE
 |---|---|---|
 | Sitios cuya descripción es una sinopsis real | 5 de 6 | Fixtures reales de cada sitio, 16/11/2026 |
 | Sitios cuya descripción es solo el título | 1 (Lerner: `"ANIQUILACION"`) | Mismo fixture |
-| Pruebas del backend | 453 → 499 (T-0011) → 505 (hotfix) → 529 (T-0013) | `npm run test:api` |
+| Pruebas del backend | 453 → 499 (T-0011) → 505 (hotfix) → 529 (T-0013) → 556 (T-0014) | `npm run test:api` |
 | Pruebas del frontend | 485 → 528 (T-0012) → 538 (T-0013) | `npm test` |
 
-La **cobertura real** de sinopsis sobre el inventario se mide corriendo la carga retroactiva en `staging` (pantalla `/admin/carga-conocimiento`) y se agrega aquí. Pendiente: el código ya está, falta correrlo.
+### Cobertura medida en `staging` (17/11/2026, `T-0013`)
+
+| Cifra | Valor |
+|---|---|
+| Libros en `staging` | 23 |
+| Con sinopsis útil (≥ 200 caracteres) | 23 |
+| Con sinopsis demasiado corta / sin sinopsis | 0 / 0 |
+| Fuente: Librería Nacional / Tornamesa / Casa Tomada / Librería del Au | 9 / 8 / 5 / 1 |
+| Fuente: Google Books | 0 |
+| Idioma | 23 «desconocido» |
+
+Es una muestra pequeña y de `staging`: dice que el mecanismo funciona, no cuál será la cobertura del inventario real. Ese número sale de correr la carga en producción. Lo que sí mostró la corrida: **ninguna fuente entrega el idioma**, y por eso nació `T-0014`.
+
+### El idioma se infiere, y es una sugerencia (T-0014)
+
+Orden de confianza: el grupo de registro del ISBN, después el texto de la sinopsis, y si ninguno es concluyente, vacío. Un grupo de ISBN identifica un país o una zona editorial, no el idioma de cada título, así que solo están los grupos cuyo idioma dominante es inequívoco (por ejemplo 978-958 Colombia y 978-84 España → `es`; 978-0 y 978-1 → `en`). Una editorial colombiana que publique un libro en inglés se equivocaría; por eso el resultado llega como sugerencia editable y nunca pisa un idioma que ya existe.
+
+El detector de texto usa palabras funcionales que distinguen cada idioma (se excluyen las que se escriben igual en varios, como `de` o `que`) y exige un mínimo de palabras, un mínimo de aciertos y una ventaja del ganador sobre el segundo. Ante la duda devuelve vacío: un idioma vacío es honesto, uno equivocado envenena el filtro del asistente.
 
 ## 6. Qué falló y cómo se corrigió
 

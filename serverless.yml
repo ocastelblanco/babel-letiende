@@ -1353,6 +1353,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/idioma.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         - 'dist-server/api/services/api-letiende.js'
@@ -1419,6 +1420,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/idioma.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         - 'dist-server/api/services/api-letiende.js'
@@ -1482,6 +1484,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/idioma.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         - 'dist-server/api/services/api-letiende.js'
@@ -1543,6 +1546,7 @@ functions:
       patterns:
         - '!**'
         - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/idioma.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
         - 'dist-server/api/services/api-letiende.js'
@@ -2001,6 +2005,7 @@ functions:
         - 'dist-server/api/handlers/carga-conocimiento.js'
         # Importa `resolverMetadatosCompletos` de metadatos.ts: arrastra sus módulos (MEMORY.md §7).
         - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/idioma.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/api-letiende.js'
         - 'dist-server/api/services/dynamodb.js'
@@ -2063,6 +2068,7 @@ functions:
         - 'dist-server/api/handlers/carga-conocimiento.js'
         # Importa `resolverMetadatosCompletos` de metadatos.ts: arrastra sus módulos (MEMORY.md §7).
         - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/idioma.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/api-letiende.js'
         - 'dist-server/api/services/dynamodb.js'
@@ -2116,6 +2122,7 @@ functions:
         - 'dist-server/api/handlers/carga-conocimiento.js'
         # Importa `resolverMetadatosCompletos` de metadatos.ts: arrastra sus módulos (MEMORY.md §7).
         - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/idioma.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/api-letiende.js'
         - 'dist-server/api/services/dynamodb.js'

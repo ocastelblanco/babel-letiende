@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, implementada). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, fusionada y verificada en `staging`) y `T-0014` (idioma de los libros, implementada, PR abierto). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -592,7 +592,7 @@ Detalle en `asistente-ia/PLAN.md` §3 y ADR-018. Tabla `babel-libros-conocimient
 
 `GET /api/libros/:bookId` devuelve solo la lista blanca `aLibroPublico`; `GET /api/libros/:bookId/completo` (personal) la reemplaza para Catalogar. Detalle al final de este documento y gotcha en `CLAUDE.md` §7.
 
-## Tarea 1 — Fase 1, parte 2: sinopsis en Catalogar y Editar (`T-0012`) — IMPLEMENTADA, PR abierto (2026-11-17)
+## Tarea 1 — Fase 1, parte 2: sinopsis en Catalogar y Editar (`T-0012`) — COMPLETA (fusionada y verificada en `staging`, 2026-11-17)
 
 Rama `feature/asistente-sinopsis-catalogar`. Solo frontend: el backend ya está desplegado (T-0011). Detalle en `asistente-ia/PLAN.md` §3.
 
@@ -612,6 +612,17 @@ Rama `feature/asistente-carga-retroactiva`. Detalle en `asistente-ia/PLAN.md` §
 - [x] Reporte de cobertura (≥ 200 caracteres = sinopsis útil) por idioma y por fuente, solo cifras agregadas (el ítem de progreso nunca lleva texto de sinopsis). Pantalla `/admin/carga-conocimiento` («Datos del asistente» en el inicio del administrador): botón, barra de avance, contadores y las dos tablas.
 - [x] 24 pruebas backend nuevas (529 en total) y 10 de frontend (538); la que protege «no pisar una sinopsis existente» falla si se quita la condición (verificado). `build:api`, `serverless print`, `serverless package --stage dev` y la carga real de los 3 paquetes (`require` del handler) verificados; build de producción limpio.
 - [ ] Tras el despliegue a `staging`: abrir `/admin/carga-conocimiento` con tu sesión de administrador, iniciar la carga y esperar a que termine; comprobar que las cifras tienen sentido y pasarme el reporte para anotarlo en la bitácora.
+
+- [x] Verificado por el usuario en `staging`: 23 libros, 23 con sinopsis útil, todos con idioma «desconocido» (origen de `T-0014`).
+
+## Tarea 3 — Fase 1, parte 4: idioma de los libros (`T-0014`) — IMPLEMENTADA, PR abierto (2026-11-17)
+
+Rama `feature/asistente-idioma-libros`. Detalle en `asistente-ia/PLAN.md` §3.
+
+- [x] `server/api/lib/idioma.ts`: el idioma se infiere primero del grupo de registro del ISBN (978/979) y, si no es concluyente, de las palabras funcionales de la sinopsis; ante la duda queda vacío. `resolverMetadatosCompletos` lo aplica solo si ninguna fuente trajo idioma (Catalogar y Editar lo reciben como sugerencia editable).
+- [x] La carga retroactiva completa el idioma de los libros que ya tenían sinopsis, sin consultar fuentes y sin cambiar un idioma existente. Módulo agregado al `package.patterns` de las 7 funciones que cargan `metadatos.js`; verificado desempaquetando los zips de `serverless package`.
+- [x] 27 pruebas backend nuevas (556 en total).
+- [ ] Tras el despliegue a `staging`: pulsar «Iniciar carga» otra vez en `/admin/carga-conocimiento` y comprobar que la tabla por idioma ya no dice «desconocido».
 
 Después: Fase 2 (`T-0020`, índice y asistente mínimo; requiere la clave de Gemini del usuario).
 
