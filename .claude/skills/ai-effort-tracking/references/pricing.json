@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "currency": "USD",
+  "unit": "per_million_tokens",
+  "_note": "Los proveedores con status 'unverified' traen la estructura completa y precios en null a proposito. Escribir aqui un precio recordado es el fallo exacto que esta skill existe para evitar. Completalos con el usuario y marca as_of y source_url cuando lo hagas.",
+  "providers": {
+    "anthropic": {
+      "cost_model": "anthropic",
+      "as_of": "2026-10-02",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "status": "cached_needs_reverification",
+      "_semantics": "cache_multipliers del proveedor aplican salvo que el modelo declare los suyos; la override por modelo se fusiona sobre la del proveedor.",
+      "models": {
+        "claude-opus-5-5": { "input": 4.00, "output": 20.00, "cache_multipliers": { "read": 0.05 } },
+        "claude-opus-5": { "input": 5.00, "output": 25.00 },
+        "claude-sonnet-5-5": { "input": 2.00, "output": 10.00 },
+        "claude-sonnet-5": { "input": 2.00, "output": 10.00 },
+        "claude-haiku-4-5": { "input": 1.00, "output": 5.00 }
+      },
+      "cache_multipliers": { "read": 0.1, "write_short": 1.25, "write_long": 2.0 }
+    },
+    "openai": {
+      "cost_model": "openai",
+      "as_of": null,
+      "source_url": "https://openai.com/api/pricing/",
+      "status": "unverified",
+      "_semantics": "cached_tokens es SUBCONJUNTO de prompt_tokens. Sin costo de escritura de cache.",
+      "models": {
+        "<model-id>": { "input": null, "cached_input": null, "output": null }
+      }
+    },
+    "deepseek": {
+      "cost_model": "deepseek",
+      "as_of": null,
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "status": "unverified",
+      "_semantics": "prompt_tokens = hit + miss. Tarifas distintas para hit y miss.",
+      "models": {
+        "<model-id>": { "input_miss": null, "input_hit": null, "output": null }
+      }
+    },
+    "google": {
+      "cost_model": "google",
+      "as_of": null,
+      "source_url": "https://ai.google.dev/pricing",
+      "status": "unverified",
+      "_semantics": "Cache con componente de almacenamiento por tiempo, no solo por token.",
+      "models": {
+        "<model-id>": {
+          "input": null,
+          "cached_input": null,
+          "output": null,
+          "cache_storage_per_token_hour": null
+        }
+      }
+    },
+    "alibaba": {
+      "cost_model": "openai",
+      "as_of": null,
+      "source_url": null,
+      "status": "unverified",
+      "_semantics": "Qwen via gateway compatible con OpenAI. Compatibilidad de formato NO es compatibilidad de facturacion: validar empiricamente antes de usar.",
+      "models": { "<model-id>": { "input": null, "cached_input": null, "output": null } }
+    },
+    "moonshot": {
+      "cost_model": "openai",
+      "as_of": null,
+      "source_url": null,
+      "status": "unverified",
+      "_semantics": "Kimi via gateway compatible con OpenAI. Validar empiricamente antes de usar.",
+      "models": { "<model-id>": { "input": null, "cached_input": null, "output": null } }
+    }
+  }
+}

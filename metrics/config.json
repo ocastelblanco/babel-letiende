@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "project_id": "babel-asistente-ia",
+  "tz_display": "America/Bogota",
+  "human_hourly_rate": 20,
+  "_human_hourly_rate": "Tarifa facturada o valor de oportunidad, en USD/hora. Preguntar al humano en init. Si queda null, VT se reporta en horas y el punto de equilibrio entre modelos queda deshabilitado. NUNCA asumir un valor.",
+  "billing": {
+    "_note": "Una entrada por combinacion provider+surface que uses. Determina que significa cada cifra en dolares.",
+    "anthropic:claude-code-cli": {
+      "regime": "flat_rate",
+      "plan": "Pro",
+      "monthly_usd": 20,
+      "allocation": "token_share"
+    }
+  },
+  "review_gap_max_s": 900,
+  "_review_gap_max_s": "Por encima de este hueco, el tiempo cuenta como human_wait_s y no como human_review_s. Relevante en sesiones cloud y movil, donde un hueco largo es ausencia y no revision.",
+  "stages_extra": [
+    "x-data-ingestion",
+    "x-prompt-engineering",
+    "x-evaluation"
+  ],
+  "_stages_extra": "Etapas propias del proyecto, ademas del enum estandar de schema.md.",
+  "report": {
+    "lead_with": [
+      "OR",
+      "VT",
+      "CPAC"
+    ],
+    "stratify_by": [
+      "capture_level",
+      "provider"
+    ]
+  },
+  "_events_dir": "Los eventos del asistente viven en asistente-ia/metrics/events/ (ledger.mjs --dir). Esta carpeta raiz solo guarda el instrumento (config, precios, estado de hooks) porque los hooks lo buscan en <repo>/metrics/."
+}

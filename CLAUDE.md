@@ -6,7 +6,7 @@ Este archivo contiene las directrices permanentes de arquitectura, código, segu
 
 ## 1. Descripción del Proyecto
 
-**Babel** es la aplicación de catalogación e inventario de la librería del centro cultural **Le Tiende** (Bogotá, Colombia). Permite a vendedores catalogar libros escaneando su código de barras (ISBN) o buscando por título/autor, completar automáticamente sus datos (autor, portada, editorial, precio de venta al público) y ubicarlos físicamente en una jerarquía de espacio → mueble → ubicación. También permite editar libros ya catalogados, registrar su venta directamente desde la ficha del libro y, para el administrador, generar reportes financieros y de inventario, y configurar catálogo, usuarios, ubicación física y descuentos editoriales. Adicionalmente expone un catálogo público de consulta, sin necesidad de autenticación, con ficha propia por libro y filtrado por ubicación.
+**Babel** es la aplicación de catalogación e inventario de la librería del centro cultural **Le Tiende** (Bogotá, Colombia). Permite a vendedores catalogar libros escaneando su código de barras (ISBN) o buscando por título/autor, completar automáticamente sus datos (autor, portada, editorial, precio de venta al público) y ubicarlos físicamente en una jerarquía de espacio → mueble → ubicación. También permite editar libros ya catalogados, registrar su venta directamente desde la ficha del libro y, para el administrador, generar reportes financieros y de inventario, y configurar catálogo, usuarios, ubicación física y descuentos editoriales. Adicionalmente expone un catálogo público de consulta, sin necesidad de autenticación, con ficha propia por libro y filtrado por ubicación. En curso (desde 16/11/2026): un **asistente de recomendación con IA** para ese catálogo público, documentado como subproyecto en `asistente-ia/` (leer `asistente-ia/README.md` y `asistente-ia/PLAN.md` antes de trabajar en él; ADR-013 a ADR-017 en `docs/MEMORY.md`).
 
 El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000 libros**, por lo que el flujo de catalogación es la ruta crítica de rendimiento de todo el sistema.
 
@@ -24,6 +24,7 @@ El caso de uso fundacional es catalogar un inventario inicial de **más de 3.000
 - **Metadatos de libros:** API externa ya existente y compartida en `https://api.letiende.co` (proxy sobre Google Books API)
 - **Generación de reportes:** librería `xlsx` (mismo paquete que usa Comandante)
 - **Lectura de código de barras:** librería web basada en `getUserMedia` (p. ej. `@zxing/browser` o `html5-qrcode`) — ver decisión final en `docs/tech-specs.md`
+- **IA del asistente (planeado):** Gemini API en un proyecto de AI Studio propio de Babel, detrás de la interfaz `ProveedorLlm`; Azure solo para comparación (ADR-015). Verificar siempre en la documentación oficial nombres de modelo, límites y precios antes de usarlos
 - **Objetivo de costo de infraestructura:** $0 (o lo más cercano posible dentro de la capa gratuita de AWS)
 
 ---
@@ -232,3 +233,25 @@ El primer request tras inactividad a una función Lambda que sirve SSR de Angula
 1. Al **iniciar**, capturar la hora exacta con `TZ=America/Bogota date`.
 2. Al **finalizar**, capturar la hora de nuevo con el mismo comando y agregar la fila al CSV (append, nunca sobreescribir ni reordenar filas existentes).
 3. Esto es independiente del reporte verbal de inicio/fin que ya se le da al usuario en el chat — ambos deben ocurrir siempre.
+
+---
+
+## 9. Registro de esfuerzo del asistente IA (`ai-effort-tracking`)
+
+Aplica a toda tarea del subproyecto `asistente-ia/` (ADR-016), **además** de la fila en `tracking-detail.csv` de §8.
+
+El registro de esfuerzo y costo vive en `asistente-ia/metrics/events/`, un archivo JSONL por sesión, versionado en git (`project_id: babel-asistente-ia`). La configuración y los precios están en `metrics/` (raíz) y los hooks en `.claude/settings.json` del repositorio.
+
+**Al cerrar cualquier unidad de trabajo del asistente**, invoca `/ai-effort-tracking capture` y escribe con `ledger.mjs append --dir asistente-ia/metrics/events`.
+
+Reglas no negociables:
+- Nunca escribas tokens, costo, duraciones ni nivel de esfuerzo de memoria.
+  Ejecuta siempre el adaptador de la superficie activa.
+- Si un dato no se puede medir, escribe `null` y baja `capture_level`. No lo estimes.
+- Los precios salen de `metrics/pricing.json`, jamás de tu conocimiento previo.
+  Si el proveedor está `unverified`, deja `cost.usd` en `null`.
+- `input_uncached` y `cache_read` son disjuntos; `thinking` va dentro de `output`.
+- El registro es append-only y cada sesión escribe solo su archivo.
+  Para corregir, emite un evento nuevo con `corrects`.
+- Referencia siempre el `trace_id` de la fase (`T-NNNN`, ver `asistente-ia/PLAN.md` §3).
+- Las etapas propias del subproyecto son `x-data-ingestion`, `x-prompt-engineering` y `x-evaluation`, además del enum estándar.
