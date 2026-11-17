@@ -33,7 +33,7 @@ interface Usuario {
  * `MetadatosLibro` — ese tipo sigue representando exclusivamente lo que
  * `api.letiende.co` puede dar.
  */
-interface MetadatosCompletos {
+export interface MetadatosCompletos {
   titulo: string | null;
   autor: string | null;
   editorial: string | null;
@@ -105,7 +105,11 @@ function nombreTablaSitiosScraping(): string {
  * degrada a lo que ya se tenía de `api.letiende.co` (mismo criterio "nunca
  * lanza" del resto del proyecto, CLAUDE.md A08).
  */
-async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosCompletos> {
+export async function resolverMetadatosCompletos(
+  isbn: string,
+  opciones: { conPvp?: boolean } = {},
+): Promise<MetadatosCompletos> {
+  const conPvp = opciones.conPvp ?? true;
   const infoBase = await obtenerMetadatosPorIsbn(isbn);
   const resultado: MetadatosCompletos = {
     ...infoBase,
@@ -119,7 +123,8 @@ async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosComple
   // completos. El `pvp` nunca llega de `api.letiende.co`, así que los sitios
   // `pvp` ya se consultaban en cada ISBN.
   const sinopsisGoogle = infoBase.sinopsis;
-  const faltaPvp = resultado.pvp === null;
+  // La carga retroactiva del asistente (T-0013) no necesita el PVP: `conPvp: false` evita consultar los sitios solo-precio.
+  const faltaPvp = conPvp && resultado.pvp === null;
 
   let sitios: SitioScraping[];
   try {

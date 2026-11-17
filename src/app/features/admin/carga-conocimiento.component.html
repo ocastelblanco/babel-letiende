@@ -1,0 +1,72 @@
+<div class="min-h-screen bg-surface px-4 py-8">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="mb-2 text-2xl font-bold text-primary">Cargar datos del asistente</h1>
+    <p class="mb-6 text-sm text-primary/70">
+      Busca la sinopsis, las categorías, el idioma y las páginas de los libros que ya están catalogados, para que el
+      asistente pueda recomendarlos. No pisa lo que ya esté guardado (ni lo escrito a mano) y los libros sin ISBN se
+      omiten. Puede tardar un buen rato con un inventario grande: puedes dejar esta pantalla abierta.
+    </p>
+
+    @if (error()) {
+      <p class="mb-4 text-sm text-danger">{{ error() }}</p>
+    }
+
+    <button
+      type="button"
+      class="mb-6 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      [disabled]="iniciando() || enProgreso()"
+      (click)="iniciar()"
+    >
+      {{ enProgreso() ? 'Carga en curso…' : 'Iniciar carga' }}
+    </button>
+
+    @if (resumen(); as r) {
+      <div class="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <p class="mb-2 text-sm font-semibold text-primary">
+          {{ r.estado === 'en_progreso' ? 'Avance' : r.estado === 'completado' ? 'Carga completada' : 'La carga se detuvo' }}
+          · {{ r.librosRevisados }} de {{ r.totalLibros }} libros ({{ porcentaje() }} %)
+        </p>
+        <div class="mb-4 h-2 w-full overflow-hidden rounded-full bg-primary/10">
+          <div class="h-full bg-secondary" [style.width.%]="porcentaje()"></div>
+        </div>
+        <dl class="grid grid-cols-2 gap-2 text-sm text-primary">
+          <dt>Datos nuevos guardados</dt><dd class="text-right font-semibold">{{ r.guardados }}</dd>
+          <dt>Ya tenían sinopsis</dt><dd class="text-right font-semibold">{{ r.yaTenian }}</dd>
+          <dt>Sin ISBN (omitidos)</dt><dd class="text-right font-semibold">{{ r.sinIsbn }}</dd>
+          <dt>Ninguna fuente tenía datos</dt><dd class="text-right font-semibold">{{ r.sinDatos }}</dd>
+          <dt>Con error</dt><dd class="text-right font-semibold">{{ r.errores }}</dd>
+        </dl>
+      </div>
+
+      <div class="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+        <h2 class="mb-2 text-sm font-semibold text-primary">Cobertura de sinopsis</h2>
+        <p class="mb-3 text-xs text-primary/70">Útil = al menos 200 caracteres.</p>
+        <dl class="mb-4 grid grid-cols-2 gap-2 text-sm text-primary">
+          <dt>Sinopsis útil</dt><dd class="text-right font-semibold">{{ r.conSinopsisUtil }}</dd>
+          <dt>Sinopsis demasiado corta</dt><dd class="text-right font-semibold">{{ r.conSinopsisCorta }}</dd>
+          <dt>Sin sinopsis</dt><dd class="text-right font-semibold">{{ r.sinSinopsis }}</dd>
+        </dl>
+
+        <h3 class="mb-1 text-xs font-semibold text-primary">Por idioma</h3>
+        <table class="mb-4 w-full text-sm text-primary" aria-label="Cobertura por idioma">
+          <thead><tr class="text-left text-xs text-primary/70"><th>Idioma</th><th class="text-right">Libros</th><th class="text-right">Con sinopsis útil</th></tr></thead>
+          <tbody>
+            @for (fila of filasIdioma(); track fila.clave) {
+              <tr><td>{{ fila.clave }}</td><td class="text-right">{{ fila.total }}</td><td class="text-right">{{ fila.utiles }}</td></tr>
+            }
+          </tbody>
+        </table>
+
+        <h3 class="mb-1 text-xs font-semibold text-primary">Por fuente</h3>
+        <table class="w-full text-sm text-primary" aria-label="Cobertura por fuente">
+          <thead><tr class="text-left text-xs text-primary/70"><th>Fuente</th><th class="text-right">Libros</th><th class="text-right">Con sinopsis útil</th></tr></thead>
+          <tbody>
+            @for (fila of filasFuente(); track fila.clave) {
+              <tr><td>{{ fila.clave }}</td><td class="text-right">{{ fila.total }}</td><td class="text-right">{{ fila.utiles }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>

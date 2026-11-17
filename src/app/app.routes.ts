@@ -107,5 +107,13 @@ export const routes: Routes = [
     canActivate: [RoleGuard('administrador')],
     title: 'Validar libros - Le Tiende',
   },
+  {
+    // Carga retroactiva de sinopsis y datos del asistente (T-0013, ADR-018) — solo administrador.
+    path: 'admin/carga-conocimiento',
+    loadComponent: () =>
+      import('./features/admin/carga-conocimiento.component').then((m) => m.CargaConocimientoComponent),
+    canActivate: [RoleGuard('administrador')],
+    title: 'Cargar datos del asistente - Le Tiende',
+  },
   { path: '**', redirectTo: '' },
 ];

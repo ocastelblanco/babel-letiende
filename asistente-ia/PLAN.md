@@ -59,16 +59,17 @@ Partida en tres PRs (no cabía en uno): `T-0011` backend, `T-0012` Catalogar y E
 - [x] `POST`/`PUT /api/libros` aceptan `conocimiento` opcional (ausente = no tocar); `DELETE` lo borra; `GET /api/libros/:bookId/conocimiento` (solo vendedor/administrador) lo lee.
 - [x] Pruebas en verde, `build:api`, `serverless print` y `serverless package --stage dev` verificados; `package.patterns` sin cambios (no hay módulos nuevos).
 
-**`T-0012` — Catalogar y Editar (PR abierto, 2026-11-17)** (A08: nada automático se guarda sin que la persona pueda corregirlo)
+**`T-0012` — Catalogar y Editar (fusionada, 2026-11-17)** (A08: nada automático se guarda sin que la persona pueda corregirlo)
 
 - [x] Catalogar muestra la sinopsis, las categorías, el idioma, las páginas y la clasificación por edad que llegan de `GET /api/metadatos/:isbn` como sugerencia editable, con su fuente, y los envía en `conocimiento` al crear un libro nuevo.
 - [x] Editar los carga con `GET /api/libros/:bookId/conocimiento` y los guarda; si no pudo leerlos, no envía nada.
 - [x] Sinopsis nunca en el catálogo público.
 
-**`T-0013` — Carga retroactiva y cobertura**
+**`T-0013` — Carga retroactiva y cobertura (implementada, PR abierto 2026-11-17)**
 
-- [ ] Carga del inventario existente con el patrón de ADR-012 (Lambda que se auto-invoca por lotes, progreso en tabla, disparada por el administrador), respetando los límites de las fuentes.
-- [ ] Reporte de cobertura: libros con sinopsis útil (≥ 200 caracteres), por idioma y por fuente; libros sin nada. Cifras agregadas en la bitácora, sin sinopsis en git.
+- [x] Carga del inventario existente con el patrón de ADR-012 (Lambda que se auto-invoca por lotes, progreso en tabla, disparada por el administrador), respetando los límites de las fuentes (PR abierto, 2026-11-17).
+- [x] Reporte de cobertura: libros con sinopsis útil (≥ 200 caracteres), por idioma y por fuente; libros sin nada. Solo cifras agregadas.
+- [ ] Correr la carga en `staging`/producción y anotar las cifras reales en la bitácora (sin sinopsis en git).
 
 ### Fase 2 — Índice y asistente mínimo · `T-0020` · capacidades: recuperación, asistente con límites, prompts versionados
 

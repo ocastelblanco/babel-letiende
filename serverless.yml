@@ -35,6 +35,7 @@ custom:
     usuarios: babel-usuarios-${sls:stage}
     validacionesLibros: babel-validaciones-libros-${sls:stage}
     conocimiento: babel-libros-conocimiento-${sls:stage}
+    cargaConocimiento: babel-carga-conocimiento-${sls:stage}
   # Nombre real de la función `validarLibrosWorker`, calculado por
   # convención (no por !GetAtt) para poder referenciarlo tanto en la
   # variable de entorno `NOMBRE_FUNCION_WORKER` (iniciarValidacionLibros y
@@ -42,6 +43,8 @@ custom:
   # sin crear una dependencia circular en CloudFormation (ADR-012,
   # docs/plan-validar-libros-async.md §5).
   nombreFuncionValidarLibrosWorker: ${self:service}-${sls:stage}-validarLibrosWorker
+  # Igual que arriba, para la carga retroactiva del asistente (T-0013, ADR-012).
+  nombreFuncionCargaConocimientoWorker: ${self:service}-${sls:stage}-cargaConocimientoWorker
 
 functions:
   api:
@@ -1976,6 +1979,183 @@ functions:
           path: /api/validaciones-libros/{validacionId}
           method: get
 
+  iniciarCargaConocimiento:
+    handler: dist-server/api/handlers/carga-conocimiento.handlerIniciar
+    role: !GetAtt IniciarCargaConocimientoLambdaRole.Arn
+    description: >-
+      POST /api/carga-conocimiento — inicia la carga retroactiva de sinopsis y
+      datos del asistente sobre el inventario (T-0013, ADR-012). Solo
+      administrador. Responde 202 y dispara cargaConocimientoWorker.
+    # Escanea todo el inventario para armar la cola (mismo motivo que iniciarValidacionLibros).
+    timeout: 25
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
+      TABLA_CARGA_CONOCIMIENTO: ${self:custom.nombresTablas.cargaConocimiento}
+      NOMBRE_FUNCION_WORKER: ${self:custom.nombreFuncionCargaConocimientoWorker}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/carga-conocimiento.js'
+        # Importa `resolverMetadatosCompletos` de metadatos.ts: arrastra sus módulos (MEMORY.md §7).
+        - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/api-letiende.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'dist-server/api/services/scraping.js'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/carga-conocimiento
+          method: post
+
+  cargaConocimientoWorker:
+    handler: dist-server/api/handlers/carga-conocimiento.handlerWorker
+    role: !GetAtt CargaConocimientoWorkerLambdaRole.Arn
+    description: >-
+      Lambda interna SIN ruta HTTP (invocada por iniciarCargaConocimiento y por
+      sí misma, InvocationType Event) — procesa la cola en lotes de 9 libros,
+      de a 3 a la vez y con pausa entre rondas, y se auto-invoca hasta terminar.
+    # Un lote son 3 rondas; cada libro puede tardar ~16 s en el peor caso (sitios lentos).
+    timeout: 120
+    memorySize: 512
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
+      TABLA_CARGA_CONOCIMIENTO: ${self:custom.nombresTablas.cargaConocimiento}
+      TABLA_SITIOS_SCRAPING: ${self:custom.nombresTablas.sitiosScraping}
+      NOMBRE_FUNCION_WORKER: ${self:custom.nombreFuncionCargaConocimientoWorker}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/carga-conocimiento.js'
+        # Importa `resolverMetadatosCompletos` de metadatos.ts: arrastra sus módulos (MEMORY.md §7).
+        - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/api-letiende.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'dist-server/api/services/scraping.js'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    # Sin `events`: solo se invoca por lambda:InvokeFunction (ADR-012).
+
+  consultarCargaConocimiento:
+    handler: dist-server/api/handlers/carga-conocimiento.handlerConsultar
+    role: !GetAtt ConsultarCargaConocimientoLambdaRole.Arn
+    description: >-
+      GET /api/carga-conocimiento/:cargaId — progreso y reporte de cobertura de
+      la carga retroactiva (cifras agregadas, sin sinopsis). Solo administrador.
+    environment:
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      TABLA_CARGA_CONOCIMIENTO: ${self:custom.nombresTablas.cargaConocimiento}
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/carga-conocimiento.js'
+        # Importa `resolverMetadatosCompletos` de metadatos.ts: arrastra sus módulos (MEMORY.md §7).
+        - 'dist-server/api/handlers/metadatos.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/api-letiende.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'dist-server/api/services/scraping.js'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/carga-conocimiento/{cargaId}
+          method: get
+
   registrarVenta:
     handler: dist-server/api/handlers/ventas.handler
     role: !GetAtt RegistrarVentaLambdaRole.Arn
@@ -3308,6 +3488,124 @@ resources:
                     - !GetAtt TablaValidacionesLibros.Arn
                     - !GetAtt TablaUsuarios.Arn
 
+    IniciarCargaConocimientoLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-iniciar-carga-conocimiento-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Lee la lista de libros (solo bookId), resuelve el rol del token y crea/consulta el progreso. Nunca escribe en babel-libros ni en la tabla de conocimiento (A05).
+          - PolicyName: babel-iniciar-carga-conocimiento-role-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaUsuarios.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaCargaConocimiento.Arn
+          - PolicyName: babel-iniciar-carga-conocimiento-role-invoke-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource:
+                    - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.nombreFuncionCargaConocimientoWorker}'
+
+    CargaConocimientoWorkerLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-carga-conocimiento-worker-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Lee libros (GetItem), lee/escribe el conocimiento y el progreso, y lee los sitios de scraping. Nunca escribe en babel-libros (A05).
+          - PolicyName: babel-carga-conocimiento-worker-role-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaConocimiento.Arn
+                    - !GetAtt TablaCargaConocimiento.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt TablaSitiosScraping.Arn
+          - PolicyName: babel-carga-conocimiento-worker-role-invoke-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource:
+                    - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.nombreFuncionCargaConocimientoWorker}'
+
+    ConsultarCargaConocimientoLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-consultar-carga-conocimiento-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          # Solo lectura: el progreso de la carga y el rol del token (A05).
+          - PolicyName: babel-consultar-carga-conocimiento-role-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaCargaConocimiento.Arn
+                    - !GetAtt TablaUsuarios.Arn
+
     RegistrarVentaLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -3614,6 +3912,20 @@ resources:
           - AttributeName: validacionId
             KeyType: HASH
 
+    # Un ítem por corrida de la carga retroactiva del asistente (T-0013, ADR-012): progreso
+    # y cobertura agregada. Sin GSI; PAY_PER_REQUEST (docs/advertencia-urgente-costos-aws.md).
+    TablaCargaConocimiento:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.cargaConocimiento}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: cargaId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: cargaId
+            KeyType: HASH
+
     # Conocimiento del libro para el asistente de recomendación (ADR-018): sinopsis,
     # categorías, idioma, páginas y clasificación por edad. Tabla aparte de
     # babel-libros a propósito. PAY_PER_REQUEST, sin GSIs (docs/advertencia-urgente-costos-aws.md).
@@ -3693,5 +4005,11 @@ resources:
     # libros puede completarse jamás, sin importar cuántas veces se reintente
     # "Iniciar validación".
     ValidarLibrosWorkerLambdaFunction:
+      Properties:
+        RecursiveLoop: Allow
+    # Igual que validarLibrosWorker: la cadena de auto-invocaciones de la carga del
+    # asistente es intencional y tiene corte propio (`terminada`); sin esto AWS la corta
+    # a las ~16 invocaciones (144 libros) sin registrar ningún error.
+    CargaConocimientoWorkerLambdaFunction:
       Properties:
         RecursiveLoop: Allow
