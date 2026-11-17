@@ -50,6 +50,8 @@ export interface ResultadoScraping {
   editorial?: string;
   portadaUrl?: string;
   pvp?: number;
+  /** Sinopsis en texto plano (asistente de recomendación, ADR-018) — nunca HTML. */
+  sinopsis?: string;
 }
 
 const RESULTADO_VACIO: ResultadoScraping = {};
@@ -325,6 +327,7 @@ async function consultarApiVtex(urlBase: string, isbn: string, opciones: Opcione
     editorial: editorialArray?.[0] ?? producto.brand,
     portadaUrl: item?.images?.[0]?.imageUrl,
     pvp: parsearPrecioPlano(item?.sellers?.[0]?.commertialOffer?.Price),
+    sinopsis: sinopsisDeSitio(producto['description'], producto.productName),
   };
 }
 
@@ -525,6 +528,49 @@ function comoString(valor: unknown): string | undefined {
   return typeof valor === 'string' ? valor : undefined;
 }
 
+/** Tope de caracteres de una sinopsis — mismo valor que `MAXIMO_CARACTERES_SINOPSIS` de `api-letiende.ts` y que valida `libros.ts` al guardar. */
+const MAXIMO_CARACTERES_SINOPSIS = 4000;
+
+/**
+ * Debajo de este largo, o si repite el título, la "descripción" de un sitio no es una
+ * sinopsis (Lerner devuelve solo el título, confirmado con su fixture real): se descarta
+ * para no ocupar el lugar de una sinopsis mejor de otro sitio o de Google Books.
+ */
+const MINIMO_CARACTERES_SINOPSIS = 40;
+
+/**
+ * Convierte la descripción de un sitio externo en texto plano (CLAUDE.md
+ * A03): `cheerio` interpreta el HTML, se conservan los saltos de párrafo
+ * como saltos de línea y solo se devuelve `.text()`, jamás el HTML. Descarta
+ * caracteres de control y recorta al tope. `undefined` si queda vacío.
+ * (Copia equivalente de `aTextoPlano` de `api-letiende.ts`, que no se
+ * importa para no crear una dependencia de ejecución entre los dos módulos,
+ * ver CLAUDE.md §7.)
+ */
+function sinopsisDeSitio(valor: unknown, titulo?: string): string | undefined {
+  if (typeof valor !== 'string' || valor.trim() === '') {
+    return undefined;
+  }
+  const $ = cheerio.load(`<div>${valor.replace(/<br\s*\/?>|<\/p>/gi, '$&\n')}</div>`);
+  const texto = $('div')
+    .first()
+    .text()
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim()
+    .slice(0, MAXIMO_CARACTERES_SINOPSIS)
+    .trim();
+  if (texto.length < MINIMO_CARACTERES_SINOPSIS) {
+    return undefined;
+  }
+  if (titulo && texto.toLowerCase() === titulo.trim().toLowerCase()) {
+    return undefined;
+  }
+  return texto;
+}
+
 /**
  * Búsqueda en la plataforma de listado+producto que comparten Tornamesa y
  * Casa Tomada (HTML, 2 peticiones: listado + producto) — confirmado en vivo
@@ -590,6 +636,7 @@ async function consultarPlataformaListaLibros(urlBase: string, query: string): P
     editorial: comoString(datosLibro['publisher']),
     portadaUrl: comoString(datosLibro['image']),
     pvp: parsearPrecioConCentavos(ofertas?.price),
+    sinopsis: sinopsisDeSitio(datosLibro['description'], comoString(datosLibro['name'])),
   };
 }
 
@@ -654,6 +701,7 @@ async function scrapearBuscaLibre(isbn: string): Promise<ResultadoScraping> {
     editorial: comoString(editorial?.name),
     portadaUrl: comoString(datosProducto['image']),
     pvp: parsearPrecioConCentavos(ofertas?.[0]?.price),
+    sinopsis: sinopsisDeSitio(datosProducto['description'], comoString(datosProducto['name'])),
   };
 }
 

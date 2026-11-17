@@ -49,15 +49,26 @@ Cada fase indica la capacidad que demuestra, el criterio de terminado (DoD) y su
 
 ### Fase 1 — Datos: enriquecer el inventario · `T-0010` · capacidad: fuentes de conocimiento
 
-Backend y frontend en un solo PR si cabe; si no, `T-0011` (backend) y `T-0012` (Catalogar).
+Partida en tres PRs (no cabía en uno): `T-0011` backend, `T-0012` Catalogar y Editar, `T-0013` carga retroactiva y reporte de cobertura.
 
-- [ ] Revisar los términos de Google Books API sobre almacenamiento y visualización de descripciones; registrar la conclusión en la bitácora.
-- [ ] Campos nuevos opcionales en `babel-libros`: `sinopsis`, `categorias` (lista), `idioma` (ISO 639-1), `paginas`, `clasificacionEdad` (`maturityRating`), `fuenteSinopsis` (`google-books` | `sitio:<dominio>` | `manual` | `null`).
-- [ ] `obtenerMetadatosPorIsbn` lee esos campos de `volumeInfo`. Si no hay sinopsis, se intentan los sitios con permiso `info` (lista de ADR-010, guardia SSRF de ADR-011), extrayendo **solo texto plano**.
-- [ ] Catalogar y Editar muestran la sinopsis como sugerencia editable (regla A08: nada automático se guarda sin que el vendedor pueda corregirlo).
-- [ ] Carga retroactiva del inventario existente con el patrón de ADR-012 (Lambda que se auto-invoca por lotes, progreso en tabla, disparada por el administrador). Respeta los límites de `api.letiende.co` y de los sitios.
-- [ ] Reporte de cobertura: libros con sinopsis útil (≥ 200 caracteres), por idioma y por fuente; libros sin nada. Cifras agregadas en la bitácora.
-- [ ] Pruebas backend y frontend en verde; `tech-specs.md` §4.3 y §5.1 actualizados.
+**`T-0011` — Backend (PR abierto, 2026-11-16)**
+
+- [x] Revisar los términos de Google Books API sobre guardar descripciones. Conclusión: la sección 5.e de los términos de las APIs de Google prohíbe crear copias permanentes del contenido devuelto; el usuario aceptó el riesgo con mitigaciones → **ADR-018**.
+- [x] Los campos van en una tabla aparte, `babel-libros-conocimiento` (cambio respecto al plan original, que los ponía en `babel-libros`; razones en ADR-018). Campos: `sinopsis`, `categorias`, `idioma`, `paginas`, `clasificacionEdad`, `fuenteSinopsis`.
+- [x] `obtenerMetadatosPorIsbn` los lee de Google Books; los adaptadores de los 6 sitios extraen la descripción en texto plano y descartan las que solo repiten el título o son demasiado cortas (Lerner devuelve solo el título). La sinopsis de un sitio con `info: true` se prefiere a la de Google (que queda de respaldo) y se anota su fuente.
+- [x] `POST`/`PUT /api/libros` aceptan `conocimiento` opcional (ausente = no tocar); `DELETE` lo borra; `GET /api/libros/:bookId/conocimiento` (solo vendedor/administrador) lo lee.
+- [x] Pruebas en verde, `build:api`, `serverless print` y `serverless package --stage dev` verificados; `package.patterns` sin cambios (no hay módulos nuevos).
+
+**`T-0012` — Catalogar y Editar** (A08: nada automático se guarda sin que la persona pueda corregirlo)
+
+- [ ] Catalogar muestra la sinopsis, las categorías, el idioma y las páginas que llegan de `GET /api/metadatos/:isbn` como sugerencia editable y las envía en `conocimiento`.
+- [ ] Editar los carga con `GET /api/libros/:bookId/conocimiento` y los guarda.
+- [ ] Sinopsis nunca en el catálogo público.
+
+**`T-0013` — Carga retroactiva y cobertura**
+
+- [ ] Carga del inventario existente con el patrón de ADR-012 (Lambda que se auto-invoca por lotes, progreso en tabla, disparada por el administrador), respetando los límites de las fuentes.
+- [ ] Reporte de cobertura: libros con sinopsis útil (≥ 200 caracteres), por idioma y por fuente; libros sin nada. Cifras agregadas en la bitácora, sin sinopsis en git.
 
 ### Fase 2 — Índice y asistente mínimo · `T-0020` · capacidades: recuperación, asistente con límites, prompts versionados
 

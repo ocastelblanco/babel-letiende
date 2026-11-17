@@ -39,6 +39,14 @@ interface MetadatosCompletos {
   editorial: string | null;
   portadaUrl: string | null;
   pvp: number | null;
+  /** Conocimiento para el asistente (ADR-018): llega de Google Books salvo la sinopsis, que prefiere los sitios de librerías. */
+  sinopsis: string | null;
+  categorias: string[];
+  idioma: string | null;
+  paginas: number | null;
+  clasificacionEdad: string | null;
+  /** De dónde salió `sinopsis`: `sitio:<dominio>` o `google-books`; `null` si no hay sinopsis. */
+  fuenteSinopsis: string | null;
 }
 
 function respuestaJson(statusCode: number, cuerpo: unknown): APIGatewayProxyResultV2 {
@@ -99,15 +107,19 @@ function nombreTablaSitiosScraping(): string {
  */
 async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosCompletos> {
   const infoBase = await obtenerMetadatosPorIsbn(isbn);
-  const resultado: MetadatosCompletos = { ...infoBase, pvp: null };
+  const resultado: MetadatosCompletos = {
+    ...infoBase,
+    pvp: null,
+    fuenteSinopsis: infoBase.sinopsis ? 'google-books' : null,
+  };
 
-  const faltaInfo = resultado.titulo === null || resultado.autor === null
-    || resultado.editorial === null || resultado.portadaUrl === null;
+  // La sinopsis de Google Books se conserva como respaldo, pero se intenta
+  // primero con los sitios de librerías (ADR-018): por eso los sitios `info`
+  // se consultan siempre, aunque título/autor/editorial/portada ya vengan
+  // completos. El `pvp` nunca llega de `api.letiende.co`, así que los sitios
+  // `pvp` ya se consultaban en cada ISBN.
+  const sinopsisGoogle = infoBase.sinopsis;
   const faltaPvp = resultado.pvp === null;
-
-  if (!faltaInfo && !faltaPvp) {
-    return resultado;
-  }
 
   let sitios: SitioScraping[];
   try {
@@ -130,9 +142,7 @@ async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosComple
     return resultado;
   }
 
-  const sitiosAplicables = sitios.filter(
-    (sitio) => (faltaInfo && sitio.info) || (faltaPvp && sitio.pvp),
-  );
+  const sitiosAplicables = sitios.filter((sitio) => sitio.info || (faltaPvp && sitio.pvp));
   if (sitiosAplicables.length === 0) {
     return resultado;
   }
@@ -165,6 +175,20 @@ async function resolverMetadatosCompletos(isbn: string): Promise<MetadatosComple
     if (resultado.pvp === null && resultadoSitio.pvp !== undefined) {
       resultado.pvp = resultadoSitio.pvp;
     }
+    // La primera sinopsis (por prioridad) de un sitio con `info` desplaza a la de Google Books.
+    if (
+      sitio.info &&
+      resultadoSitio.sinopsis &&
+      (resultado.fuenteSinopsis === null || resultado.fuenteSinopsis === 'google-books')
+    ) {
+      resultado.sinopsis = resultadoSitio.sinopsis;
+      resultado.fuenteSinopsis = `sitio:${sitio.dominio}`;
+    }
+  }
+
+  if (resultado.fuenteSinopsis === null && sinopsisGoogle) {
+    resultado.sinopsis = sinopsisGoogle;
+    resultado.fuenteSinopsis = 'google-books';
   }
 
   return resultado;

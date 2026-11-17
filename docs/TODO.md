@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: Fase 1 (datos) y Fase 2 (índice y asistente mínimo). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: Fase 1 partida en `T-0011` (backend) y `T-0012` (Catalogar y Editar). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -584,25 +584,25 @@ Rama `feature/aviso-duplicado-sin-isbn-frontend`. Detalle en el plan, §6. Solo 
 
 **Lote nuevo (2026-11-16) — Asistente de recomendación con IA:** chat en el catálogo público que recomienda libros **disponibles** a partir de sus sinopsis, con llamado de herramientas, suite de evaluación, prompts versionados, registro sin datos personales, topes, tablero y comparación con Azure. Subproyecto con documentación y registro de esfuerzo propios en `asistente-ia/` (README, `PLAN.md`, fichas, bitácora; ADR-013 a ADR-017). Plan aprobado por el usuario el 16/11/2026. Una rama y un PR por fase, en secuencia (staging compartido). Al cerrar cada fase: entrada de bitácora, fila en `tracking-detail.csv`, evento de `ai-effort-tracking` (con su `trace_id`), `MEMORY.md` §2 y la siguiente fase de `asistente-ia/PLAN.md` §3 entra aquí.
 
-## Tarea 1 — Fase 1: enriquecer el inventario con sinopsis (`T-0010`) — PENDIENTE
+## Tarea 1 — Fase 1, parte 1: backend de sinopsis y datos del libro (`T-0011`) — IMPLEMENTADA, PR abierto (2026-11-16)
 
-Rama `feature/asistente-datos-sinopsis`. Detalle y DoD en `asistente-ia/PLAN.md` §3, Fase 1. Si no cabe en un PR, se parte en `T-0011` (backend) y `T-0012` (Catalogar).
+Rama `feature/asistente-datos-sinopsis`. Detalle en `asistente-ia/PLAN.md` §3, Fase 1 (partida en `T-0011`, `T-0012` y `T-0013`). **Decisión de diseño:** los datos viven en una tabla aparte, `babel-libros-conocimiento` (ADR-018), y se usan solo internamente; el usuario aceptó el riesgo de los términos de Google Books.
 
-- [ ] Revisar los términos de uso de Google Books API sobre guardar y mostrar descripciones; conclusión en la bitácora (entrada 01).
-- [ ] Campos opcionales nuevos en `babel-libros`: `sinopsis`, `categorias`, `idioma`, `paginas`, `clasificacionEdad`, `fuenteSinopsis`.
-- [ ] `obtenerMetadatosPorIsbn` los lee de `volumeInfo`; respaldo de sinopsis con los sitios `info` (ADR-010/011), solo texto plano.
-- [ ] Catalogar y Editar muestran la sinopsis como sugerencia editable (A08).
-- [ ] Carga retroactiva con el patrón de ADR-012, disparada por el administrador, respetando los límites de las fuentes.
-- [ ] Reporte de cobertura por idioma y por fuente (cifras agregadas en la bitácora, sin sinopsis en git).
-- [ ] Pruebas en verde, `npm run build:api` y `package.patterns` revisados (gotcha de `CLAUDE.md` §7), `tech-specs.md` §4.3 y §5.1 actualizados.
+- [x] ADR-018 (términos de Google, tabla aparte, trazabilidad por fuente).
+- [x] `api-letiende.ts` lee sinopsis (texto plano), categorías, idioma, páginas y clasificación por edad de Google Books; los 6 adaptadores de `scraping.ts` extraen la descripción en texto plano y descartan las que repiten el título o son demasiado cortas.
+- [x] `GET /api/metadatos/:isbn` responde también `sinopsis`, `categorias`, `idioma`, `paginas`, `clasificacionEdad` y `fuenteSinopsis` (sitio con `info` primero, Google de respaldo). Los sitios `info` ahora se consultan siempre (antes solo si faltaba algún dato).
+- [x] Tabla `babel-libros-conocimiento` (`PAY_PER_REQUEST`, sin GSIs), `POST`/`PUT` con `conocimiento` opcional, `DELETE` lo borra, `GET /api/libros/:bookId/conocimiento` (función `conocimientoLibro`, solo lectura); permisos IAM mínimos por función.
+- [x] 499 pruebas backend en verde (antes 453), `build:api`, `serverless print` y `serverless package --stage dev` verificados.
+- [ ] Tras el despliegue a `staging`: comprobar que la tabla quedó `ACTIVE` en `PAY_PER_REQUEST` y que `GET /api/metadatos/:isbn` devuelve los campos nuevos para un ISBN real.
 
-## Tarea 2 — Fase 2: índice de embeddings y asistente mínimo (`T-0020`) — PENDIENTE (empieza cuando la Tarea 1 esté desplegada)
+## Tarea 2 — Fase 1, parte 2: sinopsis en Catalogar y Editar (`T-0012`) — PENDIENTE (empieza cuando la Tarea 1 esté desplegada)
 
-Rama `feature/asistente-indice-minimo`. Detalle y DoD en `asistente-ia/PLAN.md` §3, Fase 2. **Requiere del usuario:** proyecto de AI Studio de Babel y su clave como secreto de GitHub Actions (ADR-015).
+Rama `feature/asistente-sinopsis-catalogar`. Detalle en `asistente-ia/PLAN.md` §3.
 
-- [ ] Consultar la documentación oficial vigente de la Gemini API: modelo de embeddings y dimensiones, modelo de generación, salida estructurada, límites del nivel gratuito.
-- [ ] Índice en un archivo en un bucket S3 privado + función programada de reconstrucción incremental (ADR-013).
-- [ ] Lambda `asistente` (`POST /api/asistente`), interruptor apagado en producción, conversación sin estado con límites de entrada.
-- [ ] Búsqueda híbrida (filtros → coseno → top-k), salida estructurada y validador determinista (ADR-014).
-- [ ] `asistente-ia/prompts/asistente-v1.md` + `CHANGELOG.md`.
-- [ ] Pruebas del índice, del validador y del handler con el modelo simulado; tabla nueva `PAY_PER_REQUEST` si aplica.
+- [ ] Catalogar: sinopsis, categorías, idioma y páginas sugeridos desde `GET /api/metadatos/:isbn`, editables, enviados en `conocimiento`.
+- [ ] Editar: los carga con `GET /api/libros/:bookId/conocimiento` y los guarda.
+- [ ] Pruebas del componente y del servicio; `npm run build` y `npm test` en verde.
+
+Siguientes del lote (se activan en este orden): `T-0013` carga retroactiva y reporte de cobertura, y la Fase 2 (`T-0020`, índice y asistente mínimo; requiere la clave de Gemini del usuario).
+
+**Hallazgo de seguridad previo, detectado de paso (2026-11-16), sin corregir en este lote:** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
