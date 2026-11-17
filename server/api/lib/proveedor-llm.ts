@@ -27,6 +27,8 @@ export interface PeticionGeneracion {
   /** Subconjunto de JSON Schema/OpenAPI que el proveedor aplica a la salida. */
   esquemaSalida: Record<string, unknown>;
   maximoTokensSalida: number;
+  /** Cuánto «piensa» el modelo antes de responder; más pensamiento cuesta más tokens de salida. Por defecto `low`. */
+  nivelPensamiento?: 'minimal' | 'low' | 'medium' | 'high';
 }
 
 export interface ResultadoGeneracion {

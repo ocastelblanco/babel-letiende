@@ -110,7 +110,7 @@ describe('ProveedorGemini — embeddings', () => {
   });
 });
 
-describe('ProveedorGemini — generación', () => {
+describe('ProveedorGemini — generación (Interactions API)', () => {
   const peticion = {
     instrucciones: 'Eres un asistente.',
     mensajes: [
@@ -122,13 +122,27 @@ describe('ProveedorGemini — generación', () => {
     maximoTokensSalida: 500,
   };
 
-  it('arma la petición con roles user/model, esquema JSON y tope de tokens, y mapea el uso', async () => {
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      respuesta({
-        candidates: [{ content: { parts: [{ text: '{"texto":"ok"}' }] }, finishReason: 'STOP' }],
-        usageMetadata: { promptTokenCount: 38, candidatesTokenCount: 70, thoughtsTokenCount: 8 },
-      }),
-    );
+  function interaccion(pasos: unknown[], estado = 'completed', uso: Record<string, number> = {}) {
+    return respuesta({
+      status: estado,
+      steps: pasos,
+      usage: { total_input_tokens: 38, total_output_tokens: 70, total_thought_tokens: 0, ...uso },
+    });
+  }
+  const salida = (texto: string) => ({
+    type: 'model_output',
+    status: 'done',
+    content: [{ type: 'text', text: texto }],
+  });
+
+  it('arma la petición con pasos user_input/model_output, sin estado, con esquema JSON, y la envía a /v1/interactions', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        interaccion([{ type: 'thought', signature: 'x' }, salida('{"texto":"ok"}')], 'completed', {
+          total_thought_tokens: 8,
+        }),
+      );
     const r = await crear(fetchMock).generarJson(peticion);
 
     expect(r).toMatchObject({
@@ -139,46 +153,84 @@ describe('ProveedorGemini — generación', () => {
       bloqueado: false,
       truncado: false,
     });
+    const [url, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1/interactions');
+    expect(init.headers['x-goog-api-key']).toBe(CLAVE);
+    expect(init.headers['Api-Revision']).toBe('2026-05-20');
     const cuerpo = cuerpoEnviado(fetchMock) as {
-      systemInstruction: { parts: { text: string }[] };
-      contents: { role: string }[];
-      generationConfig: Record<string, unknown>;
+      model: string;
+      system_instruction: string;
+      store: boolean;
+      input: { type: string; content: { text: string }[] }[];
+      generation_config: Record<string, unknown>;
+      response_format: Record<string, unknown>;
     };
-    expect(cuerpo.systemInstruction.parts[0].text).toBe('Eres un asistente.');
-    expect(cuerpo.contents.map((c) => c.role)).toEqual(['user', 'model', 'user']);
-    expect(cuerpo.generationConfig).toMatchObject({
-      maxOutputTokens: 500,
-      responseMimeType: 'application/json',
+    expect(cuerpo.model).toBe('gemini-3.5-flash-lite');
+    expect(cuerpo.system_instruction).toBe('Eres un asistente.');
+    expect(cuerpo.store).toBe(false);
+    expect(cuerpo.input.map((paso) => paso.type)).toEqual([
+      'user_input',
+      'model_output',
+      'user_input',
+    ]);
+    expect(cuerpo.input[2].content[0].text).toBe('fantasía');
+    expect(cuerpo.generation_config).toEqual({ max_output_tokens: 500, thinking_level: 'low' });
+    expect(cuerpo.response_format).toMatchObject({
+      type: 'text',
+      mime_type: 'application/json',
+      schema: peticion.esquemaSalida,
     });
   });
 
-  it('ignora las partes de pensamiento al armar el texto', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      respuesta({
-        candidates: [
-          {
-            content: { parts: [{ text: 'pienso...', thought: true }, { text: '{"a":1}' }] },
-            finishReason: 'STOP',
-          },
-        ],
-      }),
-    );
+  it('respeta el nivel de pensamiento pedido', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([salida('{}')]));
+    await crear(fetchMock).generarJson({ ...peticion, nivelPensamiento: 'minimal' });
+    expect(
+      (cuerpoEnviado(fetchMock)['generation_config'] as Record<string, unknown>)['thinking_level'],
+    ).toBe('minimal');
+  });
+
+  it('une el texto de varios pasos model_output e ignora los pasos de pensamiento', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        interaccion([
+          { type: 'thought', signature: 'x', summary: 'pienso' },
+          salida('{"a":'),
+          salida('1}'),
+        ]),
+      );
     expect((await crear(fetchMock).generarJson(peticion)).texto).toBe('{"a":1}');
   });
 
-  it('marca la salida truncada y la bloqueada', async () => {
-    const truncada = vi.fn().mockResolvedValue(
-      respuesta({
-        candidates: [{ content: { parts: [{ text: '{"a"' }] }, finishReason: 'MAX_TOKENS' }],
-      }),
-    );
-    expect((await crear(truncada).generarJson(peticion)).truncado).toBe(true);
-    const bloqueada = vi
+  it('marca como truncada una respuesta incompleta con texto', async () => {
+    const fetchMock = vi
       .fn()
-      .mockResolvedValue(respuesta({ promptFeedback: { blockReason: 'SAFETY' } }));
-    const r = await crear(bloqueada).generarJson(peticion);
+      .mockImplementation(async () => interaccion([salida('{"a"')], 'incomplete'));
+    const r = await crear(fetchMock).generarJson(peticion);
+    expect(r.truncado).toBe(true);
+    expect(r.bloqueado).toBe(false);
+  });
+
+  it('una respuesta sin texto y sin terminar con normalidad se trata como bloqueada', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([], 'failed'));
+    const r = await crear(fetchMock).generarJson(peticion);
     expect(r.bloqueado).toBe(true);
     expect(r.texto).toBe('');
+  });
+
+  it('el pensamiento se suma a la salida (se factura como salida)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        interaccion([salida('{}')], 'completed', {
+          total_output_tokens: 50,
+          total_thought_tokens: 339,
+        }),
+      );
+    const r = await crear(fetchMock).generarJson(peticion);
+    expect(r.tokensSalida).toBe(389);
+    expect(r.tokensPensamiento).toBe(339);
   });
 });
 

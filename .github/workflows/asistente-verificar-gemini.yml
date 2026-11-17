@@ -1,8 +1,8 @@
 name: Asistente - verificar contrato de Gemini
 
-# Llama a la API real de Gemini con textos sintéticos para comprobar modelos,
-# embeddings y salida JSON antes de (y mientras) se escribe el cliente del
-# asistente (T-0021). Usa el secreto GEMINI_API_KEY del entorno `staging`.
+# Llama a la API real de Gemini con textos sintéticos: primero el contrato HTTP
+# (modelos, embeddings, Interactions API) y luego la clase real `ProveedorGemini`
+# que usa el asistente (T-0021, T-0024). Usa el secreto GEMINI_API_KEY del entorno `staging`.
 # El script nunca imprime la clave ni el contenido de las respuestas del modelo.
 # Corre solo a mano o cuando cambia el propio script.
 
@@ -11,6 +11,10 @@ on:
   pull_request:
     paths:
       - 'asistente-ia/scripts/verificar-gemini.mjs'
+      - 'asistente-ia/scripts/verificar-cliente-gemini.mjs'
+      - 'server/api/lib/gemini.ts'
+      - 'server/api/lib/proveedor-llm.ts'
+      - 'server/api/lib/indice-vectorial.ts'
       - '.github/workflows/asistente-verificar-gemini.yml'
 
 permissions:
@@ -27,7 +31,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Verificar contrato
+      - name: Verificar contrato (HTTP directo)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node asistente-ia/scripts/verificar-gemini.mjs
+      - name: Instalar dependencias y compilar el backend
+        run: |
+          npm ci
+          npm run build:api
+      - name: Verificar el cliente real (ProveedorGemini)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node asistente-ia/scripts/verificar-cliente-gemini.mjs
