@@ -103,14 +103,16 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] 31 pruebas nuevas (601 en total).
 - [x] Verificado en `staging` (2026-11-17): 25 de 25 libros indexados en 1,7 s con 6.096 tokens de entrada; la segunda corrida conservó los 25, no pidió ningún token ni escribió (94 ms); archivo de 22.676 bytes cifrado (AES256) en un bucket con acceso público bloqueado; regla de 6 horas activa.
 
-- [ ] Clave de Gemini del proyecto propio (secreto de GitHub Actions → variable de entorno; nunca en el repo).
-- [ ] Embeddings de "título + autor + categorías + sinopsis" con el modelo de embeddings vigente de la Gemini API. Los libros sin sinopsis se indexan con lo que tengan y quedan marcados.
-- [ ] Índice en un solo archivo en un bucket S3 privado (vectores de dimensión reducida y cuantizados; 3.000 × 768 en float32 ≈ 9 MB, en int8 ≈ 2,3 MB). Reconstrucción incremental programada (EventBridge): solo los libros con `actualizadoEn` posterior al índice.
-- [ ] Lambda `asistente` (ADR-008), `POST /api/asistente`, **interruptor apagado en producción**. Conversación sin estado: el cliente envía los últimos turnos, con límites de longitud validados en el servidor.
-- [ ] Búsqueda híbrida: filtros estructurados (disponible, idioma, precio máximo, edad) → similitud coseno → top-k.
-- [ ] Respuesta con salida estructurada (esquema JSON: texto, recomendaciones `{bookId, motivo}`, `sinResultados`). El validador descarta los `bookId` inexistentes o agotados y cuenta cuántos descartó.
-- [ ] `asistente-ia/prompts/asistente-v1.md` con encabezado (versión, modelo, fecha, motivo) + `CHANGELOG.md`.
-- [ ] Pruebas unitarias del índice, del validador y del handler (con el modelo simulado).
+**`T-0023` — Lambda `asistente`, prompt v1 y validador (implementada, PR abierto 2026-11-18)** · bitácora [`04-asistente-minimo.md`](bitacora/04-asistente-minimo.md)
+
+- [x] Clave de Gemini del proyecto propio (secreto `GEMINI_API_KEY` del entorno `staging`). La de producción (prepago) se necesita solo antes de encender el asistente allí.
+- [x] Lambda `asistente` (ADR-008), `POST /api/asistente`. Conversación sin estado: el cliente envía los últimos turnos (máx. 9, 1.000 caracteres c/u) y el servidor valida límites, roles y filtros. **Cambio respecto al plan:** exige sesión de vendedor o administrador (no es público hasta las fases 6 y 7, cuando existan los topes de gasto y de tasa), además del interruptor `ASISTENTE_ACTIVO` (encendido en `staging`, apagado en producción). Decidido con el usuario el 17/11/2026.
+- [x] Búsqueda híbrida: filtros del índice (idioma, excluir contenido adulto) → coseno (40) → existencias y precio máximo contra `babel-libros` → 8 libros al modelo. Los filtros los envía el cliente; el de edad es solo «excluir `MATURE`», el único dato que existe.
+- [x] Respuesta con esquema JSON (`texto`, `recomendaciones {bookId, motivo}`, `sinResultados`). El validador descarta los `bookId` que no estén en la lista del turno (inexistentes, agotados o de otro turno), cuenta los descartes y, si todo se descartó, sustituye el texto por la respuesta segura. A la respuesta pública solo salen `bookId`, título, autor, PVP, portada y motivo (lista blanca); la sinopsis nunca.
+- [x] `asistente-ia/prompts/asistente-v1.md` con encabezado (versión, modelo, fecha, motivo) + `CHANGELOG.md`; el mismo archivo se empaqueta y se lee en la Lambda.
+- [x] 87 pruebas nuevas con el modelo simulado (691 en total).
+- [x] Rol IAM `AsistenteLambdaRole`: solo `GetItem` sobre libros, conocimiento y usuarios, y lectura del índice en S3.
+- [ ] Verificado en `staging` por el usuario con su sesión (instrucciones en el PR).
 
 ### Fase 3 — Llamado de herramientas · `T-0030` · capacidad: integración con sistemas
 

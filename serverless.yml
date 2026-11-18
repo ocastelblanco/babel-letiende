@@ -50,6 +50,11 @@ custom:
   indiceProgramado:
     staging: true
     production: false
+  # Interruptor del endpoint del asistente (T-0023). Apagado en producción hasta las fases 6 y 7
+  # (topes de gasto y de tasa, clave de producción). Se pasa como texto: la Lambda compara con 'true'.
+  asistenteActivo:
+    staging: 'true'
+    production: 'false'
   # Igual que arriba, para la carga retroactiva del asistente (T-0013, ADR-012).
   nombreFuncionCargaConocimientoWorker: ${self:service}-${sls:stage}-cargaConocimientoWorker
 
@@ -2449,6 +2454,73 @@ functions:
           rate: rate(6 hours)
           enabled: ${self:custom.indiceProgramado.${sls:stage}, false}
 
+  asistente:
+    handler: dist-server/api/handlers/asistente.handler
+    role: !GetAtt AsistenteLambdaRole.Arn
+    description: >-
+      POST /api/asistente — asistente de recomendación (T-0023). Por ahora solo personal
+      (vendedor o administrador) y con interruptor ASISTENTE_ACTIVO: apagado en producción.
+    # Por debajo del límite de 30 s de API Gateway; el cliente de Gemini usa 10 s por intento y un reintento.
+    timeout: 29
+    memorySize: 512
+    environment:
+      TABLA_LIBROS: ${self:custom.nombresTablas.libros}
+      TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
+      TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
+      BUCKET_INDICE: ${self:custom.bucketIndice}
+      ASISTENTE_ACTIVO: ${self:custom.asistenteActivo.${sls:stage}, 'false'}
+      VERSION_PROMPT_ASISTENTE: v1
+      FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
+      GEMINI_API_KEY: ${env:GEMINI_API_KEY, ''}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/asistente.js'
+        - 'dist-server/api/lib/almacen-indice.js'
+        - 'dist-server/api/lib/asistente.js'
+        - 'dist-server/api/lib/gemini.js'
+        - 'dist-server/api/lib/indice-vectorial.js'
+        - 'dist-server/api/lib/proveedor-llm.js'
+        - 'dist-server/api/lib/verificar-token.js'
+        - 'dist-server/api/services/dynamodb.js'
+        # El prompt versionado se lee del disco en tiempo de ejecución: una sola fuente (PLAN.md T-0023).
+        - 'asistente-ia/prompts/asistente-*.md'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/@firebase/**'
+        - 'node_modules/@firebase/database-compat/**'
+        - 'node_modules/@firebase/database/**'
+        - 'node_modules/@firebase/database-types/**'
+        - 'node_modules/@firebase/logger/**'
+        - 'node_modules/@firebase/util/**'
+        - 'node_modules/@firebase/component/**'
+        - 'node_modules/@firebase/app-check-interop-types/**'
+        - 'node_modules/@firebase/auth-interop-types/**'
+        - 'node_modules/@firebase/app-types/**'
+    events:
+      - httpApi:
+          path: /api/asistente
+          method: post
+
 resources:
   Conditions:
     EsProduccion: !Equals ['${sls:stage}', 'production']
@@ -3648,6 +3720,49 @@ resources:
                   Action:
                     - s3:GetObject
                     - s3:PutObject
+                  Resource:
+                    - !Sub '${BucketIndiceAsistente.Arn}/indice/*'
+                - Effect: Allow
+                  Action:
+                    - s3:ListBucket
+                  Resource:
+                    - !GetAtt BucketIndiceAsistente.Arn
+
+    # Lambda del asistente (T-0023): lee libros y conocimiento (GetItem) y el índice de S3; resuelve el rol
+    # del usuario. No escribe en ninguna tabla ni en el bucket (A05).
+    AsistenteLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-asistente-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: babel-asistente-role-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaLibros.Arn
+                    - !GetAtt TablaConocimiento.Arn
+                    - !GetAtt TablaUsuarios.Arn
+          # ListBucket hace falta para que un índice inexistente responda 404 y no 403 (antes de la primera reconstrucción).
+          - PolicyName: babel-asistente-role-s3-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:GetObject
                   Resource:
                     - !Sub '${BucketIndiceAsistente.Arn}/indice/*'
                 - Effect: Allow

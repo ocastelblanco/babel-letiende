@@ -8,17 +8,17 @@ Registro de lo que se hizo, cómo y por qué, escrito para **consultarlo despué
 |---|---|---|---|
 | 00 | [Planeación y alcance](00-planeacion.md) | 0 | Completa (16/11/2026) |
 | 01 | [Datos: enriquecer el inventario con sinopsis](01-datos-sinopsis.md) | 1 | Completa (`T-0011` a `T-0014` fusionadas; falta correr la carga en producción) |
-| 02 | [Cliente de Gemini detrás de `ProveedorLlm`](02-cliente-gemini.md) | 2 | En curso (`T-0021` fusionada; `T-0022` implementada; `T-0023` pendiente) |
-| 03 | [Índice de embeddings](03-indice-embeddings.md) | 2 | En curso (`T-0022` implementada, PR abierto) |
-| 02 | Embeddings, índice y asistente mínimo | 2 | Pendiente |
-| 03 | Llamado de herramientas | 3 | Pendiente |
-| 04 | Suite de evaluación y línea base | 4 | Pendiente |
-| 05 | Iteración de prompts con evidencia | 5 | Pendiente |
-| 06 | Operación segura: registro, topes y privacidad | 6 | Pendiente |
-| 07 | Chat en el catálogo público y salida a producción | 7 | Pendiente |
-| 08 | Tablero y análisis de 20 respuestas reales | 8 | Pendiente |
-| 09 | Cambio de modelo y Azure | 9 | Pendiente |
-| 10 | Empaque y cierre | 10 | Pendiente |
+| 02 | [Cliente de Gemini detrás de `ProveedorLlm`](02-cliente-gemini.md) | 2 | Completa (`T-0021` y `T-0024` fusionadas) |
+| 03 | [Índice de embeddings](03-indice-embeddings.md) | 2 | Completa (`T-0022` fusionada) |
+| 04 | [El asistente mínimo: endpoint, búsqueda híbrida, prompt v1 y validador](04-asistente-minimo.md) | 2 | En curso (`T-0023` implementada, PR abierto) |
+| 05 | Llamado de herramientas | 3 | Pendiente |
+| 06 | Suite de evaluación y línea base | 4 | Pendiente |
+| 07 | Iteración de prompts con evidencia | 5 | Pendiente |
+| 08 | Operación segura: registro, topes y privacidad | 6 | Pendiente |
+| 09 | Chat en el catálogo público y salida a producción | 7 | Pendiente |
+| 10 | Tablero y análisis de 20 respuestas reales | 8 | Pendiente |
+| 11 | Cambio de modelo y Azure | 9 | Pendiente |
+| 12 | Empaque y cierre | 10 | Pendiente |
 | — | [Ruta de estudio](estudio.md) | Transversal | En curso |
 
 ## Plantilla de cada entrada
