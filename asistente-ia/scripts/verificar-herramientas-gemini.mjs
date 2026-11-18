@@ -60,14 +60,29 @@ const SISTEMA =
 
 const usuario = (texto) => ({ type: 'user_input', content: [{ type: 'text', text: texto }] });
 
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
+/** La clave de staging es de nivel gratuito (15 peticiones por minuto): se deja un margen entre llamadas. */
+const PAUSA_ENTRE_LLAMADAS_MS = 5000;
+let ultimaLlamada = 0;
+
 async function interaccion(nombre, cuerpo) {
   const inicio = Date.now();
-  const r = await fetch(URL, {
-    method: 'POST',
-    headers: { 'x-goog-api-key': CLAVE, 'Content-Type': 'application/json', 'Api-Revision': '2026-05-20' },
-    body: JSON.stringify({ model: MODELO, store: false, system_instruction: SISTEMA, ...cuerpo }),
-  });
-  const texto = await r.text();
+  let r;
+  let texto;
+  for (let intento = 0; intento < 3; intento += 1) {
+    const espera = ultimaLlamada + PAUSA_ENTRE_LLAMADAS_MS - Date.now();
+    if (espera > 0) await esperar(espera);
+    r = await fetch(URL, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': CLAVE, 'Content-Type': 'application/json', 'Api-Revision': '2026-05-20' },
+      body: JSON.stringify({ model: MODELO, store: false, system_instruction: SISTEMA, ...cuerpo }),
+    });
+    ultimaLlamada = Date.now();
+    texto = await r.text();
+    if (r.status !== 429) break;
+    console.log(`   (429, se espera 40 s y se reintenta: intento ${intento + 1})`);
+    await esperar(40_000);
+  }
   let json = null;
   try {
     json = JSON.parse(texto);
