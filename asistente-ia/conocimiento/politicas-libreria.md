@@ -33,3 +33,7 @@ No tenemos envíos ni domicilios.
 ## Apartados y encargos
 
 Se puede apartar un libro con el 25% del valor. Para solicitar un libro, comunicarse con el WhatsApp [+57 318 7056288](https://wa.me/+573187056288).
+
+## Parqueadero
+
+No contamos con parqueadero propio. El parqueadero más cercano está en Carrera 20 #37-67, frente a la Casa del Teatro Nacional.
