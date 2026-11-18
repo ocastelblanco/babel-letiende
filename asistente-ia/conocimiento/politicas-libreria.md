@@ -4,6 +4,7 @@
 > responde SOLO con lo que esté escrito aquí: no inventa horarios, formas de pago ni condiciones.
 >
 > Cómo editarlo:
+>
 > - Cada `## Título` es un tema que el asistente puede consultar. Escribe debajo el texto tal como quieres que lo diga.
 > - Un tema que solo tiene comentarios (como los de abajo) se considera vacío: el asistente dirá que no tiene esa información.
 > - Es un repositorio público: escribe solo lo que quieras que cualquiera lea (nada de datos personales ni internos).
@@ -11,24 +12,24 @@
 
 ## Horarios
 
-<!-- Días y horas de atención de la librería, incluidos festivos si cambian. -->
+De domingo a miércoles, de 2:00pm a 8:00pm. De jueves a sábado, de 2:00pm a 10:00pm.
 
 ## Formas de pago
 
-<!-- Efectivo, tarjetas, transferencias, Nequi, etc. -->
+Tarjetas débito y crédito, y transferencia por llave Bre-B.
 
 ## Cambios y devoluciones
 
-<!-- Si se aceptan cambios, en cuánto tiempo y con qué condiciones. -->
+No se aceptan cambios ni devoluciones.
 
 ## Ubicación y contacto
 
-<!-- Dirección, cómo llegar, teléfono o WhatsApp de la librería. -->
+Carrera 24 #37-44, frente al Parkway, Bogotá, Colombia. WhatsApp: [+57 324 7695957](https://wa.me/+573247695957)ñ.
 
 ## Envíos
 
-<!-- Si hay envíos o domicilios, a dónde y cómo se cobran. -->
+No tenemos envíos ni domicilios.
 
 ## Apartados y encargos
 
-<!-- Si se puede apartar un libro o encargar uno que no está en el inventario. -->
+Se puede apartar un libro con el 25% del valor. Para solicitar un libro, comunicarse con el WhatsApp [+57 318 7056288](https://wa.me/+573187056288).
