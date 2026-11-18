@@ -36,10 +36,9 @@ flowchart LR
   V[Visitante del catálogo público] --> C[ChatAsistenteComponent<br/>Angular, solo cliente]
   C -->|POST /api/asistente| L[Lambda asistente]
   L --> G{Interruptor<br/>tope por visitante<br/>tope de gasto diario}
-  G --> M[LLM con llamado de herramientas<br/>Gemini · Azure vía ProveedorLlm]
+  G --> P[Contexto fijo<br/>fecha de Bogotá + políticas de la librería] --> M[LLM con llamado de herramientas<br/>Gemini · Azure vía ProveedorLlm]
   M --> T1[buscar_libros<br/>filtros + similitud coseno]
   M --> T2[consultar_disponibilidad<br/>precio, existencias, estante]
-  M --> T3[consultar_politicas]
   T1 --> S3[(Índice de embeddings<br/>archivo en S3)]
   T2 --> D[(babel-libros<br/>solo lectura, campos permitidos)]
   M --> VAL[Validador determinista<br/>cada bookId existe y está disponible]

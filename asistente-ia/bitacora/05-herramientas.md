@@ -37,7 +37,7 @@ El diseño del plan era `buscar_libros` como herramienta. Medido contra la API r
 
 - `buscar_libros`: cuando la persona cambia de tema o pide filtros que la búsqueda inicial no aplicó. Aquí es el **modelo** quien extrae «hasta $40.000» o «en inglés» del texto, algo que `T-0023` dejaba al cliente.
 - `consultar_disponibilidad`: existencias, precio y **Espacio/Mueble/Ubicación** (dato nuevo; la ficha pública ya lo muestra).
-- `consultar_politicas`: horarios, pagos, cambios, envíos, desde `asistente-ia/conocimiento/politicas-libreria.md` (contenido de Oliver; vacío todavía: el asistente dice con honestidad que no tiene el dato).
+- ~~`consultar_politicas`~~ (eliminada en v4, ver §6): horarios, pagos, cambios y envíos pasaron a ir siempre en el contexto, desde `asistente-ia/conocimiento/politicas-libreria.md` (contenido de Oliver). Un tema que falte en el archivo hace que el asistente diga con honestidad que no tiene el dato.
 
 El caso normal sigue siendo **una** llamada al modelo; solo una pregunta que necesita un dato en vivo paga la segunda.
 
@@ -64,9 +64,9 @@ Solo libros que **vio con existencias** en esta petición: los de la búsqueda i
 - `proveedor-llm.ts` / `gemini.ts`: herramientas, rondas, `tool_choice`, llamadas parseadas con validación de forma (id y nombre obligatorios, argumentos que no sean objeto = vacíos).
 - `server/api/lib/herramientas-asistente.ts`: declaraciones, `validarLlamada` por herramienta, intérprete y buscador de políticas.
 - `server/api/handlers/asistente.ts`: `responder` con el bucle, `buscarCandidatos` compartido entre la búsqueda inicial y `buscar_libros`, ejecución sin excepciones.
-- `asistente-ia/prompts/asistente-v2.md` (la que se probó primero), `asistente-v3.md` (corrige lo visto en `staging`), `CHANGELOG.md`, `asistente-ia/conocimiento/politicas-libreria.md` (completada por Oliver).
+- `asistente-ia/prompts/asistente-v2.md` y `asistente-v3.md` (las que se probaron primero), `asistente-v4.md` (políticas siempre en el contexto), `CHANGELOG.md`, `asistente-ia/conocimiento/politicas-libreria.md` (completada por Oliver).
 - `server/api/lib/asistente.ts`: `momentoActualParaModelo` y el bloque `FECHA_Y_HORA_ACTUAL` en el último turno.
-- `serverless.yml`: tablas de ubicación, módulo nuevo y archivo de políticas en `package.patterns`, prompt v3 en `staging`.
+- `serverless.yml`: tablas de ubicación, módulo nuevo y archivo de políticas en `package.patterns`, prompt v4 en `staging`.
 - Pruebas: 61 nuevas (752 en total): validación de cada herramienta (incluido el caso real del parámetro omitido), políticas, ejecución con lista blanca, errores controlados, tope de rondas y de llamadas, presupuesto de tiempo, tokens acumulados, y que una herramienta no vuelva recomendable un libro no visto. Una mutación (quitar la línea que habilita los libros hallados por `buscar_libros`) hace fallar exactamente la prueba esperada.
 - Verificación real: el script de verificación del cliente ejercita ahora el ciclo completo con la clase `ProveedorGemini`.
 
@@ -93,6 +93,15 @@ Solo libros que **vio con existencias** en esta petición: los de la búsqueda i
 - Con herramienta, la entrada pesa ~6.800 tokens frente a ~3.300 sin ella, porque la segunda llamada repite la conversación y el resultado.
 - Además de lo anterior, una respuesta usó voseo («mirá») y diminutivos («pesitos», «momentico»), contra la regla del prompt de hablar «siempre de tú».
 
+**Segunda prueba en `staging` con el prompt v3 (Oliver, 18/11/2026)**
+
+| Pregunta | Herramientas | Latencia | Resultado |
+|---|---|---|---|
+| «Recomiéndame algo en inglés por menos de $20.000» | `buscar_libros` | 4,2 s | **Correcto:** buscó con los filtros y respondió que no hay. Verificado contra los datos: `staging` tiene 25 libros con conocimiento y uno solo en inglés (*Treasure Island*, $60.000) |
+| Bolaño: recomendación, precio y cómo llegar | `consultar_disponibilidad`, `consultar_politicas` ×2 | 4,0 s (3 rondas, 15.214 tokens de entrada) | **Correcto:** precio $89.000, «Terraza, exhibidor 1, estante 1» y dirección. Gastó las 3 rondas permitidas |
+| «¿Abren mañana? ¿en qué horario?» (1.ª vez) | — | — | **502** `No pude preparar una recomendación…`: el registro decía solo `Error` |
+| «¿Abren mañana? ¿en qué horario?» (2.ª vez) | ninguna (0 rondas) | 3,5 s | **Alucinó:** «Mañana jueves estamos abiertos de nueve de la mañana a ocho de la noche» (real: 2 p. m. a 10 p. m.). Sí usó bien el día (jueves), pero no consultó las políticas |
+
 ## 6. Qué falló y cómo se corrigió
 
 - **Primer intento de la verificación: `429`.** Mi script llamaba a la API a ritmo de prueba unitaria contra una clave de 15 por minuto. Se agregó pausa entre llamadas y reintento tras `429`/`5xx`.
@@ -103,7 +112,10 @@ Solo libros que **vio con existencias** en esta petición: los de la búsqueda i
 - **No consultó precio ni ubicación cuando se los pidieron (v2).** v3 exige `consultar_disponibilidad` siempre que pregunten por precio, existencias o dónde está, aunque el libro ya esté en la lista.
 - **Voseo y diminutivos (v2).** v3 lo prohíbe de forma explícita. Es la primera observación del estilo, de la que se ocupará la Fase 5 con la evaluación.
 - **Por qué v3 y no editar v2:** v2 es lo que se probó en `staging`; cambiarlo sin cambiar el número dejaría esta tabla sin una versión a la que atribuirla. La Fase 4 compara v1, v2 y v3 con la misma suite.
-- **Pendiente de verificar con v3:** que los cinco casos de arriba salgan bien. Esos resultados se anotarán aquí cuando Oliver los pruebe.
+- **v3 acertó en tres de cuatro y falló en lo peor: inventó un horario.** Con `consultar_politicas` como herramienta, el prompt decía «siempre», y aun así una de las dos veces el modelo respondió sin consultarla (rondas: 0). Con 2 muestras no se puede medir una tasa, pero no hace falta: un horario falso le cuesta una visita en vano a una persona, y las políticas son unas pocas líneas (~300 tokens). **Decisión:** las políticas dejan de ser una herramienta y viajan SIEMPRE en el último turno (`POLITICAS_DE_LA_LIBRERIA`, `politicasParaModelo`). Es el mismo principio de «recuperación primero» que ya se usa para los libros, en su versión más simple porque el corpus es diminuto: no hay nada que recuperar, solo que dejar de depender de que el modelo decida mirarlo. `consultar_politicas`, `buscarPolitica` y su validación se eliminaron; v4 reemplaza a v3. Efecto colateral: la pregunta de Bolaño ya no gasta dos rondas en políticas.
+- **El 502 no se pudo diagnosticar, y eso también fue un fallo.** El registro decía `fallo del modelo Error` porque `ErrorRespuestaInvalida` no definía su `name`; el único dato útil era que no tenía código HTTP, es decir, el modelo contestó pero con una respuesta que el validador rechazó (no JSON, cortada por el límite de tokens, o pidiendo herramientas cuando ya no se le ofrecían). Cambios: el error ahora tiene nombre y motivo fijo en el registro (sin texto de la persona); el límite de tokens de salida sube de 1024 a 2048 (el pensamiento cuenta dentro del tope); y si la respuesta final es inválida se pide **una sola vez más** (`meta.reintentoFinal`), porque ese tipo de fallo suele no repetirse. Sigue sin saberse cuál de las tres causas fue; con el nuevo registro, la próxima vez se sabrá.
+- **Una prueba del prompt contra el modelo real.** `verificar-prompt-gemini.mjs` (workflow de Gemini) usa el prompt vigente con el contexto exacto que arma la Lambda y repite 3 veces el caso del horario del jueves, el del domingo y un tema que no está en las políticas. Es una alarma barata, no la suite de la Fase 4.
+- **Pendiente:** que Oliver repita los casos con v4 en `staging`.
 
 ## 7. Esfuerzo
 

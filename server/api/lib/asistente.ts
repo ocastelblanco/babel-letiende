@@ -291,6 +291,7 @@ export function mensajesParaModelo(
   mensajes: MensajeConversacion[],
   libros: LibroParaModelo[],
   ahoraMs: number = Date.now(),
+  politicas: { tema: string; texto: string }[] = [],
 ): MensajeConversacion[] {
   const ultimo = mensajes.length - 1;
   const momento = momentoActualParaModelo(ahoraMs);
@@ -299,7 +300,7 @@ export function mensajesParaModelo(
     posicion === ultimo
       ? {
           rol: mensaje.rol,
-          texto: `${fecha}\n\nLIBROS_DISPONIBLES:\n${JSON.stringify(libros)}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
+          texto: `${fecha}\n\nPOLITICAS_DE_LA_LIBRERIA:\n${JSON.stringify(politicas)}\n\nLIBROS_DISPONIBLES:\n${JSON.stringify(libros)}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
         }
       : mensaje,
   );
@@ -327,7 +328,13 @@ export const ESQUEMA_SALIDA: Record<string, unknown> = {
 // ---------------------------------------------------------------------------
 
 /** La salida del modelo no sirve (no es JSON, no cumple el esquema o se cortó). */
-export class ErrorRespuestaInvalida extends Error {}
+export class ErrorRespuestaInvalida extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    // Sin esto el registro decía solo «Error» y el 502 de staging (18/11/2026) no se podía diagnosticar.
+    this.name = 'ErrorRespuestaInvalida';
+  }
+}
 
 export interface RespuestaValidada {
   texto: string;

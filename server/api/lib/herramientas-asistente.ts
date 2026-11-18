@@ -18,11 +18,10 @@ export const MAXIMO_RONDAS = 3;
 export const MAXIMO_LLAMADAS_POR_RONDA = 4;
 export const MAXIMO_LIBROS_POR_CONSULTA_DE_DISPONIBILIDAD = 5;
 const MAXIMO_CARACTERES_CONSULTA = 300;
-const MAXIMO_CARACTERES_TEMA = 80;
 const MAXIMO_CARACTERES_ID = 64;
 const MAXIMO_PRECIO = 10_000_000;
 
-export const NOMBRES_HERRAMIENTAS = ['buscar_libros', 'consultar_disponibilidad', 'consultar_politicas'] as const;
+export const NOMBRES_HERRAMIENTAS = ['buscar_libros', 'consultar_disponibilidad'] as const;
 export type NombreHerramienta = (typeof NOMBRES_HERRAMIENTAS)[number];
 
 export const HERRAMIENTAS: DeclaracionHerramienta[] = [
@@ -57,18 +56,6 @@ export const HERRAMIENTAS: DeclaracionHerramienta[] = [
       required: ['book_ids'],
     },
   },
-  {
-    nombre: 'consultar_politicas',
-    descripcion:
-      'Consulta las políticas de la librería: horarios, formas de pago, cambios y devoluciones, envíos y similares. Úsala siempre que la persona pregunte por algo de ese estilo; nunca respondas esas preguntas de memoria.',
-    parametros: {
-      type: 'object',
-      properties: {
-        tema: { type: 'string', description: 'El tema consultado, por ejemplo «horarios», «formas de pago» o «cambios».' },
-      },
-      required: ['tema'],
-    },
-  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -84,7 +71,6 @@ export interface FiltrosBusqueda {
 export type LlamadaValidada =
   | { ok: true; nombre: 'buscar_libros'; consulta: string; filtros: FiltrosBusqueda }
   | { ok: true; nombre: 'consultar_disponibilidad'; bookIds: string[] }
-  | { ok: true; nombre: 'consultar_politicas'; tema: string }
   | { ok: false; error: string };
 
 const ausente = (valor: unknown): boolean => valor === undefined || valor === null;
@@ -133,13 +119,6 @@ export function validarLlamada(nombre: string, argumentos: Record<string, unknow
       }
       return { ok: true, nombre, bookIds: [...new Set((ids as string[]).map((id) => id.trim()))] };
     }
-    case 'consultar_politicas': {
-      const tema = typeof argumentos['tema'] === 'string' ? argumentos['tema'].trim() : '';
-      if (tema === '' || tema.length > MAXIMO_CARACTERES_TEMA) {
-        return { ok: false, error: `«tema» es obligatorio: texto de 1 a ${MAXIMO_CARACTERES_TEMA} caracteres.` };
-      }
-      return { ok: true, nombre, tema };
-    }
     default:
       return { ok: false, error: `La herramienta «${nombre.slice(0, 40)}» no existe.` };
   }
@@ -184,32 +163,13 @@ export function cargarPoliticas(raiz: string = process.env['LAMBDA_TASK_ROOT'] ?
   }
 }
 
-const normalizar = (texto: string): string =>
-  texto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim();
-
-const palabrasSignificativas = (texto: string): string[] =>
-  normalizar(texto)
-    .split(/[^a-z0-9ñ]+/)
-    .filter((palabra) => palabra.length > 3);
-
-export type ResultadoPolitica =
-  | { encontrado: true; tema: string; contenido: string }
-  | { encontrado: false; temasDisponibles: string[] };
-
-export function buscarPolitica(temas: TemaPolitica[], consulta: string): ResultadoPolitica {
-  const buscada = normalizar(consulta);
-  const palabras = new Set(palabrasSignificativas(consulta));
-  const encontrada =
-    temas.find((t) => {
-      const titulo = normalizar(t.titulo);
-      return titulo.includes(buscada) || buscada.includes(titulo);
-    }) ??
-    temas.find((t) => palabrasSignificativas(t.titulo).some((palabra) => palabras.has(palabra)));
-  return encontrada
-    ? { encontrado: true, tema: encontrada.titulo, contenido: encontrada.contenido }
-    : { encontrado: false, temasDisponibles: temas.map((t) => t.titulo) };
+/**
+ * Las políticas viajan SIEMPRE en el contexto del modelo, no detrás de una herramienta: el 18/11/2026,
+ * con la herramienta `consultar_politicas`, el modelo contestó una pregunta de horarios sin consultarla
+ * (el prompt decía «siempre») y se inventó un horario. Son pocas líneas y un dato equivocado sobre el
+ * horario o los pagos le cuesta una visita en vano a una persona real; no vale la pena dejar a
+ * criterio del modelo si las mira.
+ */
+export function politicasParaModelo(temas: TemaPolitica[]): { tema: string; texto: string }[] {
+  return temas.map(({ titulo, contenido }) => ({ tema: titulo, texto: contenido }));
 }

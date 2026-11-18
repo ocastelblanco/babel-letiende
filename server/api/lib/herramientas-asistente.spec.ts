@@ -3,9 +3,9 @@ import {
   HERRAMIENTAS,
   MAXIMO_LIBROS_POR_CONSULTA_DE_DISPONIBILIDAD,
   NOMBRES_HERRAMIENTAS,
-  buscarPolitica,
   cargarPoliticas,
   interpretarPoliticas,
+  politicasParaModelo,
   validarLlamada,
 } from './herramientas-asistente';
 
@@ -83,13 +83,10 @@ describe('validarLlamada — consultar_disponibilidad', () => {
   });
 });
 
-describe('validarLlamada — consultar_politicas y herramientas desconocidas', () => {
-  it('acepta un tema', () => {
-    expect(validarLlamada('consultar_politicas', { tema: ' horarios ' })).toEqual({ ok: true, nombre: 'consultar_politicas', tema: 'horarios' });
-  });
-
-  it.each([{}, { tema: '' }, { tema: 7 }, { tema: 'x'.repeat(81) }])('rechaza un tema inválido %j', (argumentos) => {
-    expect(validarLlamada('consultar_politicas', argumentos).ok).toBe(false);
+describe('validarLlamada — herramientas desconocidas', () => {
+  it('consultar_politicas ya no es una herramienta: las políticas viajan siempre en el contexto', () => {
+    expect(NOMBRES_HERRAMIENTAS).not.toContain('consultar_politicas');
+    expect(validarLlamada('consultar_politicas', { tema: 'horarios' }).ok).toBe(false);
   });
 
   it('rechaza una herramienta que no existe y no refleja el nombre completo', () => {
@@ -136,29 +133,17 @@ Se aceptan cambios dentro de los 8 días con la factura.
   });
 });
 
-describe('buscarPolitica', () => {
-  const temas = [
-    { titulo: 'Horarios', contenido: 'Lunes a sábado.' },
-    { titulo: 'Formas de pago', contenido: 'Efectivo y tarjeta.' },
-    { titulo: 'Cambios y devoluciones', contenido: '8 días.' },
-  ];
-
-  it('encuentra por el título aunque cambien tildes, mayúsculas o haya texto de más', () => {
-    expect(buscarPolitica(temas, 'HORARIOS')).toMatchObject({ encontrado: true, tema: 'Horarios' });
-    expect(buscarPolitica(temas, 'los horarios de atención')).toMatchObject({ encontrado: true, tema: 'Horarios' });
-    expect(buscarPolitica(temas, 'formas de págo')).toMatchObject({ encontrado: true, tema: 'Formas de pago' });
-  });
-
-  it('encuentra por una palabra significativa en común', () => {
-    expect(buscarPolitica(temas, 'devolución')).toMatchObject({ encontrado: true, tema: 'Cambios y devoluciones' });
-  });
-
-  it('si no hay tema, devuelve los disponibles y nada inventado', () => {
-    expect(buscarPolitica(temas, 'garantía de tapa dura')).toEqual({
-      encontrado: false,
-      temasDisponibles: ['Horarios', 'Formas de pago', 'Cambios y devoluciones'],
-    });
-    expect(buscarPolitica([], 'horarios')).toEqual({ encontrado: false, temasDisponibles: [] });
+describe('politicasParaModelo', () => {
+  it('entrega cada tema con su texto tal cual, sin perder ni inventar nada', () => {
+    const temas = [
+      { titulo: 'Horarios', contenido: 'Lunes a sábado.' },
+      { titulo: 'Formas de pago', contenido: 'Efectivo y tarjeta.' },
+    ];
+    expect(politicasParaModelo(temas)).toEqual([
+      { tema: 'Horarios', texto: 'Lunes a sábado.' },
+      { tema: 'Formas de pago', texto: 'Efectivo y tarjeta.' },
+    ]);
+    expect(politicasParaModelo([])).toEqual([]);
   });
 });
 

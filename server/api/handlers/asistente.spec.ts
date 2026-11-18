@@ -298,7 +298,7 @@ describe('responder — herramientas', () => {
     const { proveedor, generarJson } = proveedorSecuencia([final(respuestaFinal())]);
     const respuesta = await responder(conHerramientas(proveedor), peticion());
     expect(generarJson).toHaveBeenCalledTimes(1);
-    expect(llamadaN(generarJson, 0).herramientas?.map((h) => h.nombre)).toEqual(['buscar_libros', 'consultar_disponibilidad', 'consultar_politicas']);
+    expect(llamadaN(generarJson, 0).herramientas?.map((h) => h.nombre)).toEqual(['buscar_libros', 'consultar_disponibilidad']);
     expect(respuesta.meta).toMatchObject({ rondas: 0, herramientas: [], fallosHerramientas: 0, tiempoAgotado: false });
   });
 
@@ -329,16 +329,24 @@ describe('responder — herramientas', () => {
     expect(respuesta.meta).toMatchObject({ rondas: 1, herramientas: ['consultar_disponibilidad'] });
   });
 
-  it('consultar_politicas devuelve el texto del archivo, o que no hay información', async () => {
-    const { proveedor, generarJson } = proveedorSecuencia([
-      pide({ id: 'c1', nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } }, { id: 'c2', nombre: 'consultar_politicas', argumentos: { tema: 'garantía' } }),
-      final({ texto: 'Atendemos de lunes a sábado.', recomendaciones: [], sinResultados: false }),
-    ]);
+  it('las políticas viajan siempre en el último turno, sin que el modelo tenga que pedirlas', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final({ texto: 'Atendemos de lunes a sábado.', recomendaciones: [], sinResultados: false })]);
     const respuesta = await responder(conHerramientas(proveedor), peticion('¿a qué hora abren?'));
-    const resultados = llamadaN(generarJson, 1).rondas?.[0].resultados ?? [];
-    expect(JSON.parse(resultados[0].contenido)).toEqual({ encontrado: true, tema: 'Horarios', contenido: 'Lunes a sábado de 10 a. m. a 6 p. m.' });
-    expect(JSON.parse(resultados[1].contenido)).toEqual({ encontrado: false, temasDisponibles: ['Horarios'] });
-    expect(respuesta.texto).toBe('Atendemos de lunes a sábado.');
+    expect(generarJson).toHaveBeenCalledTimes(1);
+    const llamada = generarJson.mock.calls[0] as unknown as [{ instrucciones: string; mensajes: { texto: string }[] }];
+    expect(llamada[0].mensajes[0].texto).toContain('POLITICAS_DE_LA_LIBRERIA:\n[{"tema":"Horarios","texto":"Lunes a sábado de 10 a. m. a 6 p. m."}]');
+    expect(llamada[0].instrucciones).not.toContain('Lunes a sábado'); // los datos nunca van en las instrucciones
+    expect(respuesta.meta.herramientas).toEqual([]);
+  });
+
+  it('un modelo que aún pidiera consultar_politicas recibe «no existe» y no revienta', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([
+      pide({ id: 'c1', nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } }),
+      final(respuestaFinal()),
+    ]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion());
+    expect(JSON.parse(llamadaN(generarJson, 1).rondas?.[0].resultados[0].contenido as string).error).toMatch(/no existe/);
+    expect(respuesta.meta.fallosHerramientas).toBe(1);
   });
 
   it('buscar_libros amplía lo que se puede recomendar con libros que la primera búsqueda no traía', async () => {
@@ -406,7 +414,7 @@ describe('responder — herramientas', () => {
   });
 
   it('topa las rondas: tras el máximo, la última llamada al modelo ya no ofrece herramientas', async () => {
-    const pedir = (n: number) => pide({ id: `c${n}`, nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } });
+    const pedir = (n: number) => pide({ id: `c${n}`, nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } });
     const { proveedor, generarJson } = proveedorSecuencia([pedir(1), pedir(2), pedir(3), final(respuestaFinal())]);
     const respuesta = await responder(conHerramientas(proveedor), peticion());
     expect(generarJson).toHaveBeenCalledTimes(4);
@@ -417,18 +425,23 @@ describe('responder — herramientas', () => {
   });
 
   it('si el modelo insiste en pedir herramientas cuando ya no se le ofrecen, es un fallo y no una respuesta', async () => {
-    const pedir = (n: number) => pide({ id: `c${n}`, nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } });
-    const { proveedor } = proveedorSecuencia([pedir(1), pedir(2), pedir(3), pedir(4)]);
-    await expect(responder(conHerramientas(proveedor), peticion())).rejects.toThrow(ErrorRespuestaInvalida);
+    const pedir = (n: number) => pide({ id: `c${n}`, nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } });
+    const { proveedor, generarJson } = proveedorSecuencia([pedir(1), pedir(2), pedir(3), pedir(4), pedir(5)]);
+    await expect(responder(conHerramientas(proveedor), peticion())).rejects.toThrow(/siguió pidiendo herramientas/);
+    expect(generarJson).toHaveBeenCalledTimes(5); // 3 vueltas + final + 1 reintento
+    expect(llamadaN(generarJson, 4).herramientas).toBeUndefined();
   });
 
   it('con un prompt sin herramientas, si el modelo pidiera una igualmente, no se ejecuta y es un fallo', async () => {
-    const { proveedor } = proveedorSecuencia([pide({ id: 'c1', nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } })]);
+    const { proveedor } = proveedorSecuencia([
+      pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
+      pide({ id: 'c2', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
+    ]);
     await expect(responder(dependencias(proveedor), peticion())).rejects.toThrow(ErrorRespuestaInvalida);
   });
 
   it('cada llamada de una vuelta recibe respuesta; las que pasan del tope reciben un error', async () => {
-    const llamadas = Array.from({ length: 6 }, (_, i) => ({ id: `c${i}`, nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } }));
+    const llamadas = Array.from({ length: 6 }, (_, i) => ({ id: `c${i}`, nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }));
     const { proveedor, generarJson } = proveedorSecuencia([pide(...llamadas), final(respuestaFinal())]);
     const respuesta = await responder(conHerramientas(proveedor), peticion());
     const resultados = llamadaN(generarJson, 1).rondas?.[0].resultados ?? [];
@@ -447,7 +460,7 @@ describe('responder — herramientas', () => {
 
   it('suma los tokens de todas las vueltas', async () => {
     const { proveedor } = proveedorSecuencia([
-      pide({ id: 'c1', nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } }),
+      pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
       final(respuestaFinal()),
     ]);
     const respuesta = await responder(conHerramientas(proveedor), peticion());
@@ -459,13 +472,13 @@ describe('responder — herramientas', () => {
   it('si la cadena ya tardó demasiado, no se pide otra vuelta y se avisa de la demora', async () => {
     let reloj = 0;
     const { proveedor, generarJson } = proveedorSecuencia([
-      pide({ id: 'c1', nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } }),
+      pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
       final(respuestaFinal()),
     ]);
     // La primera vuelta consume 19 s del reloj simulado.
     generarJson.mockImplementationOnce(async () => {
       reloj += 19_000;
-      return pide({ id: 'c1', nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } });
+      return pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } });
     });
     const respuesta = await responder(conHerramientas(proveedor, { ahora: () => reloj }), peticion());
     expect(generarJson).toHaveBeenCalledTimes(1);
@@ -479,13 +492,59 @@ describe('responder — herramientas', () => {
     generarJson
       .mockImplementationOnce(async () => {
         reloj += 15_000;
-        return pide({ id: 'c1', nombre: 'consultar_politicas', argumentos: { tema: 'horarios' } });
+        return pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } });
       })
       .mockImplementationOnce(async () => final(respuestaFinal()));
     const respuesta = await responder(conHerramientas(proveedor, { ahora: () => reloj }), peticion());
     expect(generarJson).toHaveBeenCalledTimes(2);
     expect(llamadaN(generarJson, 1).herramientas).toBeUndefined();
     expect(respuesta.meta.tiempoAgotado).toBe(false);
+  });
+});
+
+describe('responder — reintento de la respuesta final', () => {
+  it('si la respuesta final no es JSON, se pide una vez más y se usa la segunda', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([generacion('esto no es JSON'), final(respuestaFinal())]);
+    const respuesta = await responder(dependencias(proveedor), peticion());
+    expect(generarJson).toHaveBeenCalledTimes(2);
+    expect(respuesta.recomendaciones).toHaveLength(1);
+    expect(respuesta.meta.reintentoFinal).toBe(true);
+    expect(respuesta.meta.tokensSalida).toBe(160); // se cuentan las dos llamadas
+  });
+
+  it('si la respuesta se cortó por el límite de tokens, también se reintenta una vez', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([generacion('{"texto":"Mira', { truncado: true }), final(respuestaFinal())]);
+    const respuesta = await responder(dependencias(proveedor), peticion());
+    expect(generarJson).toHaveBeenCalledTimes(2);
+    expect(respuesta.meta.reintentoFinal).toBe(true);
+  });
+
+  it('solo se reintenta una vez: si la segunda también falla, es un fallo (502) con el motivo', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([generacion('no'), generacion('tampoco')]);
+    await expect(responder(dependencias(proveedor), peticion())).rejects.toThrow(/no es JSON/);
+    expect(generarJson).toHaveBeenCalledTimes(2);
+  });
+
+  it('una respuesta válida a la primera no gasta un reintento', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(respuestaFinal())]);
+    const respuesta = await responder(dependencias(proveedor), peticion());
+    expect(generarJson).toHaveBeenCalledTimes(1);
+    expect(respuesta.meta.reintentoFinal).toBe(false);
+  });
+
+  it('si ya pasó el tiempo para otra llamada, no reintenta', async () => {
+    let reloj = 0;
+    const { proveedor, generarJson } = proveedorSecuencia([]);
+    generarJson.mockImplementationOnce(async () => {
+      reloj += 15_000;
+      return generacion('no es JSON');
+    });
+    await expect(responder(dependencias(proveedor, { ahora: () => reloj }), peticion())).rejects.toThrow(ErrorRespuestaInvalida);
+    expect(generarJson).toHaveBeenCalledTimes(1);
+  });
+
+  it('el nombre del error permite diagnosticar el 502 en el registro', () => {
+    expect(new ErrorRespuestaInvalida('x').name).toBe('ErrorRespuestaInvalida');
   });
 });
 

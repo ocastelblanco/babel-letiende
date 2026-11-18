@@ -29,8 +29,8 @@ import {
   HERRAMIENTAS,
   MAXIMO_LLAMADAS_POR_RONDA,
   MAXIMO_RONDAS,
-  buscarPolitica,
   cargarPoliticas,
+  politicasParaModelo,
   validarLlamada,
   type TemaPolitica,
 } from '../lib/herramientas-asistente';
@@ -115,13 +115,16 @@ export interface RespuestaAsistente {
     fallosHerramientas: number;
     /** Se cortó la cadena de herramientas por tiempo y se respondió con el aviso de demora. */
     tiempoAgotado: boolean;
+    /** La primera respuesta final no era válida (cortada o no JSON) y se pidió una vez más. */
+    reintentoFinal: boolean;
   };
 }
 
 /** Todavía no hay un índice utilizable (no se ha construido, o es de otro modelo de embeddings). */
 export class IndiceNoDisponibleError extends Error {}
 
-const MAXIMO_TOKENS_SALIDA = 1024;
+// El pensamiento del modelo cuenta dentro de este tope: con 1024 una respuesta larga podía cortarse.
+const MAXIMO_TOKENS_SALIDA = 2048;
 /**
  * API Gateway corta a los 30 s y cada llamada al modelo puede tardar 5 a 13 s (medido contra la API real,
  * 18/11/2026). Una vuelta más de herramientas solo se intenta si queda tiempo para ella y para la respuesta.
@@ -221,8 +224,6 @@ async function ejecutarLlamada(
         );
         return { contenido: JSON.stringify({ libros }), fallo: false };
       }
-      case 'consultar_politicas':
-        return { contenido: JSON.stringify(buscarPolitica(dependencias.politicas, validada.tema)), fallo: false };
     }
   } catch (error) {
     // El detalle va al registro (sin contenido de la persona); al modelo solo un mensaje genérico.
@@ -265,6 +266,7 @@ export async function responder(
   let tokensGeneracionEntrada = 0;
   let tokensSalida = 0;
   let modelo: string | null = null;
+  let reintentoFinal = false;
 
   const meta = (extra: Partial<RespuestaAsistente['meta']>): RespuestaAsistente['meta'] => ({
     versionPrompt: prompt.version,
@@ -279,6 +281,7 @@ export async function responder(
     herramientas: herramientasLlamadas,
     fallosHerramientas,
     tiempoAgotado: false,
+    reintentoFinal,
     ...extra,
   });
 
@@ -288,6 +291,21 @@ export async function responder(
   }
 
   const librosIniciales = await paraModelo(dependencias, inicial.candidatos);
+  const generar = async (conHerramientas: boolean): Promise<ResultadoGeneracion> => {
+    const resultado = await proveedor.generarJson({
+      instrucciones: prompt.instrucciones,
+      mensajes: mensajesParaModelo(peticion.mensajes, librosIniciales, ahora(), politicasParaModelo(dependencias.politicas)),
+      esquemaSalida: ESQUEMA_SALIDA,
+      maximoTokensSalida: MAXIMO_TOKENS_SALIDA,
+      nivelPensamiento: 'low',
+      ...(conHerramientas ? { herramientas: HERRAMIENTAS } : {}),
+      ...(rondasHechas.length > 0 ? { rondas: rondasHechas } : {}),
+    });
+    tokensGeneracionEntrada += resultado.tokensEntrada;
+    tokensSalida += resultado.tokensSalida;
+    modelo = resultado.modelo;
+    return resultado;
+  };
   let generacion: ResultadoGeneracion;
   for (;;) {
     const quedaTiempo = ahora() - inicio < LIMITE_PARA_OTRA_VUELTA_MS;
@@ -301,18 +319,7 @@ export async function responder(
         meta: meta({ tiempoAgotado: true }),
       };
     }
-    generacion = await proveedor.generarJson({
-      instrucciones: prompt.instrucciones,
-      mensajes: mensajesParaModelo(peticion.mensajes, librosIniciales, ahora()),
-      esquemaSalida: ESQUEMA_SALIDA,
-      maximoTokensSalida: MAXIMO_TOKENS_SALIDA,
-      nivelPensamiento: 'low',
-      ...(puedeUsarHerramientas ? { herramientas: HERRAMIENTAS } : {}),
-      ...(rondasHechas.length > 0 ? { rondas: rondasHechas } : {}),
-    });
-    tokensGeneracionEntrada += generacion.tokensEntrada;
-    tokensSalida += generacion.tokensSalida;
-    modelo = generacion.modelo;
+    generacion = await generar(puedeUsarHerramientas);
     if (generacion.llamadas.length === 0 || !puedeUsarHerramientas) {
       break;
     }
@@ -333,20 +340,41 @@ export async function responder(
     rondasHechas.push({ pasosDelModelo: generacion.pasosDelModelo, resultados });
   }
 
-  if (generacion.bloqueado) {
-    return {
-      texto: TEXTO_BLOQUEADO,
-      recomendaciones: [],
-      sinResultados: true,
-      meta: meta({ bloqueado: true }),
-    };
-  }
-  if (generacion.llamadas.length > 0 || generacion.truncado) {
-    // O el modelo siguió pidiendo herramientas cuando ya no se le ofrecían, o se cortó: no hay respuesta que validar.
-    throw new ErrorRespuestaInvalida('La respuesta del modelo no es final o se cortó.');
-  }
+  const respuestaBloqueada = (): RespuestaAsistente => ({
+    texto: TEXTO_BLOQUEADO,
+    recomendaciones: [],
+    sinResultados: true,
+    meta: meta({ bloqueado: true }),
+  });
+  const validarFinal = (g: ResultadoGeneracion) => {
+    if (g.llamadas.length > 0) {
+      throw new ErrorRespuestaInvalida('El modelo siguió pidiendo herramientas cuando ya no se le ofrecían.');
+    }
+    if (g.truncado) {
+      throw new ErrorRespuestaInvalida('La respuesta del modelo se cortó por el límite de tokens.');
+    }
+    return validarRespuesta(g.texto, new Set(sesion.vistos.keys()));
+  };
 
-  const validada = validarRespuesta(generacion.texto, new Set(sesion.vistos.keys()));
+  if (generacion.bloqueado) {
+    return respuestaBloqueada();
+  }
+  let validada: ReturnType<typeof validarFinal>;
+  try {
+    validada = validarFinal(generacion);
+  } catch (error) {
+    if (!(error instanceof ErrorRespuestaInvalida) || ahora() - inicio >= LIMITE_PARA_OTRA_VUELTA_MS) {
+      throw error;
+    }
+    // Una respuesta final cortada o que no es JSON suele no repetirse: se pide una sola vez más, sin herramientas.
+    console.warn('asistente: respuesta final inválida, se reintenta una vez:', error.message);
+    reintentoFinal = true;
+    generacion = await generar(false);
+    if (generacion.bloqueado) {
+      return respuestaBloqueada();
+    }
+    validada = validarFinal(generacion);
+  }
   return {
     texto: validada.texto,
     // Lista blanca explícita: nada de esparcir el ítem de la base de datos.
@@ -491,7 +519,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
     }
     if (error instanceof ErrorProveedorLlm || error instanceof ErrorRespuestaInvalida) {
       // Detalle solo en el registro de la Lambda; el mensaje del proveedor nunca llega al cliente.
-      console.error('asistente: fallo del modelo', error.name, error instanceof ErrorProveedorLlm ? error.estadoHttp : '');
+      // Solo datos propios del fallo (nombre, estado HTTP y código del proveedor, o el motivo fijo de la validación); nunca texto de la persona.
+      console.error(
+        'asistente: fallo del modelo',
+        error.name,
+        error instanceof ErrorProveedorLlm ? `${error.estadoHttp ?? 'sin-estado'} ${error.codigo ?? ''}`.trim() : error.message,
+      );
       const saturado = error instanceof ErrorProveedorLlm && error.reintentable;
       return respuestaJson(saturado ? 503 : 502, {
         error: 'No pude preparar una recomendación en este momento. Intenta de nuevo.',

@@ -119,7 +119,7 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto al plan:** la búsqueda inicial de `T-0023` se conserva y las herramientas son de apoyo. Con 5 a 13 s por llamada al modelo (medido), hacer de `buscar_libros` el único camino costaría dos llamadas por pregunta, contra el límite de 30 s de API Gateway.
 
 - [x] Contrato del llamado de herramientas verificado contra la API real (`asistente-ia/scripts/verificar-herramientas-gemini.mjs`): declaración plana, `requires_action`, el pensamiento se reenvía (si no, 400), el resultado va como lista de partes de texto, herramientas + salida JSON en la misma petición, llamadas en paralelo, `tool_choice`.
-- [x] Herramientas de solo lectura: `buscar_libros(consulta, filtros)`, `consultar_disponibilidad(bookIds)` (precio, existencias, Espacio/Mueble/Ubicación), `consultar_politicas(tema)`.
+- [x] Herramientas de solo lectura: `buscar_libros(consulta, filtros)`, `consultar_disponibilidad(bookIds)` (precio, existencias, Espacio/Mueble/Ubicación). Las políticas de la librería no son herramienta: viajan siempre en el contexto (v4, tras un horario inventado en `staging`).
 - [x] Lista blanca de campos: el modelo **nunca** recibe `costo`, `utilidad`, `porcentajeDescuentoEditorial` ni datos de ventas (prueba con un libro que los trae).
 - [x] Validación de argumentos en el servidor (el modelo real omitió un parámetro obligatorio en la verificación), tope de 3 rondas y de 4 llamadas por ronda, presupuesto de tiempo, y respuesta definida cuando una herramienta falla o los argumentos son inválidos.
 - [x] Rol IAM de la Lambda: solo lectura (`GetItem`) sobre libros, conocimiento, usuarios, ubicaciones, muebles y espacios, y lectura del índice en S3.
@@ -127,7 +127,8 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [x] 61 pruebas nuevas (752 en total) que ejercitan cada herramienta, incluidos los fallos.
 - [x] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**, completado el 18/11/2026: horarios, formas de pago, cambios y devoluciones, ubicación, envíos y apartados). Un tema vacío hace que el asistente diga que no tiene el dato.
 - [x] Verificado en `staging` por el usuario con su sesión (prompt v2, 5 preguntas): disponibilidad, ubicación y horarios correctos; 3 fallos hallados y corregidos en el mismo PR con el prompt v3 y la fecha calculada en el servidor (bitácora 05 §5-6).
-- [ ] Verificar v3 en `staging` con los mismos 5 casos.
+- [x] Segunda prueba en `staging` (v3): buscar con filtros y precio/ubicación correctos; un horario inventado y un 502 → v4 (políticas siempre en el contexto, sin la herramienta `consultar_politicas`), reintento de la respuesta final y registro con motivo.
+- [ ] Verificar v4 en `staging` con los mismos casos.
 
 ### Fase 4 — Suite de evaluación · `T-0040` · capacidad: pruebas funcionales y de regresión
 
