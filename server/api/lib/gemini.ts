@@ -45,6 +45,10 @@ export interface OpcionesGemini {
   modeloTexto?: string;
   modeloEmbeddings?: string;
   dimensiones?: number;
+  /** Tiempo máximo por intento. Un endpoint interactivo lo baja para no pasar el límite de API Gateway (30 s). */
+  timeoutMs?: number;
+  /** Reintentos tras el primer intento (429, 5xx y red). */
+  reintentosMaximos?: number;
   /** Para pruebas. */
   fetchImpl?: typeof fetch;
   esperar?: (ms: number) => Promise<void>;
@@ -70,6 +74,8 @@ export class ProveedorGemini implements ProveedorLlm {
   private readonly claveApi: string;
   private readonly fetchImpl: typeof fetch;
   private readonly esperar: (ms: number) => Promise<void>;
+  private readonly timeoutMs: number;
+  private readonly reintentosMaximos: number;
 
   constructor(opciones: OpcionesGemini) {
     if (!opciones.claveApi) {
@@ -81,6 +87,8 @@ export class ProveedorGemini implements ProveedorLlm {
     this.dimensiones = opciones.dimensiones ?? DIMENSIONES_POR_DEFECTO;
     this.fetchImpl = opciones.fetchImpl ?? fetch;
     this.esperar = opciones.esperar ?? esperarReal;
+    this.timeoutMs = opciones.timeoutMs ?? TIMEOUT_MS;
+    this.reintentosMaximos = opciones.reintentosMaximos ?? REINTENTOS_MAXIMOS;
   }
 
   async incrustarDocumentos(documentos: DocumentoParaIncrustar[]): Promise<ResultadoIncrustacion> {
@@ -201,7 +209,7 @@ export class ProveedorGemini implements ProveedorLlm {
     cabeceras: Record<string, string> = {},
   ): Promise<T> {
     let ultimo: ErrorProveedorLlm | null = null;
-    for (let intento = 0; intento <= REINTENTOS_MAXIMOS; intento += 1) {
+    for (let intento = 0; intento <= this.reintentosMaximos; intento += 1) {
       if (intento > 0) {
         await this.esperar(PAUSA_BASE_MS * 2 ** (intento - 1));
       }
@@ -214,7 +222,7 @@ export class ProveedorGemini implements ProveedorLlm {
             ...cabeceras,
           },
           body: JSON.stringify(cuerpo),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
+          signal: AbortSignal.timeout(this.timeoutMs),
         });
         if (respuesta.ok) {
           return (await respuesta.json()) as T;
@@ -253,8 +261,12 @@ export class ProveedorGemini implements ProveedorLlm {
 }
 
 /** Construye el proveedor desde las variables de entorno de la Lambda. */
-export function crearProveedorLlm(entorno: NodeJS.ProcessEnv = process.env): ProveedorLlm {
+export function crearProveedorLlm(
+  entorno: NodeJS.ProcessEnv = process.env,
+  opciones: Pick<OpcionesGemini, 'timeoutMs' | 'reintentosMaximos'> = {},
+): ProveedorLlm {
   return new ProveedorGemini({
+    ...opciones,
     claveApi: entorno['GEMINI_API_KEY'] ?? '',
     modeloTexto: entorno['GEMINI_MODELO_TEXTO'] || undefined,
     modeloEmbeddings: entorno['GEMINI_MODELO_EMBEDDINGS'] || undefined,
