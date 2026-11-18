@@ -2,7 +2,9 @@
 /**
  * Prueba el prompt vigente del asistente contra el modelo REAL, con el mismo contexto que arma la
  * Lambda (fecha, políticas reales del archivo y lista de libros), para los casos que fallaron en
- * `staging` el 18/11/2026: un horario inventado y un horario del día equivocado. Requiere
+ * `staging` el 18/11/2026 (un horario inventado y un horario del día equivocado), un dato que se debe citar
+ * (la dirección del parqueadero) y un tema ausente. Si cambias esos temas en `politicas-libreria.md`,
+ * las primeras comprobaciones te avisan que esta prueba quedó desactualizada. Requiere
  * `npm run build:api`. Usa la versión de `VERSION_PROMPT_ASISTENTE` (por defecto, la de serverless.yml).
  *
  * No sustituye la suite de evaluación de la Fase 4: es una alarma barata y con la clave de `staging`.
@@ -71,10 +73,15 @@ const MIERCOLES = Date.UTC(2026, 10, 18, 17, 0);
 // Horario real del archivo: dom-mié 2-8 p. m.; jue-sáb 2-10 p. m. (lo comprueba la primera línea).
 const horarios = politicas.find((t) => /horario/i.test(t.tema))?.texto ?? '';
 comprobar(/jueves a s[aá]bado.*10:00\s*pm/i.test(horarios) && /domingo a mi[eé]rcoles.*8:00\s*pm/i.test(horarios), 'el archivo de políticas conserva el horario que esta prueba espera (jueves a sábado hasta las 10 p. m.; domingo a miércoles hasta las 8 p. m.)');
+const parqueadero = politicas.find((t) => /parqueadero/i.test(t.tema))?.texto ?? '';
+comprobar(/carrera 20 #37-67/i.test(parqueadero), 'el archivo de políticas conserva la dirección del parqueadero que esta prueba espera');
+comprobar(!politicas.some((t) => /wifi|internet/i.test(`${t.tema} ${t.texto}`)), 'el archivo de políticas no habla de wifi (el tema «ausente» de esta prueba)');
 
 await repetir('¿Abren mañana? ¿en qué horario?', MIERCOLES, 'mañana (jueves) dice 10 p. m. y no inventa otro horario', (t) => /(10|diez)/.test(t) && !/nueve de la ma[ñn]ana|9:00\s*a\.?\s*m|9 a\.?\s*m/.test(t));
 await repetir('¿Abren el domingo? ¿hasta qué hora?', MIERCOLES, 'domingo dice 8 p. m.', (t) => /(8|ocho)/.test(t) && !/(10|diez)\s*(p\.?\s*m|de la noche)/.test(t));
-await repetir('¿Tienen parqueadero propio para los clientes?', MIERCOLES, 'un tema que no está en las políticas se reconoce sin inventar', (t) => /no (tengo|cuento|dispongo|dispone|tenemos)|no (esa|ese) (dato|informaci)|directamente|preguntar|comunicar/.test(t) && !/(^|[.!¡]\s*)s[ií],? (tenemos|contamos|hay)/.test(t)); // «sí, tenemos» al inicio de frase; no el «si» condicional («sobre si contamos»)
+await repetir('¿Tienen parqueadero propio para los clientes?', MIERCOLES, 'parqueadero: dice que no hay propio y da la dirección del más cercano', (t) => /no (contamos|tenemos|hay)/.test(t) && /(carrera|cra\.?|kr\.?)\s*20|37-67/.test(t) && !/(^|[.!¡]\s*)s[ií],? (tenemos|contamos|hay)/.test(t));
+// Un tema que no está en el archivo: debe reconocerlo sin inventar. «sí, tenemos» al inicio de frase cuenta como inventar; el «si» condicional («sobre si contamos») no.
+await repetir('¿Tienen wifi gratis para los clientes?', MIERCOLES, 'un tema que no está en las políticas se reconoce sin inventar', (t) => /no (tengo|cuento|dispongo|dispone|tenemos)|no (esa|ese) (dato|informaci)|directamente|preguntar|comunicar/.test(t) && !/(^|[.!¡]\s*)s[ií],? (tenemos|contamos|hay)/.test(t));
 
 console.log(fallos === 0 ? '\nTodo en orden.' : `\n${fallos} comprobaciones fallaron.`);
 process.exit(fallos === 0 ? 0 : 1);

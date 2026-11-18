@@ -128,7 +128,7 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [x] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**, completado el 18/11/2026: horarios, formas de pago, cambios y devoluciones, ubicación, envíos y apartados). Un tema vacío hace que el asistente diga que no tiene el dato.
 - [x] Verificado en `staging` por el usuario con su sesión (prompt v2, 5 preguntas): disponibilidad, ubicación y horarios correctos; 3 fallos hallados y corregidos en el mismo PR con el prompt v3 y la fecha calculada en el servidor (bitácora 05 §5-6).
 - [x] Segunda prueba en `staging` (v3): buscar con filtros y precio/ubicación correctos; un horario inventado y un 502 → v4 (políticas siempre en el contexto, sin la herramienta `consultar_politicas`), reintento de la respuesta final y registro con motivo.
-- [ ] Verificar v4 en `staging` con los mismos casos.
+- [x] v4 verificada: 9 de 9 en el CI contra el modelo real (`verificar-prompt-gemini.mjs`) y varias pruebas de Oliver en `staging`, incluidas preguntas de políticas. Oliver agregó al archivo de políticas el tema del parqueadero.
 
 ### Fase 4 — Suite de evaluación · `T-0040` · capacidad: pruebas funcionales y de regresión
 
@@ -137,11 +137,12 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [ ] Métricas deterministas: existencia, disponibilidad, cumplimiento de restricciones, rechazo correcto, acierto (hit@k), resistencia a inyección, tokens, costo y latencia. Recall@k del recuperador sin LLM (barato). Modelo juez opcional para la fidelidad de la explicación, con sus sesgos documentados.
 - [ ] Ejecutor con control de cuota, `--dry-run` y nueva puntuación sin llamar a la API; resultados crudos fuera de git y tabla agregada en git.
 - [ ] Compuerta: `evals:comparar` contra la línea base sale con error si alguna métrica empeora más de la tolerancia. Workflow manual de GitHub Actions, obligatorio antes de cambiar prompt o modelo.
-- [ ] Primera corrida con v1 = línea base.
+- [ ] Primera corrida con v1 = línea base; luego v2, v3 y v4 (ya existen: salieron de las pruebas de `staging` de la Fase 3).
+- [ ] **Políticas: herramienta o contexto (decidido el 18/11/2026).** Convertir la anécdota de `staging` en una medición. Base actual, sin valor estadístico: con herramienta, v2 consultó las políticas en sus 2 preguntas de horario y v3 la omitió en 1 de 2 e inventó un horario; v4 (en el contexto) pasó 9 de 9 en el CI y las pruebas de Oliver. Plan: devolver `consultar_politicas` detrás de una opción del encabezado del prompt (`politicas: contexto | herramienta`, por defecto `contexto`), unas 15 preguntas de políticas (día relativo, día concreto, tema ausente, dato que se debe citar, pregunta mixta libro + política) con varias repeticiones, contra v3 (herramienta) y v4 (contexto). Métricas: acierto, alucinación, omisión de la herramienta, latencia y tokens. Resultado esperado: una tabla en la bitácora que justifique (o revierta) la decisión de v4. Producción sigue con `contexto` mientras tanto.
 
 ### Fase 5 — Iteración de prompts · `T-0050` · capacidad: versionar y optimizar prompts
 
-- [ ] v2 y v3 guiadas solo por fallos de la suite. Por cada cambio: motivo, hipótesis, efecto medido.
+- [ ] Desde v5, cambios guiados solo por fallos de la suite (v2 a v4 salieron de pruebas manuales en `staging`, antes de que existiera la suite). Por cada cambio: motivo, hipótesis, efecto medido.
 - [ ] Ficha por prompt y tabla de resultados por versión en la bitácora.
 
 ### Fase 6 — Operación segura (backend) · `T-0060` · capacidad: uso responsable, privacidad y seguridad
@@ -149,6 +150,7 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [ ] Tabla `babel-asistente-registros` (TTL): consulta con correos, teléfonos y números de documento enmascarados, `bookId` propuestos, latencia, tokens, costo estimado, modelo, versión del prompt, valoración y banderas (rechazo, inyección sospechada). Sin IP: solo un hash con sal diaria rotativa.
 - [ ] Tabla `babel-asistente-control`: interruptor administrable, contador atómico de gasto diario (tope en USD) y de mensajes por visitante (con TTL).
 - [ ] Límites de entrada (longitud, número de turnos) y limitación de tasa en API Gateway para la ruta.
+- [ ] **Validador de fidelidad (decidido el 18/11/2026).** Mismo principio que el validador de `bookId`, aplicado a datos: toda hora, porcentaje, teléfono, dirección y precio que aparezca en `texto` debe estar en las políticas o en los datos de ese turno (libros ofrecidos y resultados de herramientas). Si no, la respuesta se descarta, se pide una vez más y se cuenta en el registro. Sirve con las políticas en el contexto o detrás de una herramienta: tenerlas a la vista no impide que el modelo las cambie. Casos en la suite: respuestas con un dato alterado.
 - [ ] Casos de seguridad agregados a la suite; ficha de riesgos actualizada con los controles reales; verificación con la skill `owasp-security-verification`.
 
 ### Fase 7 — Chat en el catálogo público · `T-0070` · capacidad: asistente conversacional → **producción**

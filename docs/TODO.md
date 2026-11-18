@@ -668,7 +668,9 @@ Rama `feature/asistente-herramientas`. Detalle en `asistente-ia/PLAN.md` §3 y `
 - [x] Verificación en `staging` con tu sesión (prompt v2): 3 fallos hallados (día de «mañana» inventado, no buscó con filtros, no consultó precio/ubicación) + voseo.
 - [x] Corrección en el mismo PR: fecha y hora de Bogotá calculadas en el servidor (`FECHA_Y_HORA_ACTUAL`) y prompt v3. 759 pruebas backend.
 - [x] Segunda prueba (v3): 3 de 4 bien; un horario inventado y un 502. Corregido con v4: políticas siempre en el contexto (herramienta `consultar_politicas` eliminada), un reintento de la respuesta final, error con nombre y motivo en el registro. 761 pruebas backend; prueba del prompt contra el modelo real en el workflow de Gemini.
-- [ ] Verificar v4 en `staging` con los mismos casos y fusionar.
+- [x] v4 verificada en `staging` por Oliver (varias pruebas, incluidas de políticas) y en el CI contra el modelo real. Políticas: tema «Parqueadero» agregado.
+- [ ] Fusionar el PR #161 (lo hace Oliver).
+- [ ] Anotado en `asistente-ia/PLAN.md`: comparación herramienta/contexto para las políticas (Fase 4) y validador de fidelidad de datos (Fase 6).
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
 
