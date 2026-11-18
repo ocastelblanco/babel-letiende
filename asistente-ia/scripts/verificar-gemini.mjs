@@ -13,7 +13,8 @@
  *   GEMINI_API_KEY=... node asistente-ia/scripts/verificar-gemini.mjs
  */
 
-const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const HOST = 'https://generativelanguage.googleapis.com';
+const BASE = `${HOST}/v1beta`;
 const CLAVE = process.env.GEMINI_API_KEY;
 const MODELO_TEXTO = process.env.GEMINI_MODELO_TEXTO ?? 'gemini-3.5-flash-lite';
 const MODELO_EMBEDDINGS = process.env.GEMINI_MODELO_EMBEDDINGS ?? 'gemini-embedding-2';
@@ -36,11 +37,11 @@ function forma(valor, profundidad = 0) {
   return typeof valor === 'number' || typeof valor === 'boolean' ? valor : String(valor);
 }
 
-async function llamar(nombre, metodo, ruta, cuerpo, extraCabeceras = {}) {
+async function llamar(nombre, metodo, ruta, cuerpo, extraCabeceras = {}, base = BASE) {
   const inicio = Date.now();
   let respuesta;
   try {
-    respuesta = await fetch(`${BASE}${ruta}`, {
+    respuesta = await fetch(`${base}${ruta}`, {
       method: metodo,
       headers: { 'x-goog-api-key': CLAVE, 'Content-Type': 'application/json', ...extraCabeceras },
       body: cuerpo ? JSON.stringify(cuerpo) : undefined,
@@ -127,44 +128,107 @@ const ESQUEMA = {
 const SISTEMA = 'Eres un asistente de prueba. Responde solo con el JSON pedido.';
 const PREGUNTA = 'Recomiéndame un libro de la lista: [{"bookId":"a1","titulo":"Prueba"}].';
 
-// 4. Interactions API (la que describe la documentación actual)
-for (const nivel of ['minimal', 'low']) {
-  const r = await llamar(
-    `Interactions API (thinking_level=${nivel})`,
-    'POST',
-    '/interactions',
-    {
-      model: MODELO_TEXTO,
-      system_instruction: SISTEMA,
-      input: PREGUNTA,
-      store: false,
-      generation_config: { max_output_tokens: 400, thinking_level: nivel },
-      response_format: { type: 'text', mime_type: 'application/json', schema: ESQUEMA },
-    },
-    { 'Api-Revision': '2026-05-20' },
-  );
-  if (r.ok) {
-    console.log('forma:', JSON.stringify(forma(r.json)));
-    break;
+// 4. Interactions API: variantes de versión y de cabecera (la documentación se contradice sobre /v1 y Api-Revision)
+const REVISION = { 'Api-Revision': '2026-05-20' };
+const cuerpoInteraccion = (extra = {}) => ({
+  model: MODELO_TEXTO,
+  system_instruction: SISTEMA,
+  input: [{ type: 'user_input', content: [{ type: 'text', text: PREGUNTA }] }],
+  store: false,
+  generation_config: { max_output_tokens: 800, thinking_level: 'minimal' },
+  response_format: { type: 'text', mime_type: 'application/json', schema: ESQUEMA },
+  ...extra,
+});
+
+/** Texto de los pasos model_output y descripción de lo que pasó, sin imprimir el contenido. */
+function describirInteraccion(json) {
+  const pasos = json.steps ?? [];
+  const texto = pasos
+    .filter((paso) => paso.type === 'model_output')
+    .flatMap((paso) => paso.content ?? [])
+    .filter((bloque) => bloque.type === 'text')
+    .map((bloque) => bloque.text)
+    .join('');
+  console.log(`status=${json.status} pasos=[${pasos.map((p) => p.type).join(', ')}]`);
+  console.log('usage:', JSON.stringify(json.usage ?? null));
+  try {
+    const objeto = JSON.parse(texto);
+    console.log(`salida JSON válida (${texto.length} caracteres); claves: ${Object.keys(objeto).join(', ')}`);
+  } catch {
+    console.log(`la salida NO es JSON válido (${texto.length} caracteres)`);
   }
+  return texto;
 }
 
-// 5. generateContent clásico (para saber si sigue vivo y cómo reporta el uso)
-{
-  const r = await llamar('generateContent clásico', 'POST', `/models/${MODELO_TEXTO}:generateContent`, {
-    systemInstruction: { parts: [{ text: SISTEMA }] },
-    contents: [{ role: 'user', parts: [{ text: PREGUNTA }] }],
-    generationConfig: { maxOutputTokens: 400, responseMimeType: 'application/json', responseSchema: ESQUEMA },
-  });
+const variantes = [
+  ['v1beta + Api-Revision', HOST + '/v1beta', REVISION],
+  ['v1beta sin Api-Revision', HOST + '/v1beta', {}],
+  ['v1 + Api-Revision', HOST + '/v1', REVISION],
+  ['v1 sin Api-Revision', HOST + '/v1', {}],
+];
+const funcionan = [];
+for (const [etiqueta, base, cabeceras] of variantes) {
+  const r = await llamar(`Interactions: ${etiqueta}`, 'POST', '/interactions', cuerpoInteraccion(), cabeceras, base);
   if (r.ok) {
-    console.log('forma:', JSON.stringify(forma(r.json)));
-    console.log('usageMetadata:', JSON.stringify(r.json.usageMetadata ?? null));
-    const salida = r.json.candidates?.[0]?.content?.parts?.[0]?.text;
-    try {
-      const objeto = JSON.parse(salida);
-      console.log(`la salida es JSON válido; claves: ${Object.keys(objeto).join(', ')}`);
-    } catch {
-      console.log('la salida NO es JSON válido');
+    funcionan.push({ etiqueta, base, cabeceras });
+    describirInteraccion(r.json);
+  }
+}
+console.log(`\nVariantes que funcionan: ${funcionan.map((f) => f.etiqueta).join(' | ') || 'ninguna'}`);
+
+const elegida = funcionan[0];
+if (elegida) {
+  // 5. Conversación sin estado: historial de varios turnos reenviado en `input`
+  {
+    const r = await llamar(
+      'Interactions: multi-turno sin estado',
+      'POST',
+      '/interactions',
+      cuerpoInteraccion({
+        input: [
+          { type: 'user_input', content: [{ type: 'text', text: 'Busco algo de fantasía.' }] },
+          { type: 'model_output', content: [{ type: 'text', text: '{"texto":"¿Para qué edad?","recomendaciones":[],"sinResultados":false}' }] },
+          { type: 'user_input', content: [{ type: 'text', text: PREGUNTA }] },
+        ],
+      }),
+      elegida.cabeceras,
+      elegida.base,
+    );
+    if (r.ok) describirInteraccion(r.json);
+  }
+
+  // 6. Respuesta cortada por el tope de tokens: cómo se señala
+  {
+    const r = await llamar(
+      'Interactions: tope de tokens muy bajo',
+      'POST',
+      '/interactions',
+      cuerpoInteraccion({ generation_config: { max_output_tokens: 16, thinking_level: 'minimal' } }),
+      elegida.cabeceras,
+      elegida.base,
+    );
+    if (r.ok) {
+      console.log('forma:', JSON.stringify(forma(r.json)));
+      describirInteraccion(r.json);
     }
+  }
+
+  // 7. Valores de thinking_level aceptados por el modelo de texto
+  for (const nivel of ['minimal', 'low', 'medium', 'high']) {
+    const r = await llamar(
+      `Interactions: thinking_level=${nivel}`,
+      'POST',
+      '/interactions',
+      cuerpoInteraccion({ generation_config: { max_output_tokens: 800, thinking_level: nivel } }),
+      elegida.cabeceras,
+      elegida.base,
+    );
+    if (r.ok) console.log(`usage: ${JSON.stringify(r.json.usage ?? null)}`);
+  }
+
+  // 8. Forma completa de la respuesta
+  {
+    const r = await llamar('Interactions: forma completa', 'POST', '/interactions', cuerpoInteraccion(), elegida.cabeceras, elegida.base);
+    if (r.ok) console.log('forma:', JSON.stringify(forma(r.json)));
   }
 }

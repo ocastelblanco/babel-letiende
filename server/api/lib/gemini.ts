@@ -8,21 +8,29 @@ import {
 } from './proveedor-llm';
 
 /**
- * Implementación de `ProveedorLlm` sobre la Gemini API (REST, `v1beta`).
+ * Implementación de `ProveedorLlm` sobre la Gemini API (REST).
  *
- * El contrato se comprobó contra la API real el 2026-11-17 con el workflow
- * `asistente-verificar-gemini.yml` (no se escribió de memoria ni solo de la
- * documentación, que ya describe la Interactions API):
- * - `gemini-embedding-2` no admite `task_type`: el rol del texto va como prefijo
- *   (`title: ... | text: ...` para documentos, `task: search result | query: ...`
+ * El contrato se comprobó contra la API real (workflow `asistente-verificar-gemini.yml`,
+ * 17/11/2026) en vez de escribirse de memoria: la documentación se contradecía.
+ * - Embeddings: `gemini-embedding-2` no admite `task_type`; el rol del texto va como
+ *   prefijo (`title: ... | text: ...` para documentos, `task: search result | query: ...`
  *   para consultas). Con `output_dimensionality: 768` devuelve vectores de norma 1.
- * - `batchEmbedContents` devuelve un vector por cada petición del lote.
- * - `generateContent` acepta `responseMimeType` + `responseSchema` y reporta el
- *   uso en `usageMetadata`.
+ *   `batchEmbedContents` devuelve un vector por petición.
+ * - Generación: Interactions API estable (`POST /v1/interactions`), sin estado en el
+ *   servidor (`store: false`; el historial viaja en `input`). La respuesta trae pasos
+ *   (`thought`, `model_output`); el texto sale de los `model_output`. `status: incomplete`
+ *   indica corte por el tope de tokens. El pensamiento llega en `total_thought_tokens`,
+ *   aparte de `total_output_tokens`, y se factura como salida. Funciona con y sin
+ *   `Api-Revision`; se envía para fijar el esquema de respuesta.
  * La clave viaja solo en la cabecera `x-goog-api-key`; nunca en la URL ni en logs.
  */
 
-const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const HOST = 'https://generativelanguage.googleapis.com';
+/** Embeddings: `v1beta`, la ruta con la que se verificó `batchEmbedContents`. */
+const BASE_EMBEDDINGS = `${HOST}/v1beta`;
+/** Generación: la Interactions API estable. */
+const BASE_INTERACCIONES = `${HOST}/v1`;
+const REVISION_API = '2026-05-20';
 export const MODELO_TEXTO_POR_DEFECTO = 'gemini-3.5-flash-lite';
 export const MODELO_EMBEDDINGS_POR_DEFECTO = 'gemini-embedding-2';
 export const DIMENSIONES_POR_DEFECTO = 768;
@@ -42,10 +50,13 @@ export interface OpcionesGemini {
   esperar?: (ms: number) => Promise<void>;
 }
 
-interface UsoGemini {
+interface UsoEmbeddings {
   promptTokenCount?: number;
-  candidatesTokenCount?: number;
-  thoughtsTokenCount?: number;
+}
+
+interface PasoInteraccion {
+  type?: string;
+  content?: { type?: string; text?: string }[];
 }
 
 const esperarReal = (ms: number): Promise<void> =>
@@ -90,8 +101,8 @@ export class ProveedorGemini implements ProveedorLlm {
       const lote = textos.slice(inicio, inicio + TAMANO_LOTE_EMBEDDINGS);
       const respuesta = await this.llamar<{
         embeddings?: { values?: number[] }[];
-        usageMetadata?: UsoGemini;
-      }>(`/models/${this.modeloEmbeddings}:batchEmbedContents`, {
+        usageMetadata?: UsoEmbeddings;
+      }>(BASE_EMBEDDINGS, `/models/${this.modeloEmbeddings}:batchEmbedContents`, {
         requests: lote.map((texto) => ({
           model: `models/${this.modeloEmbeddings}`,
           content: { parts: [{ text: texto }] },
@@ -127,58 +138,81 @@ export class ProveedorGemini implements ProveedorLlm {
 
   async generarJson(peticion: PeticionGeneracion): Promise<ResultadoGeneracion> {
     const respuesta = await this.llamar<{
-      candidates?: {
-        content?: { parts?: { text?: string; thought?: boolean }[] };
-        finishReason?: string;
-      }[];
-      promptFeedback?: { blockReason?: string };
-      usageMetadata?: UsoGemini;
-    }>(`/models/${this.modeloTexto}:generateContent`, {
-      systemInstruction: { parts: [{ text: peticion.instrucciones }] },
-      contents: peticion.mensajes.map((mensaje) => ({
-        role: mensaje.rol === 'usuario' ? 'user' : 'model',
-        parts: [{ text: mensaje.texto }],
-      })),
-      generationConfig: {
-        maxOutputTokens: peticion.maximoTokensSalida,
-        responseMimeType: 'application/json',
-        responseSchema: peticion.esquemaSalida,
+      status?: string;
+      steps?: PasoInteraccion[];
+      usage?: {
+        total_input_tokens?: number;
+        total_output_tokens?: number;
+        total_thought_tokens?: number;
+      };
+    }>(
+      BASE_INTERACCIONES,
+      '/interactions',
+      {
+        model: this.modeloTexto,
+        system_instruction: peticion.instrucciones,
+        // Sin estado en el servidor: el historial completo viaja en cada llamada y nada queda guardado en Google.
+        store: false,
+        input: peticion.mensajes.map((mensaje) => ({
+          type: mensaje.rol === 'usuario' ? 'user_input' : 'model_output',
+          content: [{ type: 'text', text: mensaje.texto }],
+        })),
+        generation_config: {
+          max_output_tokens: peticion.maximoTokensSalida,
+          thinking_level: peticion.nivelPensamiento ?? 'low',
+        },
+        response_format: {
+          type: 'text',
+          mime_type: 'application/json',
+          schema: peticion.esquemaSalida,
+        },
       },
-    });
+      { 'Api-Revision': REVISION_API },
+    );
 
-    const candidato = respuesta.candidates?.[0];
-    const texto = (candidato?.content?.parts ?? [])
-      .filter((parte) => !parte.thought && typeof parte.text === 'string')
-      .map((parte) => parte.text)
+    const texto = (respuesta.steps ?? [])
+      .filter((paso) => paso.type === 'model_output')
+      .flatMap((paso) => paso.content ?? [])
+      .filter((bloque) => bloque.type === 'text' && typeof bloque.text === 'string')
+      .map((bloque) => bloque.text)
       .join('');
-    const razon = candidato?.finishReason ?? null;
-    const uso = respuesta.usageMetadata ?? {};
-    const pensamiento = uso.thoughtsTokenCount ?? 0;
+    const uso = respuesta.usage ?? {};
+    const pensamiento = uso.total_thought_tokens ?? 0;
+    const estado = respuesta.status ?? null;
     return {
       texto,
-      tokensEntrada: uso.promptTokenCount ?? 0,
-      tokensSalida: (uso.candidatesTokenCount ?? 0) + pensamiento,
+      tokensEntrada: uso.total_input_tokens ?? 0,
+      tokensSalida: (uso.total_output_tokens ?? 0) + pensamiento,
       tokensPensamiento: pensamiento,
-      bloqueado:
-        Boolean(respuesta.promptFeedback?.blockReason) ||
-        razon === 'SAFETY' ||
-        razon === 'PROHIBITED_CONTENT',
-      truncado: razon === 'MAX_TOKENS',
+      // La documentación no describe cómo se señala un bloqueo de seguridad en una interacción, así que
+      // no se pudo verificar: se trata como bloqueo toda respuesta sin texto que no terminó con normalidad.
+      bloqueado: texto === '' && estado !== 'completed',
+      // Verificado: un tope de tokens muy bajo devuelve `status: incomplete` con el texto cortado.
+      truncado: estado === 'incomplete' && texto !== '',
       modelo: this.modeloTexto,
     };
   }
 
   /** POST con tiempo límite y reintentos acotados para cuota agotada, errores del servidor y fallos de red. */
-  private async llamar<T>(ruta: string, cuerpo: unknown): Promise<T> {
+  private async llamar<T>(
+    base: string,
+    ruta: string,
+    cuerpo: unknown,
+    cabeceras: Record<string, string> = {},
+  ): Promise<T> {
     let ultimo: ErrorProveedorLlm | null = null;
     for (let intento = 0; intento <= REINTENTOS_MAXIMOS; intento += 1) {
       if (intento > 0) {
         await this.esperar(PAUSA_BASE_MS * 2 ** (intento - 1));
       }
       try {
-        const respuesta = await this.fetchImpl(`${BASE_URL}${ruta}`, {
+        const respuesta = await this.fetchImpl(`${base}${ruta}`, {
           method: 'POST',
-          headers: { 'x-goog-api-key': this.claveApi, 'Content-Type': 'application/json' },
+          headers: {
+            'x-goog-api-key': this.claveApi,
+            'Content-Type': 'application/json',
+            ...cabeceras,
+          },
           body: JSON.stringify(cuerpo),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });
