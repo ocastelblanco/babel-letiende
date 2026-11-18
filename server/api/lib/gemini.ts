@@ -1,6 +1,7 @@
 import {
   ErrorProveedorLlm,
   type DocumentoParaIncrustar,
+  type LlamadaHerramienta,
   type PeticionGeneracion,
   type ProveedorLlm,
   type ResultadoGeneracion,
@@ -61,6 +62,10 @@ interface UsoEmbeddings {
 interface PasoInteraccion {
   type?: string;
   content?: { type?: string; text?: string }[];
+  /** Solo en `function_call`. */
+  id?: string;
+  name?: string;
+  arguments?: unknown;
 }
 
 const esperarReal = (ms: number): Promise<void> =>
@@ -161,13 +166,44 @@ export class ProveedorGemini implements ProveedorLlm {
         system_instruction: peticion.instrucciones,
         // Sin estado en el servidor: el historial completo viaja en cada llamada y nada queda guardado en Google.
         store: false,
-        input: peticion.mensajes.map((mensaje) => ({
-          type: mensaje.rol === 'usuario' ? 'user_input' : 'model_output',
-          content: [{ type: 'text', text: mensaje.texto }],
-        })),
+        input: [
+          ...peticion.mensajes.map((mensaje) => ({
+            type: mensaje.rol === 'usuario' ? 'user_input' : 'model_output',
+            content: [{ type: 'text', text: mensaje.texto }],
+          })),
+          // Verificado (T-0030): hay que reenviar TODOS los pasos de la vuelta anterior, incluido el
+          // pensamiento (sin él, 400), y el resultado va como lista de partes de texto (un texto plano
+          // o un objeto no se entienden: el modelo vuelve a pedir la herramienta).
+          ...(peticion.rondas ?? []).flatMap((ronda) => [
+            ...ronda.pasosDelModelo,
+            ...ronda.resultados.map((resultado) => ({
+              type: 'function_result',
+              name: resultado.nombre,
+              call_id: resultado.llamadaId,
+              result: [{ type: 'text', text: resultado.contenido }],
+            })),
+          ]),
+        ],
+        ...(peticion.herramientas && peticion.herramientas.length > 0
+          ? {
+              tools: peticion.herramientas.map((herramienta) => ({
+                type: 'function',
+                name: herramienta.nombre,
+                description: herramienta.descripcion,
+                parameters: herramienta.parametros,
+              })),
+            }
+          : {}),
         generation_config: {
           max_output_tokens: peticion.maximoTokensSalida,
           thinking_level: peticion.nivelPensamiento ?? 'low',
+          ...(peticion.forzarHerramientas && peticion.forzarHerramientas.length > 0
+            ? {
+                tool_choice: {
+                  allowed_tools: { mode: 'any', tools: peticion.forzarHerramientas },
+                },
+              }
+            : {}),
         },
         response_format: {
           type: 'text',
@@ -178,7 +214,25 @@ export class ProveedorGemini implements ProveedorLlm {
       { 'Api-Revision': REVISION_API },
     );
 
-    const texto = (respuesta.steps ?? [])
+    const pasos = respuesta.steps ?? [];
+    const llamadas: LlamadaHerramienta[] = pasos
+      .filter((paso) => paso.type === 'function_call')
+      .flatMap((paso) =>
+        typeof paso.id === 'string' && typeof paso.name === 'string'
+          ? [
+              {
+                id: paso.id,
+                nombre: paso.name,
+                // Lo que escribe el modelo no es de fiar: un valor que no sea un objeto se trata como «sin argumentos».
+                argumentos:
+                  paso.arguments && typeof paso.arguments === 'object' && !Array.isArray(paso.arguments)
+                    ? (paso.arguments as Record<string, unknown>)
+                    : {},
+              },
+            ]
+          : [],
+      );
+    const texto = pasos
       .filter((paso) => paso.type === 'model_output')
       .flatMap((paso) => paso.content ?? [])
       .filter((bloque) => bloque.type === 'text' && typeof bloque.text === 'string')
@@ -194,10 +248,13 @@ export class ProveedorGemini implements ProveedorLlm {
       tokensPensamiento: pensamiento,
       // La documentación no describe cómo se señala un bloqueo de seguridad en una interacción, así que
       // no se pudo verificar: se trata como bloqueo toda respuesta sin texto que no terminó con normalidad.
-      bloqueado: texto === '' && estado !== 'completed',
+      // Una interacción que espera el resultado de una herramienta (`requires_action`) tampoco es un bloqueo.
+      bloqueado: texto === '' && estado !== 'completed' && llamadas.length === 0,
       // Verificado: un tope de tokens muy bajo devuelve `status: incomplete` con el texto cortado.
       truncado: estado === 'incomplete' && texto !== '',
       modelo: this.modeloTexto,
+      llamadas,
+      pasosDelModelo: pasos,
     };
   }
 

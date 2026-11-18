@@ -30,6 +30,8 @@ const MAXIMO_PRECIO = 10_000_000;
 
 export const TEXTO_SIN_RESULTADOS =
   'No encontré en la librería un libro que encaje con eso. ¿Quieres contarme un poco más de lo que buscas, o probar con otro tema?';
+export const TEXTO_DEMORA =
+  'Esto está tardando más de lo normal y prefiero no hacerte esperar. ¿Me repites tu pregunta en un momento?';
 export const TEXTO_BLOQUEADO =
   'No puedo ayudarte con esa consulta. Si quieres, cuéntame qué tipo de lectura buscas y te recomiendo algo de la librería.';
 
@@ -169,6 +171,7 @@ export interface LibroDeInventario {
   portadaUrl?: string | null;
   pvp: number;
   cantidadDisponible: number;
+  ubicacionId?: string;
 }
 
 /**
@@ -368,6 +371,8 @@ export interface PromptAsistente {
   fecha: string;
   motivo: string;
   instrucciones: string;
+  /** El prompt está escrito para usar herramientas (encabezado `herramientas: true`). Las versiones sin ese dato no las usan. */
+  herramientas: boolean;
 }
 
 const prompts = new Map<string, PromptAsistente>();
@@ -416,6 +421,7 @@ export function cargarPrompt(
     fecha: campos[2] as string,
     motivo: campos[3] as string,
     instrucciones,
+    herramientas: encabezado.get('herramientas') === 'true',
   };
   prompts.set(clave, prompt);
   return prompt;

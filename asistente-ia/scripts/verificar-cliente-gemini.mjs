@@ -88,5 +88,46 @@ const corta = await proveedor.generarJson({
 });
 comprobar(corta.truncado, 'un tope de tokens muy bajo se marca como truncada');
 
+// 3. Ciclo de herramientas con la clase real (T-0030): pide → se ejecuta → se devuelve → respuesta final con esquema
+const herramienta = {
+  nombre: 'consultar_disponibilidad',
+  descripcion: 'Consulta precio y existencias de libros por su bookId.',
+  parametros: { type: 'object', properties: { book_ids: { type: 'array', items: { type: 'string' } } }, required: ['book_ids'] },
+};
+const esquemaFinal = {
+  type: 'object',
+  properties: { texto: { type: 'string' }, recomendaciones: { type: 'array', items: { type: 'object', properties: { bookId: { type: 'string' }, motivo: { type: 'string' } }, required: ['bookId', 'motivo'] } }, sinResultados: { type: 'boolean' } },
+  required: ['texto', 'recomendaciones', 'sinResultados'],
+};
+const peticionHerramientas = {
+  instrucciones: 'Eres el asistente de una librería. Para precios y existencias usa siempre la herramienta; nunca los inventes. Responde solo con el JSON pedido.',
+  mensajes: [{ rol: 'usuario', texto: 'El libro con bookId l-9 se llama «Cien años de soledad». ¿Cuántos quedan y cuánto cuesta?' }],
+  esquemaSalida: esquemaFinal,
+  maximoTokensSalida: 600,
+  herramientas: [herramienta],
+};
+const vuelta1 = await proveedor.generarJson(peticionHerramientas);
+comprobar(vuelta1.llamadas.length === 1 && vuelta1.llamadas[0].nombre === 'consultar_disponibilidad', `el modelo pide la herramienta (${vuelta1.llamadas.map((l) => l.nombre).join(',') || 'ninguna'})`);
+comprobar(Boolean(vuelta1.llamadas[0]?.id) && Array.isArray(vuelta1.llamadas[0]?.argumentos?.book_ids), 'la llamada trae id y argumentos como objeto');
+comprobar(vuelta1.bloqueado === false, 'una interacción que espera una herramienta no se marca como bloqueada');
+comprobar(vuelta1.pasosDelModelo.length >= 2, `devuelve los pasos del modelo para reenviarlos (${vuelta1.pasosDelModelo.length})`);
+if (vuelta1.llamadas[0]) {
+  const vuelta2 = await proveedor.generarJson({
+    ...peticionHerramientas,
+    rondas: [{
+      pasosDelModelo: vuelta1.pasosDelModelo,
+      resultados: [{ llamadaId: vuelta1.llamadas[0].id, nombre: vuelta1.llamadas[0].nombre, contenido: JSON.stringify({ libros: [{ bookId: 'l-9', existe: true, titulo: 'Cien años de soledad', precio: 42000, existencias: 3 }] }) }],
+    }],
+  });
+  comprobar(vuelta2.llamadas.length === 0 && vuelta2.texto !== '', 'con el resultado devuelto, el modelo da la respuesta final');
+  let final = null;
+  try { final = JSON.parse(vuelta2.texto); } catch { /* se reporta abajo */ }
+  comprobar(final !== null && Array.isArray(final.recomendaciones) && typeof final.sinResultados === 'boolean', 'la respuesta final cumple el esquema (herramientas + salida JSON)');
+  comprobar(vuelta2.texto.includes('42') , 'la respuesta usa el dato que devolvió la herramienta');
+  // Última vuelta sin herramientas, con la historia dentro: lo que hace el orquestador al agotar las rondas.
+  const sinTools = await proveedor.generarJson({ ...peticionHerramientas, herramientas: undefined, rondas: [{ pasosDelModelo: vuelta1.pasosDelModelo, resultados: [{ llamadaId: vuelta1.llamadas[0].id, nombre: vuelta1.llamadas[0].nombre, contenido: JSON.stringify({ libros: [{ bookId: 'l-9', existe: true, precio: 42000, existencias: 3 }] }) }] }] });
+  comprobar(sinTools.llamadas.length === 0 && sinTools.texto !== '', 'la vuelta final sin herramientas funciona con la historia de la llamada');
+}
+
 console.log(fallos === 0 ? '\nTodo en orden.' : `\n${fallos} comprobaciones fallaron.`);
 process.exit(fallos === 0 ? 0 : 1);

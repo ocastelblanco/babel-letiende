@@ -103,7 +103,7 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] 31 pruebas nuevas (601 en total).
 - [x] Verificado en `staging` (2026-11-17): 25 de 25 libros indexados en 1,7 s con 6.096 tokens de entrada; la segunda corrida conservó los 25, no pidió ningún token ni escribió (94 ms); archivo de 22.676 bytes cifrado (AES256) en un bucket con acceso público bloqueado; regla de 6 horas activa.
 
-**`T-0023` — Lambda `asistente`, prompt v1 y validador (implementada, PR abierto 2026-11-18)** · bitácora [`04-asistente-minimo.md`](bitacora/04-asistente-minimo.md)
+**`T-0023` — Lambda `asistente`, prompt v1 y validador (fusionada, PR #160, 2026-11-18)** · bitácora [`04-asistente-minimo.md`](bitacora/04-asistente-minimo.md)
 
 - [x] Clave de Gemini del proyecto propio (secreto `GEMINI_API_KEY` del entorno `staging`). La de producción (prepago) se necesita solo antes de encender el asistente allí.
 - [x] Lambda `asistente` (ADR-008), `POST /api/asistente`. Conversación sin estado: el cliente envía los últimos turnos (máx. 9, 1.000 caracteres c/u) y el servidor valida límites, roles y filtros. **Cambio respecto al plan:** exige sesión de vendedor o administrador (no es público hasta las fases 6 y 7, cuando existan los topes de gasto y de tasa), además del interruptor `ASISTENTE_ACTIVO` (encendido en `staging`, apagado en producción). Decidido con el usuario el 17/11/2026.
@@ -112,16 +112,21 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] `asistente-ia/prompts/asistente-v1.md` con encabezado (versión, modelo, fecha, motivo) + `CHANGELOG.md`; el mismo archivo se empaqueta y se lee en la Lambda.
 - [x] 87 pruebas nuevas con el modelo simulado (691 en total).
 - [x] Rol IAM `AsistenteLambdaRole`: solo `GetItem` sobre libros, conocimiento y usuarios, y lectura del índice en S3.
-- [ ] Verificado en `staging` por el usuario con su sesión (instrucciones en el PR).
+- [x] Verificado en `staging` por el usuario con su sesión (18/11/2026): recomendaciones reales, filtros de idioma y precio correctos, inyección directa resistida. Producción verificada con el interruptor apagado (`503`).
 
 ### Fase 3 — Llamado de herramientas · `T-0030` · capacidad: integración con sistemas
 
-- [ ] Herramientas de solo lectura: `buscar_libros(consulta, filtros)`, `consultar_disponibilidad(bookIds)` (precio, existencias, Espacio/Mueble/Ubicación), `consultar_politicas(tema)`.
-- [ ] Lista blanca de campos: el modelo **nunca** recibe `costo`, `utilidad`, `porcentajeDescuentoEditorial` ni datos de ventas.
-- [ ] Validación de argumentos, tope de rondas de herramientas por consulta y respuesta definida cuando una herramienta falla.
-- [ ] Rol IAM de la Lambda: solo lectura sobre `babel-libros` y el bucket del índice.
-- [ ] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**: horarios, cambios, formas de pago) que el asistente cita.
-- [ ] Pruebas que ejercitan cada herramienta, incluidos los fallos.
+Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto al plan:** la búsqueda inicial de `T-0023` se conserva y las herramientas son de apoyo. Con 5 a 13 s por llamada al modelo (medido), hacer de `buscar_libros` el único camino costaría dos llamadas por pregunta, contra el límite de 30 s de API Gateway.
+
+- [x] Contrato del llamado de herramientas verificado contra la API real (`asistente-ia/scripts/verificar-herramientas-gemini.mjs`): declaración plana, `requires_action`, el pensamiento se reenvía (si no, 400), el resultado va como lista de partes de texto, herramientas + salida JSON en la misma petición, llamadas en paralelo, `tool_choice`.
+- [x] Herramientas de solo lectura: `buscar_libros(consulta, filtros)`, `consultar_disponibilidad(bookIds)` (precio, existencias, Espacio/Mueble/Ubicación), `consultar_politicas(tema)`.
+- [x] Lista blanca de campos: el modelo **nunca** recibe `costo`, `utilidad`, `porcentajeDescuentoEditorial` ni datos de ventas (prueba con un libro que los trae).
+- [x] Validación de argumentos en el servidor (el modelo real omitió un parámetro obligatorio en la verificación), tope de 3 rondas y de 4 llamadas por ronda, presupuesto de tiempo, y respuesta definida cuando una herramienta falla o los argumentos son inválidos.
+- [x] Rol IAM de la Lambda: solo lectura (`GetItem`) sobre libros, conocimiento, usuarios, ubicaciones, muebles y espacios, y lectura del índice en S3.
+- [x] Prompt v2 (`herramientas: true`); v1 queda intacto como línea base sin herramientas.
+- [x] 61 pruebas nuevas (752 en total) que ejercitan cada herramienta, incluidos los fallos.
+- [ ] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**: horarios, formas de pago, cambios y devoluciones, envíos...). La plantilla ya está en el repositorio; mientras esté vacía, el asistente dice que no tiene el dato.
+- [ ] Verificado en `staging` por el usuario con su sesión.
 
 ### Fase 4 — Suite de evaluación · `T-0040` · capacidad: pruebas funcionales y de regresión
 
