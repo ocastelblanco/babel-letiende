@@ -12,6 +12,7 @@ on:
     paths:
       - 'asistente-ia/scripts/verificar-gemini.mjs'
       - 'asistente-ia/scripts/verificar-cliente-gemini.mjs'
+      - 'asistente-ia/scripts/verificar-herramientas-gemini.mjs'
       - 'server/api/lib/gemini.ts'
       - 'server/api/lib/proveedor-llm.ts'
       - 'server/api/lib/indice-vectorial.ts'
@@ -35,6 +36,10 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node asistente-ia/scripts/verificar-gemini.mjs
+      - name: Verificar el llamado de herramientas (HTTP directo)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node asistente-ia/scripts/verificar-herramientas-gemini.mjs
       - name: Instalar dependencias y compilar el backend
         run: |
           npm ci
