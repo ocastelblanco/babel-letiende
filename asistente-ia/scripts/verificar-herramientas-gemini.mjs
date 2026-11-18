@@ -69,7 +69,7 @@ async function interaccion(nombre, cuerpo) {
   const inicio = Date.now();
   let r;
   let texto;
-  for (let intento = 0; intento < 3; intento += 1) {
+  for (let intento = 0; intento < 4; intento += 1) {
     const espera = ultimaLlamada + PAUSA_ENTRE_LLAMADAS_MS - Date.now();
     if (espera > 0) await esperar(espera);
     r = await fetch(URL, {
@@ -79,9 +79,9 @@ async function interaccion(nombre, cuerpo) {
     });
     ultimaLlamada = Date.now();
     texto = await r.text();
-    if (r.status !== 429) break;
-    console.log(`   (429, se espera 40 s y se reintenta: intento ${intento + 1})`);
-    await esperar(40_000);
+    if (r.status !== 429 && r.status < 500) break;
+    console.log(`   (HTTP ${r.status}, se espera y se reintenta: intento ${intento + 1})`);
+    await esperar(r.status === 429 ? 40_000 : 12_000);
   }
   let json = null;
   try {
@@ -207,6 +207,24 @@ if (llamadaC) {
     anotar('C2.status', C2.json.status);
     anotar('C2.salida_es_json_con_esquema', String(Boolean(objeto && Array.isArray(objeto.recomendaciones) && typeof objeto.sinResultados === 'boolean')));
     anotar('C2.bookId_recomendados', JSON.stringify((objeto?.recomendaciones ?? []).map((r) => r.bookId)));
+  }
+}
+
+if (llamadaC) {
+  const C3 = await interaccion('C3. respuesta final SIN tools, solo response_format (con la historia de la llamada en el input)', {
+    input: [usuario(peticionA.input[0].content[0].text), ...C1.json.steps, { type: 'function_result', name: llamadaC.name, call_id: llamadaC.id, result: [{ type: 'text', text: JSON.stringify(resultadoBuscar) }] }],
+    generation_config: { max_output_tokens: 600, thinking_level: 'low' },
+    response_format: formatoJson,
+  });
+  if (C3.ok) {
+    let objeto = null;
+    try {
+      objeto = JSON.parse(textoFinal(C3.json));
+    } catch {
+      // se reporta abajo
+    }
+    anotar('C3.status', C3.json.status);
+    anotar('C3.salida_es_json_con_esquema', String(Boolean(objeto && Array.isArray(objeto.recomendaciones) && typeof objeto.sinResultados === 'boolean')));
   }
 }
 
