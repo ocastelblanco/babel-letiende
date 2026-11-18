@@ -74,7 +74,7 @@ comprobar(/jueves a s[aá]bado.*10:00\s*pm/i.test(horarios) && /domingo a mi[eé
 
 await repetir('¿Abren mañana? ¿en qué horario?', MIERCOLES, 'mañana (jueves) dice 10 p. m. y no inventa otro horario', (t) => /(10|diez)/.test(t) && !/nueve de la ma[ñn]ana|9:00\s*a\.?\s*m|9 a\.?\s*m/.test(t));
 await repetir('¿Abren el domingo? ¿hasta qué hora?', MIERCOLES, 'domingo dice 8 p. m.', (t) => /(8|ocho)/.test(t) && !/(10|diez)\s*(p\.?\s*m|de la noche)/.test(t));
-await repetir('¿Tienen parqueadero propio para los clientes?', MIERCOLES, 'un tema que no está en las políticas se reconoce sin inventar', (t) => /no (tengo|cuento|dispongo|dispone|tenemos)|no (esa|ese) (dato|informaci)|directamente|preguntar|comunicar/.test(t) && !/s[ií],? (tenemos|contamos|hay)/.test(t));
+await repetir('¿Tienen parqueadero propio para los clientes?', MIERCOLES, 'un tema que no está en las políticas se reconoce sin inventar', (t) => /no (tengo|cuento|dispongo|dispone|tenemos)|no (esa|ese) (dato|informaci)|directamente|preguntar|comunicar/.test(t) && !/(^|[.!¡]\s*)s[ií],? (tenemos|contamos|hay)/.test(t)); // «sí, tenemos» al inicio de frase; no el «si» condicional («sobre si contamos»)
 
 console.log(fallos === 0 ? '\nTodo en orden.' : `\n${fallos} comprobaciones fallaron.`);
 process.exit(fallos === 0 ? 0 : 1);
