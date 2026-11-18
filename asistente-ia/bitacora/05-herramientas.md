@@ -64,23 +64,46 @@ Solo libros que **vio con existencias** en esta petición: los de la búsqueda i
 - `proveedor-llm.ts` / `gemini.ts`: herramientas, rondas, `tool_choice`, llamadas parseadas con validación de forma (id y nombre obligatorios, argumentos que no sean objeto = vacíos).
 - `server/api/lib/herramientas-asistente.ts`: declaraciones, `validarLlamada` por herramienta, intérprete y buscador de políticas.
 - `server/api/handlers/asistente.ts`: `responder` con el bucle, `buscarCandidatos` compartido entre la búsqueda inicial y `buscar_libros`, ejecución sin excepciones.
-- `asistente-ia/prompts/asistente-v2.md`, `CHANGELOG.md`, `asistente-ia/conocimiento/politicas-libreria.md` (plantilla).
-- `serverless.yml`: tablas de ubicación, módulo nuevo y archivo de políticas en `package.patterns`, prompt v2 en `staging`.
+- `asistente-ia/prompts/asistente-v2.md` (la que se probó primero), `asistente-v3.md` (corrige lo visto en `staging`), `CHANGELOG.md`, `asistente-ia/conocimiento/politicas-libreria.md` (completada por Oliver).
+- `server/api/lib/asistente.ts`: `momentoActualParaModelo` y el bloque `FECHA_Y_HORA_ACTUAL` en el último turno.
+- `serverless.yml`: tablas de ubicación, módulo nuevo y archivo de políticas en `package.patterns`, prompt v3 en `staging`.
 - Pruebas: 61 nuevas (752 en total): validación de cada herramienta (incluido el caso real del parámetro omitido), políticas, ejecución con lista blanca, errores controlados, tope de rondas y de llamadas, presupuesto de tiempo, tokens acumulados, y que una herramienta no vuelva recomendable un libro no visto. Una mutación (quitar la línea que habilita los libros hallados por `buscar_libros`) hace fallar exactamente la prueba esperada.
 - Verificación real: el script de verificación del cliente ejercita ahora el ciclo completo con la clase `ProveedorGemini`.
 
 ## 5. Cifras medidas
 
-- Latencia por llamada al modelo (clave gratuita, ejecutor de GitHub, 18/11/2026): 5 a 13 s; picos de 25 a 38 s con `503` y reintentos.
+**Contrato y operación (verificación contra la API real, clave gratuita, 18/11/2026)**
+
+- Latencia por llamada al modelo: 5 a 13 s; picos de 25 a 38 s con `503` y reintentos.
 - Límite de la clave gratuita de `staging`: **15 peticiones por minuto**; el primer intento del script lo superó y recibió `429`. El script ahora deja 5 s entre llamadas y reintenta.
 - `503 service unavailable` transitorios: aparecieron en varias llamadas seguidas ese día, incluida una en la verificación del cliente real.
 - Consumo de una vuelta con herramientas: 223 tokens de entrada y 37 de salida para pedir una herramienta; ~250 caracteres en la respuesta final.
+
+**Prueba funcional en `staging` con el prompt v2 (Oliver, 18/11/2026, `gemini-3.5-flash-lite`, 5 preguntas)**
+
+| Pregunta | Herramienta usada | Latencia | Resultado |
+|---|---|---|---|
+| «¿Dónde encuentro *El camino de Ida* y cuántos quedan?» | `consultar_disponibilidad` | 3,5 s | Correcto: existencias y Espacio/Mueble/Ubicación reales (6.852 tokens de entrada) |
+| «¿A qué horas abren?» | `consultar_politicas` | 2,5 s | Correcto: horarios tomados de `politicas-libreria.md` |
+| «Ahora recomiéndame algo en inglés por menos de $20.000» | ninguna | 1,7 s | **Fallo de criterio:** dijo que no había nada sin llamar a `buscar_libros` con los filtros (la lista inicial no los aplica) |
+| «Quiero un libro de Roberto Bolaño… dame el precio y dónde lo puedo encontrar» | ninguna | 2,4 s | **Fallo de criterio:** recomendó *Cuentos completos* pero no dio el precio ni la ubicación: «acércate a la librería» |
+| «¿Abren mañana? ¿en qué horario?» | `consultar_politicas` | 2,4 s | **Falso:** dijo «mañana abrimos de 2:00 p.m. a 8:00 p.m.» cuando mañana era jueves (2:00 p.m. a 10:00 p.m.) |
+
+- 0 fallos de herramientas y 0 recomendaciones descartadas en las cinco. Latencia total de 1,7 a 3,5 s con una sola ronda: muy por debajo de los 30 s de API Gateway.
+- Con herramienta, la entrada pesa ~6.800 tokens frente a ~3.300 sin ella, porque la segunda llamada repite la conversación y el resultado.
+- Además de lo anterior, una respuesta usó voseo («mirá») y diminutivos («pesitos», «momentico»), contra la regla del prompt de hablar «siempre de tú».
 
 ## 6. Qué falló y cómo se corrigió
 
 - **Primer intento de la verificación: `429`.** Mi script llamaba a la API a ritmo de prueba unitaria contra una clave de 15 por minuto. Se agregó pausa entre llamadas y reintento tras `429`/`5xx`.
 - **Los `503` hicieron fallar dos veces el script y una el cliente real.** No eran del código: eran del servicio. Es una advertencia operativa para producción (el cliente ya reintenta 5xx; la interfaz tendrá que tolerar un «inténtalo de nuevo»).
 - **El resultado de una herramienta como texto plano o como objeto no daba error, daba un bucle.** Lo habría detectado tarde (más latencia y más costo) de no haberlo probado con la API real.
+- **«¿Abren mañana?» se respondió con el horario equivocado (staging, v2).** El modelo recibía las políticas correctas, pero ningún dato sobre qué día era, así que adivinó. No se arregla con prompt: un modelo no tiene reloj. El servidor calcula el día y la hora de Bogotá (UTC-5 fijo) y los pone, junto con el día de mañana ya calculado, en el último turno de la persona (`FECHA_Y_HORA_ACTUAL`, `momentoActualParaModelo`); el día de mañana se entrega calculado porque un modelo pequeño falla en la aritmética de fechas.
+- **No buscó con filtros antes de decir «no hay» (v2).** La búsqueda inicial no aplica idioma ni precio si la persona los pide en el texto, así que «no hay nada en inglés por menos de $20.000» se decidió sobre una lista que nunca se filtró. Es un criterio de uso de herramientas, y el modelo lo omitió porque v2 decía «úsalas solo cuando hagan falta». v3 dice explícitamente que antes de afirmar que no hay un libro con un idioma o un precio máximo debe llamar a `buscar_libros` con ese filtro.
+- **No consultó precio ni ubicación cuando se los pidieron (v2).** v3 exige `consultar_disponibilidad` siempre que pregunten por precio, existencias o dónde está, aunque el libro ya esté en la lista.
+- **Voseo y diminutivos (v2).** v3 lo prohíbe de forma explícita. Es la primera observación del estilo, de la que se ocupará la Fase 5 con la evaluación.
+- **Por qué v3 y no editar v2:** v2 es lo que se probó en `staging`; cambiarlo sin cambiar el número dejaría esta tabla sin una versión a la que atribuirla. La Fase 4 compara v1, v2 y v3 con la misma suite.
+- **Pendiente de verificar con v3:** que los cinco casos de arriba salgan bien. Esos resultados se anotarán aquí cuando Oliver los pruebe.
 
 ## 7. Esfuerzo
 

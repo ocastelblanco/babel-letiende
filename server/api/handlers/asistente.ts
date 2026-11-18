@@ -303,7 +303,7 @@ export async function responder(
     }
     generacion = await proveedor.generarJson({
       instrucciones: prompt.instrucciones,
-      mensajes: mensajesParaModelo(peticion.mensajes, librosIniciales),
+      mensajes: mensajesParaModelo(peticion.mensajes, librosIniciales, ahora()),
       esquemaSalida: ESQUEMA_SALIDA,
       maximoTokensSalida: MAXIMO_TOKENS_SALIDA,
       nivelPensamiento: 'low',

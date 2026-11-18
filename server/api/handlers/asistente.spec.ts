@@ -143,6 +143,16 @@ describe('responder', () => {
     expect(llamada.mensajes[0].texto).toContain('Sinopsis de a');
   });
 
+  it('le dice al modelo qué día y hora es en Bogotá, en el último turno y no en las instrucciones', async () => {
+    const { proveedor, generarJson } = proveedorFalso(generacion({ texto: 'Hola.', recomendaciones: [], sinResultados: false }));
+    // 2026-11-19 15:00 UTC = jueves 19 de noviembre, 10:00 a. m. en Bogotá
+    await responder(dependencias(proveedor, { ahora: () => Date.UTC(2026, 10, 19, 15, 0) }), peticion());
+    const llamada = (generarJson.mock.calls[0] as unknown as [{ instrucciones: string; mensajes: { texto: string }[] }])[0];
+    expect(llamada.mensajes[0].texto).toContain('Hoy: jueves 19 de noviembre de 2026, 10:00 a. m. (hora de Bogotá)');
+    expect(llamada.mensajes[0].texto).toContain('Mañana: viernes 20 de noviembre de 2026');
+    expect(llamada.instrucciones).not.toContain('noviembre');
+  });
+
   it('no ofrece al modelo los libros agotados', async () => {
     const { proveedor, generarJson } = proveedorFalso(
       generacion({ texto: 'Mira.', recomendaciones: [{ bookId: 'a', motivo: 'ok' }], sinResultados: false }),

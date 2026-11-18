@@ -250,8 +250,39 @@ export function libroParaModelo(
   };
 }
 
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+/** Bogotá no tiene horario de verano: siempre UTC-5. */
+const DESFASE_BOGOTA_MS = -5 * 60 * 60 * 1000;
+
+function fechaEnLetras(desplazada: Date): string {
+  return `${DIAS_SEMANA[desplazada.getUTCDay()]} ${desplazada.getUTCDate()} de ${MESES[desplazada.getUTCMonth()]} de ${desplazada.getUTCFullYear()}`;
+}
+
 /**
- * Conversación que recibe el modelo. Los libros van en el ÚLTIMO turno de la persona,
+ * Día y hora de Bogotá en palabras, para que el modelo no tenga que adivinar de qué día se
+ * habla cuando preguntan «¿abren mañana?». Se calcula en el servidor: el modelo no tiene reloj
+ * y, sin este dato, inventa el día (staging, 18/11/2026: dijo el horario de un miércoles para un jueves).
+ * El día de mañana se da calculado porque un modelo pequeño falla en la aritmética de fechas.
+ */
+export function momentoActualParaModelo(ahoraMs: number): { hoy: string; manana: string; hora: string } {
+  const hoy = new Date(ahoraMs + DESFASE_BOGOTA_MS);
+  const manana = new Date(ahoraMs + DESFASE_BOGOTA_MS + 24 * 60 * 60 * 1000);
+  const horas = hoy.getUTCHours();
+  const minutos = String(hoy.getUTCMinutes()).padStart(2, '0');
+  const hora12 = horas % 12 === 0 ? 12 : horas % 12;
+  return {
+    hoy: fechaEnLetras(hoy),
+    manana: fechaEnLetras(manana),
+    hora: `${hora12}:${minutos} ${horas < 12 ? 'a. m.' : 'p. m.'}`,
+  };
+}
+
+/**
+ * Conversación que recibe el modelo. Los libros (y la fecha) van en el ÚLTIMO turno de la persona,
  * serializados como JSON: así una sinopsis (texto de un tercero) o el mensaje de la persona
  * no pueden salirse de su cadena para parecer una instrucción, y nada de eso llega al
  * campo de instrucciones del sistema.
@@ -259,13 +290,16 @@ export function libroParaModelo(
 export function mensajesParaModelo(
   mensajes: MensajeConversacion[],
   libros: LibroParaModelo[],
+  ahoraMs: number = Date.now(),
 ): MensajeConversacion[] {
   const ultimo = mensajes.length - 1;
+  const momento = momentoActualParaModelo(ahoraMs);
+  const fecha = `FECHA_Y_HORA_ACTUAL:\nHoy: ${momento.hoy}, ${momento.hora} (hora de Bogotá)\nMañana: ${momento.manana}`;
   return mensajes.map((mensaje, posicion) =>
     posicion === ultimo
       ? {
           rol: mensaje.rol,
-          texto: `LIBROS_DISPONIBLES:\n${JSON.stringify(libros)}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
+          texto: `${fecha}\n\nLIBROS_DISPONIBLES:\n${JSON.stringify(libros)}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
         }
       : mensaje,
   );

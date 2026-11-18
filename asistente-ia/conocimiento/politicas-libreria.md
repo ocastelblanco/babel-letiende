@@ -24,7 +24,7 @@ No se aceptan cambios ni devoluciones.
 
 ## Ubicación y contacto
 
-Carrera 24 #37-44, frente al Parkway, Bogotá, Colombia. WhatsApp: [+57 324 7695957](https://wa.me/+573247695957)ñ.
+Carrera 24 #37-44, frente al Parkway, Bogotá, Colombia. WhatsApp: [+57 324 7695957](https://wa.me/+573247695957).
 
 ## Envíos
 

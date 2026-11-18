@@ -664,8 +664,10 @@ Rama `feature/asistente-endpoint-chat`. Detalle en `asistente-ia/PLAN.md` §3 y 
 Rama `feature/asistente-herramientas`. Detalle en `asistente-ia/PLAN.md` §3 y `asistente-ia/bitacora/05-herramientas.md`.
 
 - [x] Contrato del llamado de herramientas verificado contra la API real; `ProveedorLlm`/`ProveedorGemini` con herramientas; módulo `herramientas-asistente`; bucle acotado en `responder`; prompt v2 con `herramientas: true`. 752 pruebas backend.
-- [ ] **Tuyo (Oliver):** completar `asistente-ia/conocimiento/politicas-libreria.md` (horarios, formas de pago, cambios y devoluciones, ubicación y contacto, envíos, apartados). Mientras esté vacío el asistente responde que no tiene ese dato.
-- [ ] Verificación en `staging` con tu sesión (instrucciones en el PR).
+- [x] **Tuyo (Oliver):** `asistente-ia/conocimiento/politicas-libreria.md` completado (18/11/2026).
+- [x] Verificación en `staging` con tu sesión (prompt v2): 3 fallos hallados (día de «mañana» inventado, no buscó con filtros, no consultó precio/ubicación) + voseo.
+- [x] Corrección en el mismo PR: fecha y hora de Bogotá calculadas en el servidor (`FECHA_Y_HORA_ACTUAL`) y prompt v3. 759 pruebas backend.
+- [ ] Verificar v3 en `staging` con los mismos 5 casos y fusionar.
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
 

@@ -125,8 +125,9 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [x] Rol IAM de la Lambda: solo lectura (`GetItem`) sobre libros, conocimiento, usuarios, ubicaciones, muebles y espacios, y lectura del índice en S3.
 - [x] Prompt v2 (`herramientas: true`); v1 queda intacto como línea base sin herramientas.
 - [x] 61 pruebas nuevas (752 en total) que ejercitan cada herramienta, incluidos los fallos.
-- [ ] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**: horarios, formas de pago, cambios y devoluciones, envíos...). La plantilla ya está en el repositorio; mientras esté vacía, el asistente dice que no tiene el dato.
-- [ ] Verificado en `staging` por el usuario con su sesión.
+- [x] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**, completado el 18/11/2026: horarios, formas de pago, cambios y devoluciones, ubicación, envíos y apartados). Un tema vacío hace que el asistente diga que no tiene el dato.
+- [x] Verificado en `staging` por el usuario con su sesión (prompt v2, 5 preguntas): disponibilidad, ubicación y horarios correctos; 3 fallos hallados y corregidos en el mismo PR con el prompt v3 y la fecha calculada en el servidor (bitácora 05 §5-6).
+- [ ] Verificar v3 en `staging` con los mismos 5 casos.
 
 ### Fase 4 — Suite de evaluación · `T-0040` · capacidad: pruebas funcionales y de regresión
 
