@@ -110,7 +110,7 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] Búsqueda híbrida: filtros del índice (idioma, excluir contenido adulto) → coseno (40) → existencias y precio máximo contra `babel-libros` → 8 libros al modelo. Los filtros los envía el cliente; el de edad es solo «excluir `MATURE`», el único dato que existe.
 - [x] Respuesta con esquema JSON (`texto`, `recomendaciones {bookId, motivo}`, `sinResultados`). El validador descarta los `bookId` que no estén en la lista del turno (inexistentes, agotados o de otro turno), cuenta los descartes y, si todo se descartó, sustituye el texto por la respuesta segura. A la respuesta pública solo salen `bookId`, título, autor, PVP, portada y motivo (lista blanca); la sinopsis nunca.
 - [x] `asistente-ia/prompts/asistente-v1.md` con encabezado (versión, modelo, fecha, motivo) + `CHANGELOG.md`; el mismo archivo se empaqueta y se lee en la Lambda.
-- [x] 84 pruebas nuevas con el modelo simulado (688 en total).
+- [x] 87 pruebas nuevas con el modelo simulado (691 en total).
 - [x] Rol IAM `AsistenteLambdaRole`: solo `GetItem` sobre libros, conocimiento y usuarios, y lectura del índice en S3.
 - [ ] Verificado en `staging` por el usuario con su sesión (instrucciones en el PR).
 

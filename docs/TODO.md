@@ -655,7 +655,7 @@ Rama `feature/asistente-interactions-api`. Decidido por el usuario tras actualiz
 
 Rama `feature/asistente-endpoint-chat`. Detalle en `asistente-ia/PLAN.md` §3 y `asistente-ia/bitacora/04-asistente-minimo.md`.
 
-- [x] `POST /api/asistente`: solo personal (vendedor/administrador) y con interruptor `ASISTENTE_ACTIVO` (encendido en `staging`, apagado en producción). Búsqueda híbrida, salida con esquema, validador de `bookId`, prompt v1 versionado. 688 pruebas backend.
+- [x] `POST /api/asistente`: solo personal (vendedor/administrador) y con interruptor `ASISTENTE_ACTIVO` (encendido en `staging`, apagado en producción). Búsqueda híbrida, salida con esquema, validador de `bookId`, prompt v1 versionado. 691 pruebas backend.
 - [ ] Verificación del usuario en `staging` con su sesión (consola del navegador; ver el PR).
 - [ ] Pendientes para encender el asistente en producción (no en este PR): secreto `GEMINI_API_KEY` del entorno `production` (prepago, proyecto de AI Studio propio de Babel), correr la carga de conocimiento en producción, encender `custom.indiceProgramado.production` y `custom.asistenteActivo.production`.
 

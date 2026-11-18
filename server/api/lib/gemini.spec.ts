@@ -269,6 +269,27 @@ describe('ProveedorGemini — errores', () => {
     expect(error.message).not.toContain(CLAVE);
   });
 
+  it('los reintentos son configurables: con uno solo hay dos intentos y una pausa', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => respuesta({ error: { status: 'UNAVAILABLE' } }, 503));
+    const esperar = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      crear(fetchMock, { reintentosMaximos: 1, esperar }).incrustarConsulta('x'),
+    ).rejects.toBeInstanceOf(ErrorProveedorLlm);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(esperar.mock.calls.map((c) => c[0])).toEqual([500]);
+  });
+
+  it('el tiempo límite por intento es configurable', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      respuesta({ embeddings: [{ values: vector(768) }], usageMetadata: { promptTokenCount: 1 } }),
+    );
+    await crear(fetchMock, { timeoutMs: 4000 }).incrustarConsulta('x');
+    const senal = (fetchMock.mock.calls[0][1] as { signal: AbortSignal }).signal;
+    expect(senal).toBeInstanceOf(AbortSignal);
+  });
+
   it('no reintenta un 400', async () => {
     const fetchMock = vi
       .fn()
@@ -303,5 +324,9 @@ describe('crearProveedorLlm', () => {
     expect(proveedor.modeloTexto).toBe('otro-modelo');
     expect(proveedor.modeloEmbeddings).toBe('gemini-embedding-2');
     expect(proveedor.nombre).toBe('gemini');
+  });
+
+  it('acepta tiempo límite y reintentos propios', () => {
+    expect(() => crearProveedorLlm({ GEMINI_API_KEY: CLAVE }, { timeoutMs: 5000, reintentosMaximos: 0 })).not.toThrow();
   });
 });

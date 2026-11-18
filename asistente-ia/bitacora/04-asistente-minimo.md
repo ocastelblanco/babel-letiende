@@ -57,12 +57,12 @@ El servidor no guarda nada entre mensajes. El cliente envía los últimos turnos
 - `server/api/handlers/asistente.ts`: `responder(dependencias, peticion)` (orquestador, probable con el modelo simulado), `crearCargadorIndice` (el índice se baja de S3 una vez cada 5 minutos por contenedor caliente) y el `handler` HTTP (interruptor → sesión → rol → cuerpo → respuesta; errores con mensaje genérico).
 - `serverless.yml`: función `asistente` (timeout 29 s, 512 MB), rol `AsistenteLambdaRole` de mínimo privilegio (solo `GetItem` sobre libros, conocimiento y usuarios; solo lectura del índice en S3; ninguna escritura), `custom.asistenteActivo`, y el prompt incluido en `package.patterns`.
 - `asistente-ia/prompts/asistente-v1.md` y `CHANGELOG.md`.
-- 84 pruebas nuevas (688 en total) con el modelo simulado: límites y filtros de la petición, orden y filtrado de candidatos, lista blanca (nunca `costo`, `utilidad` ni datos internos), el ataque de sinopsis envenenada, descarte y conteo de `bookId` inventados o agotados, respuesta bloqueada o truncada, índice ausente o de otro modelo, interruptor, 401/403/400/413/502/503/500 sin detalle interno.
+- 87 pruebas nuevas (691 en total) con el modelo simulado: límites y filtros de la petición, orden y filtrado de candidatos, lista blanca (nunca `costo`, `utilidad` ni datos internos), el ataque de sinopsis envenenada, descarte y conteo de `bookId` inventados o agotados, respuesta bloqueada o truncada, índice ausente o de otro modelo, interruptor, 401/403/400/413/502/503/500 sin detalle interno.
 - Regla de `CLAUDE.md` §7 (módulo nuevo ⇒ `package.patterns`): comprobada desempaquetando `.serverless/asistente.zip` (34,5 MB) y cargando el handler y el prompt desde ahí.
 
 ## 5. Cifras medidas
 
-- Pruebas: 688 de backend (604 antes), todas en verde.
+- Pruebas: 691 de backend (604 antes), todas en verde.
 - Paquete de la Lambda: 34,5 MB (la del índice, con el SDK de S3 y el cliente de Gemini, pesa 60 MB).
 - Verificación en `staging`: pendiente (se anota abajo al terminar).
 
