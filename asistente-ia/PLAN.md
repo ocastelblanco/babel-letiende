@@ -129,6 +129,7 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [x] Verificado en `staging` por el usuario con su sesión (prompt v2, 5 preguntas): disponibilidad, ubicación y horarios correctos; 3 fallos hallados y corregidos en el mismo PR con el prompt v3 y la fecha calculada en el servidor (bitácora 05 §5-6).
 - [x] Segunda prueba en `staging` (v3): buscar con filtros y precio/ubicación correctos; un horario inventado y un 502 → v4 (políticas siempre en el contexto, sin la herramienta `consultar_politicas`), reintento de la respuesta final y registro con motivo.
 - [x] v4 verificada: 9 de 9 en el CI contra el modelo real (`verificar-prompt-gemini.mjs`) y varias pruebas de Oliver en `staging`, incluidas preguntas de políticas. Oliver agregó al archivo de políticas el tema del parqueadero.
+- [x] v5 (vigente): el CI halló que un tema ausente de las políticas (wifi) podía responderse como «no contamos con…»; la regla nueva obliga a decir solo que no hay dato. 15 de 15 en el CI (parqueadero y wifi incluidos). Fase 3 fusionada en el PR #161 (18/11/2026).
 
 ### Fase 4 — Suite de evaluación · `T-0040` · capacidad: pruebas funcionales y de regresión
 
@@ -137,7 +138,7 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [ ] Métricas deterministas: existencia, disponibilidad, cumplimiento de restricciones, rechazo correcto, acierto (hit@k), resistencia a inyección, tokens, costo y latencia. Recall@k del recuperador sin LLM (barato). Modelo juez opcional para la fidelidad de la explicación, con sus sesgos documentados.
 - [ ] Ejecutor con control de cuota, `--dry-run` y nueva puntuación sin llamar a la API; resultados crudos fuera de git y tabla agregada en git.
 - [ ] Compuerta: `evals:comparar` contra la línea base sale con error si alguna métrica empeora más de la tolerancia. Workflow manual de GitHub Actions, obligatorio antes de cambiar prompt o modelo.
-- [ ] Primera corrida con v1 = línea base; luego v2, v3 y v4 (ya existen: salieron de las pruebas de `staging` de la Fase 3).
+- [ ] Primera corrida con v1 = línea base; luego v2, v3, v4 y v5 (ya existen: salieron de las pruebas de `staging` de la Fase 3).
 - [ ] **Políticas: herramienta o contexto (decidido el 18/11/2026).** Convertir la anécdota de `staging` en una medición. Base actual, sin valor estadístico: con herramienta, v2 consultó las políticas en sus 2 preguntas de horario y v3 la omitió en 1 de 2 e inventó un horario; v4 (en el contexto) pasó 9 de 9 en el CI y las pruebas de Oliver. Plan: devolver `consultar_politicas` detrás de una opción del encabezado del prompt (`politicas: contexto | herramienta`, por defecto `contexto`), unas 15 preguntas de políticas (día relativo, día concreto, tema ausente, dato que se debe citar, pregunta mixta libro + política) con varias repeticiones, contra v3 (herramienta) y v4 (contexto). Métricas: acierto, alucinación, omisión de la herramienta, latencia y tokens. Resultado esperado: una tabla en la bitácora que justifique (o revierta) la decisión de v4. Producción sigue con `contexto` mientras tanto.
 
 ### Fase 5 — Iteración de prompts · `T-0050` · capacidad: versionar y optimizar prompts
