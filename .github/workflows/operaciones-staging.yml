@@ -151,7 +151,7 @@ on:
 jobs:
   operar-staging:
     name: ${{ inputs.operacion }} (${{ inputs.email }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: staging
     env:
@@ -182,11 +182,11 @@ jobs:
       - name: Checkout del código
         # Solo lo necesita probar-usuarios-me (usa firebase-admin del
         # package.json del repo) — inofensivo y rápido para las demás.
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Node.js
         if: inputs.operacion == 'probar-usuarios-me' || inputs.operacion == 'probar-catalogar-libro' || inputs.operacion == 'sembrar-libros-demo' || inputs.operacion == 'sembrar-estantes-demo' || inputs.operacion == 'probar-estantes' || inputs.operacion == 'probar-registrar-venta' || inputs.operacion == 'probar-usuarios-crud' || inputs.operacion == 'probar-editoriales-descuentos-crud' || inputs.operacion == 'probar-cambiar-estante' || inputs.operacion == 'probar-listar-ventas'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm

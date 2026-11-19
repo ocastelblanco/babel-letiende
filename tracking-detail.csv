@@ -262,3 +262,4 @@ Backend,18/11/2026 18:21,18/11/2026 18:54,0:33:00,AI,Opus 5.5,Fase 3 del asisten
 Backend,18/11/2026 19:06,18/11/2026 19:18,0:12:00,AI,Sonnet 5.5,Fase 3 del asistente IA (T-0030): prompt v5 (la ausencia en las politicas no se afirma como inexistencia) y verificacion del CI contra el modelo real 15 de 15,Claude Code,cli,high
 Backend,18/11/2026 21:21,18/11/2026 21:22,0:01:00,AI,Sonnet 5.5,Fase 3 del asistente IA (T-0030): posfusion del PR 161 - limpieza local y memoria del proyecto,Claude Code,cli,low
 Specs definition,19/11/2026 07:58,19/11/2026 07:59,0:01:00,AI,Sonnet 5.5,Fase 3 del asistente IA (T-0030): PR de documentacion - TODO y PLAN al estado fusionado con prompt v5 y registro de esfuerzo del cierre,Claude Code,cli,low
+Workspace settting,19/11/2026 09:41,19/11/2026 09:46,0:05:00,AI,Sonnet 5.5,Chore de CI: actions checkout y setup-node a v7 y runner fijado en ubuntu-24.04 (advertencias de Node 20 y Ubuntu 26),Claude Code,cli,low
