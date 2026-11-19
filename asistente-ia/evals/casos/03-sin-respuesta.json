@@ -1,0 +1,74 @@
+[
+  {
+    "id": "S01",
+    "categoria": "sin-respuesta",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Tienen libros para aprender a programar en Python?"
+      }
+    ],
+    "esperaSinResultados": true,
+    "busqueda": []
+  },
+  {
+    "id": "S02",
+    "categoria": "sin-respuesta",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco un manual de derecho tributario colombiano"
+      }
+    ],
+    "esperaSinResultados": true,
+    "busqueda": []
+  },
+  {
+    "id": "S03",
+    "categoria": "sin-respuesta",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Tienen algún libro que explique cómo reparar una lavadora?"
+      }
+    ],
+    "esperaSinResultados": true,
+    "busqueda": []
+  },
+  {
+    "id": "S04",
+    "categoria": "sin-respuesta",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Necesito un libro de cálculo diferencial para mi primer semestre"
+      }
+    ],
+    "esperaSinResultados": true,
+    "busqueda": []
+  },
+  {
+    "id": "S05",
+    "categoria": "sin-respuesta",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero un libro para aprender a invertir en Bitcoin"
+      }
+    ],
+    "esperaSinResultados": true,
+    "busqueda": []
+  },
+  {
+    "id": "S06",
+    "categoria": "sin-respuesta",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco un tratado de derecho penal"
+      }
+    ],
+    "esperaSinResultados": true,
+    "busqueda": []
+  }
+]

@@ -1,6 +1,6 @@
 # 01 — Datos: enriquecer el inventario con sinopsis
 
-**Fecha:** 16/11/2026 · **Fase:** 1 · **trace_id:** `T-0011` (backend) · `T-0012` (Catalogar y Editar) · `T-0013` (carga retroactiva) · **Estado:** `T-0011` y `T-0012` fusionadas; `T-0013` implementada (PR abierto), con las cifras reales de cobertura pendientes de correr la carga
+**Fecha:** 16/11/2026 · **Fase:** 1 · **trace_id:** `T-0011` (backend) · `T-0012` (Catalogar y Editar) · `T-0013` (carga retroactiva) · **Estado:** `T-0011` a `T-0014` fusionadas; carga corrida en producción el 19/11/2026 (cifras abajo)
 
 ## 1. Objetivo
 
@@ -108,6 +108,27 @@ Es una muestra pequeña y de `staging`: dice que el mecanismo funciona, no cuál
 Orden de confianza: el grupo de registro del ISBN, después el texto de la sinopsis, y si ninguno es concluyente, vacío. Un grupo de ISBN identifica un país o una zona editorial, no el idioma de cada título, así que solo están los grupos cuyo idioma dominante es inequívoco (por ejemplo 978-958 Colombia y 978-84 España → `es`; 978-0 y 978-1 → `en`). Una editorial colombiana que publique un libro en inglés se equivocaría; por eso el resultado llega como sugerencia editable y nunca pisa un idioma que ya existe.
 
 El detector de texto usa palabras funcionales que distinguen cada idioma (se excluyen las que se escriben igual en varios, como `de` o `que`) y exige un mínimo de palabras, un mínimo de aciertos y una ventaja del ganador sobre el segundo. Ante la duda devuelve vacío: un idioma vacío es honesto, uno equivocado envenena el filtro del asistente.
+
+### Cobertura medida en producción (19/11/2026, `T-0013`)
+
+La carga se lanzó desde `/admin/carga-conocimiento` en producción el 19/11/2026 a las 10:57 (hora de Bogotá) y terminó a las 11:55: **58 minutos** para 2.541 libros, 0 errores, sin pisar nada (0 libros «ya tenían»). Cifras del reporte y de un conteo posterior sobre la tabla (solo agregados):
+
+| Cifra | Valor | % de 2.541 |
+|---|---|---|
+| Libros en producción | 2.541 | |
+| Filas de conocimiento guardadas | 2.519 | 99,1 % |
+| Con sinopsis útil (≥ 200 caracteres) | 2.201 | **86,6 %** |
+| Sinopsis demasiado corta | 52 | 2,0 % |
+| Sin sinopsis | 288 | 11,3 % |
+| Sin ISBN (no se pudo consultar) | 4 | 0,2 % |
+| Sin datos en ninguna fuente | 18 | 0,7 % |
+
+Fuente de la sinopsis útil: Tornamesa 801, Librería Nacional 778, Casa Tomada 343, Librería del Au 226, Lerner 49, Buscalibre 4. **Google Books: 0**, igual que en `staging`: la cobertura la dan los sitios de las librerías, no la API de Google.
+
+Idioma (campo `idioma` de la tabla de conocimiento): español 2.508, inglés 7, alemán 1, desconocido 25. Dos hallazgos que la Fase 4 va a cuidar:
+
+- **Ningún libro tiene categorías ni clasificación por edad.** Ni los sitios ni Google Books las entregaron. El filtro «excluir contenido adulto» no puede filtrar nada hoy, y el texto que se convierte en vector es «autor | sinopsis» (el título viaja como campo aparte del documento). Las peticiones por edad dependen únicamente de lo que diga la sinopsis.
+- **El idioma inferido por el grupo del ISBN puede equivocarse.** El grupo 978-0/1 es «inglés» por el registro del editor, no por el idioma del libro: libros con título en español como *Alicia en el País de las Maravillas* y *Carne* quedaron como `en`. El filtro por idioma hereda ese error. No se corrige en la Fase 4; queda anotado como mejora de datos y como límite de las pruebas de idioma.
 
 ## 6. Qué falló y cómo se corrigió
 

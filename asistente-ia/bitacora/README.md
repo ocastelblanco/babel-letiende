@@ -7,12 +7,12 @@ Registro de lo que se hizo, cómo y por qué, escrito para **consultarlo despué
 | # | Entrada | Fase | Estado |
 |---|---|---|---|
 | 00 | [Planeación y alcance](00-planeacion.md) | 0 | Completa (16/11/2026) |
-| 01 | [Datos: enriquecer el inventario con sinopsis](01-datos-sinopsis.md) | 1 | Completa (`T-0011` a `T-0014` fusionadas; falta correr la carga en producción) |
+| 01 | [Datos: enriquecer el inventario con sinopsis](01-datos-sinopsis.md) | 1 | Completa (`T-0011` a `T-0014` fusionadas; carga en producción corrida el 19/11/2026) |
 | 02 | [Cliente de Gemini detrás de `ProveedorLlm`](02-cliente-gemini.md) | 2 | Completa (`T-0021` y `T-0024` fusionadas) |
 | 03 | [Índice de embeddings](03-indice-embeddings.md) | 2 | Completa (`T-0022` fusionada) |
 | 04 | [El asistente mínimo: endpoint, búsqueda híbrida, prompt v1 y validador](04-asistente-minimo.md) | 2 | Completa (`T-0023` fusionada y verificada en `staging`) |
-| 05 | [Llamado de herramientas: contrato verificado, validación de argumentos y bucle acotado](05-herramientas.md) | 3 | En curso (`T-0030` implementada, PR abierto) |
-| 06 | Suite de evaluación y línea base | 4 | Pendiente |
+| 05 | [Llamado de herramientas: contrato verificado, validación de argumentos y bucle acotado](05-herramientas.md) | 3 | Completa (`T-0030` fusionada, prompt v5) |
+| 06 | [Suite de evaluación y línea base](06-evaluacion.md) | 4 | En curso (`T-0041` en PR; `T-0042` y `T-0043` pendientes) |
 | 07 | Iteración de prompts con evidencia | 5 | Pendiente |
 | 08 | Operación segura: registro, topes y privacidad | 6 | Pendiente |
 | 09 | Chat en el catálogo público y salida a producción | 7 | Pendiente |

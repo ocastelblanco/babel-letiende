@@ -675,18 +675,19 @@ Rama `feature/asistente-herramientas`. Detalle en `asistente-ia/PLAN.md` §3 y `
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
 
-## Tarea 9 — Fase 4a: base de la suite sin LLM (`T-0041`) — SIGUIENTE
+## Tarea 9 — Fase 4a: base de la suite sin LLM (`T-0041`) — IMPLEMENTADA, PR abierto (2026-11-19)
 
 Detalle en `asistente-ia/PLAN.md` (Fase 4). Una rama y un PR; no se abre hasta que termine el despliegue anterior.
 
-- [ ] **Tuyo (Oliver), ya:** lanzar la carga de sinopsis en producción (`/admin/carga-conocimiento` → «Iniciar carga») y avisar cuando el reporte diga que terminó. Sin eso no hay inventario real para la suite (en `staging` solo hay 25 libros).
-- [ ] Verificar en la documentación oficial los límites del nivel gratuito de `gemini-embedding-2`.
-- [ ] Copia congelada de producción fuera de git (solo lectura, paginada, lista blanca de campos) e índice local con la clave de `staging`.
-- [ ] Formato de caso, 40 casos, puntuador determinista con Vitest, Recall@k, `--dry-run` y nueva puntuación sin API.
-- [ ] Archivo de candidatos para tu validación (fuera de git): unión del recuperador y de una búsqueda por palabras; puedes agregar libros que no estén.
-- [ ] Bitácora 06 (evaluación, primera parte) y cifras de cobertura de producción en la bitácora 01.
+- [x] Carga de sinopsis en producción corrida por Oliver (19/11/2026): 2.541 libros, 2.201 con sinopsis útil.
+- [x] Límites del nivel gratuito: la documentación no los publica; **tuyo:** leer en AI Studio RPM, TPM y RPD de `gemini-3.5-flash-lite` y `gemini-embedding-2`.
+- [x] Copia congelada de producción fuera de git (solo lectura, paginada, lista blanca de campos).
+- [ ] **Tuyo (Oliver):** poner `GEMINI_API_KEY=<la clave de staging>` en `.env` (ignorado por git). Con eso construyo el índice local.
+- [x] Formato de caso, 46 casos, puntuador determinista con Vitest, Recall@k, `--dry-run` y nueva puntuación sin API.
+- [ ] Archivo de candidatos para tu validación (`asistente-ia/evals/congelado/candidatos.md`, fuera de git): lo genero cuando exista el índice. **Tuyo:** marcar los aceptables (1 a 2 horas) y avisarme.
+- [x] Bitácora 06 (evaluación, primera parte) y cifras de cobertura de producción en la bitácora 01.
 
-## Tarea 10 — Fase 4b: ejecutor y línea base (`T-0042`) — EN ESPERA de la Tarea 9 y de tu validación
+## Tarea 10 — Fase 4b: ejecutor y línea base (`T-0042`) — SIGUIENTE (el ejecutor se puede escribir antes de tu validación; la corrida la necesita)
 
 - [ ] Ejecutor sobre `responder()` en el mismo proceso, con la copia congelada, control de cuota y `--limit`.
 - [ ] Corrida de v4 y v5 (3 repeticiones); tabla en la bitácora.

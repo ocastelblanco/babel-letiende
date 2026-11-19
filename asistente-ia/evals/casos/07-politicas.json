@@ -1,0 +1,187 @@
+[
+  {
+    "id": "P01",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿A qué hora abren los sábados y hasta qué hora?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "10:00\\s*p\\.?\\s*m",
+        "diez de la noche",
+        "10 de la noche",
+        "22:00"
+      ],
+      [
+        "2:00\\s*p\\.?\\s*m",
+        "dos de la tarde",
+        "14:00"
+      ]
+    ],
+    "noDebeContener": [
+      "nueve de la ma[ñn]ana",
+      "9:00\\s*a\\.?\\s*m"
+    ]
+  },
+  {
+    "id": "P02",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Abren mañana? ¿en qué horario?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "10:00\\s*p\\.?\\s*m",
+        "10\\s*p\\.?\\s*m",
+        "diez de la noche",
+        "10 de la noche"
+      ]
+    ],
+    "noDebeContener": [
+      "8:00\\s*p\\.?\\s*m"
+    ]
+  },
+  {
+    "id": "P03",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Tienen parqueadero propio para los clientes?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "no (contamos|tenemos|hay)"
+      ],
+      [
+        "carrera\\s*20",
+        "37-67"
+      ]
+    ],
+    "noDebeContener": [
+      "(^|[.!¡]\\s*)s[ií],? (tenemos|contamos|hay)"
+    ]
+  },
+  {
+    "id": "P04",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Hacen envíos o domicilios?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "no (tenemos|hacemos|ofrecemos|contamos|realizamos|hay)"
+      ]
+    ],
+    "noDebeContener": [
+      "(^|[.!¡]\\s*)s[ií],? (hacemos|tenemos|contamos|ofrecemos|enviamos)"
+    ]
+  },
+  {
+    "id": "P05",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Cómo puedo pagar mi compra?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "tarjeta"
+      ],
+      [
+        "bre-?b",
+        "transferencia",
+        "llave"
+      ]
+    ],
+    "noDebeContener": [
+      "nequi",
+      "daviplata",
+      "efectivo",
+      "pse"
+    ]
+  },
+  {
+    "id": "P06",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Tienen wifi gratis para los clientes?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "no (tengo|cuento|dispongo|dispone|tenemos)[^.]{0,40}(dato|informaci)",
+        "no (tengo|cuento con) (ese|esa|ning)",
+        "directamente|preguntar|comunicar"
+      ]
+    ],
+    "noDebeContener": [
+      "(^|[.!¡]\\s*)s[ií],? (tenemos|contamos|hay)",
+      "no (contamos|tenemos|hay) (con )?(servicio de )?wi-?fi"
+    ]
+  },
+  {
+    "id": "P07",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco poemas de amor y de paso, ¿abren hoy?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "2:00\\s*p\\.?\\s*m|dos de la tarde|14:00"
+      ],
+      [
+        "8:00\\s*p\\.?\\s*m|ocho de la noche|8\\s*p\\.?\\s*m|20:00"
+      ]
+    ],
+    "noDebeContener": [
+      "10:00\\s*p\\.?\\s*m"
+    ],
+    "busqueda": [
+      "poemas de amor"
+    ],
+    "aceptables": null
+  },
+  {
+    "id": "P08",
+    "categoria": "politicas",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Puedo apartar un libro? ¿cuánto debo dejar?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "25\\s*%",
+        "25 por ciento",
+        "veinticinco"
+      ]
+    ]
+  }
+]

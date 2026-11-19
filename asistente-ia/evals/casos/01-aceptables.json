@@ -1,0 +1,263 @@
+[
+  {
+    "id": "A01",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco un libro de poemas de amor para regalarle a mi pareja"
+      }
+    ],
+    "busqueda": [
+      "poemas de amor",
+      "poesía amor"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A02",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero leer algo de Roberto Bolaño, ¿qué tienen?"
+      }
+    ],
+    "busqueda": [
+      "bolaño"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A03",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Recomiéndame una novela de misterio o policiaca para este fin de semana"
+      }
+    ],
+    "busqueda": [
+      "misterio",
+      "policiaca",
+      "crimen",
+      "asesin"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A04",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero entender cómo funciona el poder en la sociedad, ¿qué filosofía me recomiendas?"
+      }
+    ],
+    "busqueda": [
+      "foucault",
+      "poder",
+      "filosofía política",
+      "biopolítica"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A05",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Qué libros de Quino tienen? Quiero reírme un rato"
+      }
+    ],
+    "busqueda": [
+      "quino",
+      "mafalda"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A06",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco un cuento ilustrado para leerle a mi hijo de cuatro años antes de dormir"
+      }
+    ],
+    "busqueda": [
+      "cuento ilustrado",
+      "infantil",
+      "álbum ilustrado"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A07",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero aprender a cocinar, ¿tienen libros de recetas?"
+      }
+    ],
+    "busqueda": [
+      "receta",
+      "cocina"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A08",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Estoy interesada en el feminismo, recomiéndame ensayos para empezar"
+      }
+    ],
+    "busqueda": [
+      "feminis"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A09",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero entender mejor la historia de Colombia y el conflicto armado"
+      }
+    ],
+    "busqueda": [
+      "colombia",
+      "conflicto armado",
+      "reconciliación",
+      "violencia"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A10",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Me gustan las novelas de fantasía con magia y criaturas, ¿qué me recomiendas?"
+      }
+    ],
+    "busqueda": [
+      "fantasía",
+      "magia",
+      "dragón",
+      "elfo",
+      "hadas"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A11",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero una novela sobre la Segunda Guerra Mundial o el Holocausto"
+      }
+    ],
+    "busqueda": [
+      "holocausto",
+      "guerra mundial",
+      "nazi",
+      "segunda guerra"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A12",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco poesía colombiana"
+      }
+    ],
+    "busqueda": [
+      "poesía",
+      "poemas",
+      "colombiano"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A13",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Me preocupa la inteligencia artificial y lo que hace la tecnología con nosotros, ¿qué puedo leer?"
+      }
+    ],
+    "busqueda": [
+      "inteligencia artificial",
+      "tecnología",
+      "algoritmo",
+      "digital"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A14",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero leer sobre la historia del rock o de algún músico"
+      }
+    ],
+    "busqueda": [
+      "rock",
+      "música",
+      "músico",
+      "lou reed",
+      "canción"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "A15",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Recomiéndame un clásico de la literatura rusa"
+      }
+    ],
+    "busqueda": [
+      "ruso",
+      "rusia",
+      "tolstói",
+      "dostoievski",
+      "chéjov",
+      "babel",
+      "gógol"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  }
+]
