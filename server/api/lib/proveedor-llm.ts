@@ -21,9 +21,40 @@ export interface MensajeConversacion {
   texto: string;
 }
 
+/** Una herramienta que el modelo puede pedir que se ejecute. */
+export interface DeclaracionHerramienta {
+  nombre: string;
+  descripcion: string;
+  /** JSON Schema del objeto de argumentos (`type: 'object'`, `properties`, `required`). */
+  parametros: Record<string, unknown>;
+}
+
+/** El modelo pide ejecutar una herramienta. Los argumentos vienen del modelo: hay que validarlos antes de usarlos. */
+export interface LlamadaHerramienta {
+  id: string;
+  nombre: string;
+  argumentos: Record<string, unknown>;
+}
+
+/**
+ * Una vuelta del ciclo «el modelo pide herramientas → se ejecutan → se le devuelven los resultados».
+ * `pasosDelModelo` es lo que el modelo respondió en esa vuelta y se devuelve TAL CUAL (opaco para
+ * quien llama): el proveedor exige reenviarlo completo, incluido su razonamiento interno.
+ */
+export interface RondaHerramientas {
+  pasosDelModelo: unknown[];
+  resultados: { llamadaId: string; nombre: string; contenido: string }[];
+}
+
 export interface PeticionGeneracion {
   instrucciones: string;
   mensajes: MensajeConversacion[];
+  /** Herramientas disponibles en esta vuelta. */
+  herramientas?: DeclaracionHerramienta[];
+  /** Vueltas de herramientas ya ocurridas desde el último mensaje de la persona, en orden. */
+  rondas?: RondaHerramientas[];
+  /** Obliga al modelo a llamar a una de estas herramientas en vez de responder con texto. */
+  forzarHerramientas?: string[];
   /** Subconjunto de JSON Schema/OpenAPI que el proveedor aplica a la salida. */
   esquemaSalida: Record<string, unknown>;
   maximoTokensSalida: number;
@@ -43,6 +74,10 @@ export interface ResultadoGeneracion {
   /** Se cortó por llegar al tope de tokens: el JSON puede estar incompleto. */
   truncado: boolean;
   modelo: string;
+  /** Herramientas que el modelo pide ejecutar. Si hay alguna, `texto` no es la respuesta final. */
+  llamadas: LlamadaHerramienta[];
+  /** Los pasos de esta vuelta, para devolverlos en la siguiente `RondaHerramientas`. */
+  pasosDelModelo: unknown[];
 }
 
 export interface ProveedorLlm {

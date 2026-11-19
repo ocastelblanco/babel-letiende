@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, fusionada y verificada en `staging`) y `T-0014` (idioma de los libros, fusionada y verificada) y `T-0021` (cliente de Gemini, fusionada) y `T-0022` (índice de embeddings, fusionada) y `T-0024` (generación con la Interactions API, fusionada) y `T-0023` (Lambda `asistente`, prompt v1 y validador, implementada, PR abierto). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, fusionada y verificada en `staging`) y `T-0014` (idioma de los libros, fusionada y verificada) y `T-0021` (cliente de Gemini, fusionada) y `T-0022` (índice de embeddings, fusionada) y `T-0024` (generación con la Interactions API, fusionada) y `T-0023` (Lambda `asistente`, prompt v1 y validador, fusionada y verificada) y `T-0030` (herramientas, implementada, PR abierto). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -651,13 +651,26 @@ Rama `feature/asistente-interactions-api`. Decidido por el usuario tras actualiz
 - [x] Contrato verificado con la clave real (versión y cabecera, multi-turno, truncado, niveles de pensamiento) y la clase real ejercitada de punta a punta en el workflow de verificación (12 comprobaciones).
 - [x] Fusionado (PR #159) y desplegado.
 
-## Tarea 7 — Fase 2, parte 4: Lambda `asistente`, prompt v1 y validador (`T-0023`) — IMPLEMENTADA, PR abierto (2026-11-18)
+## Tarea 7 — Fase 2, parte 4: Lambda `asistente`, prompt v1 y validador (`T-0023`) — FUSIONADA y VERIFICADA (2026-11-18)
 
 Rama `feature/asistente-endpoint-chat`. Detalle en `asistente-ia/PLAN.md` §3 y `asistente-ia/bitacora/04-asistente-minimo.md`.
 
 - [x] `POST /api/asistente`: solo personal (vendedor/administrador) y con interruptor `ASISTENTE_ACTIVO` (encendido en `staging`, apagado en producción). Búsqueda híbrida, salida con esquema, validador de `bookId`, prompt v1 versionado. 691 pruebas backend.
-- [ ] Verificación del usuario en `staging` con su sesión (consola del navegador; ver el PR).
+- [x] Verificado por el usuario en `staging` con su sesión (PR #160): recomendaciones reales, filtros de idioma y precio correctos. Producción verificada con el interruptor apagado (`503`).
 - [ ] Pendientes para encender el asistente en producción (no en este PR): secreto `GEMINI_API_KEY` del entorno `production` (prepago, proyecto de AI Studio propio de Babel), correr la carga de conocimiento en producción, encender `custom.indiceProgramado.production` y `custom.asistenteActivo.production`.
+
+## Tarea 8 — Fase 3: herramientas del asistente (`T-0030`) — IMPLEMENTADA, PR abierto (2026-11-18)
+
+Rama `feature/asistente-herramientas`. Detalle en `asistente-ia/PLAN.md` §3 y `asistente-ia/bitacora/05-herramientas.md`.
+
+- [x] Contrato del llamado de herramientas verificado contra la API real; `ProveedorLlm`/`ProveedorGemini` con herramientas; módulo `herramientas-asistente`; bucle acotado en `responder`; prompt v2 con `herramientas: true`. 752 pruebas backend.
+- [x] **Tuyo (Oliver):** `asistente-ia/conocimiento/politicas-libreria.md` completado (18/11/2026).
+- [x] Verificación en `staging` con tu sesión (prompt v2): 3 fallos hallados (día de «mañana» inventado, no buscó con filtros, no consultó precio/ubicación) + voseo.
+- [x] Corrección en el mismo PR: fecha y hora de Bogotá calculadas en el servidor (`FECHA_Y_HORA_ACTUAL`) y prompt v3. 759 pruebas backend.
+- [x] Segunda prueba (v3): 3 de 4 bien; un horario inventado y un 502. Corregido con v4: políticas siempre en el contexto (herramienta `consultar_politicas` eliminada), un reintento de la respuesta final, error con nombre y motivo en el registro. 761 pruebas backend; prueba del prompt contra el modelo real en el workflow de Gemini.
+- [x] v4 verificada en `staging` por Oliver (varias pruebas, incluidas de políticas) y en el CI contra el modelo real. Políticas: tema «Parqueadero» agregado.
+- [ ] Fusionar el PR #161 (lo hace Oliver).
+- [ ] Anotado en `asistente-ia/PLAN.md`: comparación herramienta/contexto para las políticas (Fase 4) y validador de fidelidad de datos (Fase 6).
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
 

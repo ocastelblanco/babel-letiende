@@ -30,6 +30,8 @@ const MAXIMO_PRECIO = 10_000_000;
 
 export const TEXTO_SIN_RESULTADOS =
   'No encontré en la librería un libro que encaje con eso. ¿Quieres contarme un poco más de lo que buscas, o probar con otro tema?';
+export const TEXTO_DEMORA =
+  'Esto está tardando más de lo normal y prefiero no hacerte esperar. ¿Me repites tu pregunta en un momento?';
 export const TEXTO_BLOQUEADO =
   'No puedo ayudarte con esa consulta. Si quieres, cuéntame qué tipo de lectura buscas y te recomiendo algo de la librería.';
 
@@ -169,6 +171,7 @@ export interface LibroDeInventario {
   portadaUrl?: string | null;
   pvp: number;
   cantidadDisponible: number;
+  ubicacionId?: string;
 }
 
 /**
@@ -247,8 +250,39 @@ export function libroParaModelo(
   };
 }
 
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+/** Bogotá no tiene horario de verano: siempre UTC-5. */
+const DESFASE_BOGOTA_MS = -5 * 60 * 60 * 1000;
+
+function fechaEnLetras(desplazada: Date): string {
+  return `${DIAS_SEMANA[desplazada.getUTCDay()]} ${desplazada.getUTCDate()} de ${MESES[desplazada.getUTCMonth()]} de ${desplazada.getUTCFullYear()}`;
+}
+
 /**
- * Conversación que recibe el modelo. Los libros van en el ÚLTIMO turno de la persona,
+ * Día y hora de Bogotá en palabras, para que el modelo no tenga que adivinar de qué día se
+ * habla cuando preguntan «¿abren mañana?». Se calcula en el servidor: el modelo no tiene reloj
+ * y, sin este dato, inventa el día (staging, 18/11/2026: dijo el horario de un miércoles para un jueves).
+ * El día de mañana se da calculado porque un modelo pequeño falla en la aritmética de fechas.
+ */
+export function momentoActualParaModelo(ahoraMs: number): { hoy: string; manana: string; hora: string } {
+  const hoy = new Date(ahoraMs + DESFASE_BOGOTA_MS);
+  const manana = new Date(ahoraMs + DESFASE_BOGOTA_MS + 24 * 60 * 60 * 1000);
+  const horas = hoy.getUTCHours();
+  const minutos = String(hoy.getUTCMinutes()).padStart(2, '0');
+  const hora12 = horas % 12 === 0 ? 12 : horas % 12;
+  return {
+    hoy: fechaEnLetras(hoy),
+    manana: fechaEnLetras(manana),
+    hora: `${hora12}:${minutos} ${horas < 12 ? 'a. m.' : 'p. m.'}`,
+  };
+}
+
+/**
+ * Conversación que recibe el modelo. Los libros (y la fecha) van en el ÚLTIMO turno de la persona,
  * serializados como JSON: así una sinopsis (texto de un tercero) o el mensaje de la persona
  * no pueden salirse de su cadena para parecer una instrucción, y nada de eso llega al
  * campo de instrucciones del sistema.
@@ -256,13 +290,17 @@ export function libroParaModelo(
 export function mensajesParaModelo(
   mensajes: MensajeConversacion[],
   libros: LibroParaModelo[],
+  ahoraMs: number = Date.now(),
+  politicas: { tema: string; texto: string }[] = [],
 ): MensajeConversacion[] {
   const ultimo = mensajes.length - 1;
+  const momento = momentoActualParaModelo(ahoraMs);
+  const fecha = `FECHA_Y_HORA_ACTUAL:\nHoy: ${momento.hoy}, ${momento.hora} (hora de Bogotá)\nMañana: ${momento.manana}`;
   return mensajes.map((mensaje, posicion) =>
     posicion === ultimo
       ? {
           rol: mensaje.rol,
-          texto: `LIBROS_DISPONIBLES:\n${JSON.stringify(libros)}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
+          texto: `${fecha}\n\nPOLITICAS_DE_LA_LIBRERIA:\n${JSON.stringify(politicas)}\n\nLIBROS_DISPONIBLES:\n${JSON.stringify(libros)}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
         }
       : mensaje,
   );
@@ -290,7 +328,13 @@ export const ESQUEMA_SALIDA: Record<string, unknown> = {
 // ---------------------------------------------------------------------------
 
 /** La salida del modelo no sirve (no es JSON, no cumple el esquema o se cortó). */
-export class ErrorRespuestaInvalida extends Error {}
+export class ErrorRespuestaInvalida extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    // Sin esto el registro decía solo «Error» y el 502 de staging (18/11/2026) no se podía diagnosticar.
+    this.name = 'ErrorRespuestaInvalida';
+  }
+}
 
 export interface RespuestaValidada {
   texto: string;
@@ -368,6 +412,8 @@ export interface PromptAsistente {
   fecha: string;
   motivo: string;
   instrucciones: string;
+  /** El prompt está escrito para usar herramientas (encabezado `herramientas: true`). Las versiones sin ese dato no las usan. */
+  herramientas: boolean;
 }
 
 const prompts = new Map<string, PromptAsistente>();
@@ -416,6 +462,7 @@ export function cargarPrompt(
     fecha: campos[2] as string,
     motivo: campos[3] as string,
     instrucciones,
+    herramientas: encabezado.get('herramientas') === 'true',
   };
   prompts.set(clave, prompt);
   return prompt;

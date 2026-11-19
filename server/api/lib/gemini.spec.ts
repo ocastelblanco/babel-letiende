@@ -234,6 +234,116 @@ describe('ProveedorGemini — generación (Interactions API)', () => {
   });
 });
 
+describe('ProveedorGemini — herramientas', () => {
+  const herramienta = {
+    nombre: 'buscar_libros',
+    descripcion: 'Busca libros.',
+    parametros: { type: 'object', properties: { consulta: { type: 'string' } }, required: ['consulta'] },
+  };
+  const base = {
+    instrucciones: 'Eres un asistente.',
+    mensajes: [{ rol: 'usuario' as const, texto: 'quiero fantasía' }],
+    esquemaSalida: { type: 'object' },
+    maximoTokensSalida: 500,
+  };
+  const pensamiento = { type: 'thought', signature: 'firma-opaca' };
+  const llamada = { type: 'function_call', id: 'c-1', name: 'buscar_libros', arguments: { consulta: 'fantasía' } };
+
+  function interaccion(pasos: unknown[], estado: string) {
+    return respuesta({
+      status: estado,
+      steps: pasos,
+      usage: { total_input_tokens: 223, total_output_tokens: 37, total_thought_tokens: 0 },
+    });
+  }
+
+  it('declara las herramientas con la forma plana que verificó la API real', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([{ type: 'model_output', content: [{ type: 'text', text: '{}' }] }], 'completed'));
+    await crear(fetchMock).generarJson({ ...base, herramientas: [herramienta] });
+    expect(cuerpoEnviado(fetchMock)['tools']).toEqual([
+      { type: 'function', name: 'buscar_libros', description: 'Busca libros.', parameters: herramienta.parametros },
+    ]);
+  });
+
+  it('sin herramientas no envía `tools` ni `tool_choice`', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([{ type: 'model_output', content: [{ type: 'text', text: '{}' }] }], 'completed'));
+    await crear(fetchMock).generarJson(base);
+    const cuerpo = cuerpoEnviado(fetchMock);
+    expect(cuerpo['tools']).toBeUndefined();
+    expect(JSON.stringify(cuerpo)).not.toContain('tool_choice');
+  });
+
+  it('una interacción que espera herramientas devuelve las llamadas y no cuenta como bloqueada', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([pensamiento, llamada], 'requires_action'));
+    const resultado = await crear(fetchMock).generarJson({ ...base, herramientas: [herramienta] });
+    expect(resultado.llamadas).toEqual([{ id: 'c-1', nombre: 'buscar_libros', argumentos: { consulta: 'fantasía' } }]);
+    expect(resultado.bloqueado).toBe(false);
+    expect(resultado.texto).toBe('');
+    // Los pasos se devuelven completos (con el pensamiento) para reenviarlos.
+    expect(resultado.pasosDelModelo).toEqual([pensamiento, llamada]);
+  });
+
+  it('varias llamadas en una misma vuelta (paralelas) se conservan con su id', async () => {
+    const otra = { type: 'function_call', id: 'c-2', name: 'consultar_disponibilidad', arguments: { book_ids: ['a'] } };
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([pensamiento, llamada, otra], 'requires_action'));
+    const resultado = await crear(fetchMock).generarJson({ ...base, herramientas: [herramienta] });
+    expect(resultado.llamadas.map((l) => l.id)).toEqual(['c-1', 'c-2']);
+  });
+
+  it('argumentos que no son un objeto se tratan como vacíos, y una llamada sin id o nombre se ignora', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      interaccion(
+        [
+          { type: 'function_call', id: 'c-1', name: 'buscar_libros', arguments: 'texto suelto' },
+          { type: 'function_call', id: 'c-2', name: 'buscar_libros', arguments: ['lista'] },
+          { type: 'function_call', name: 'sin_id', arguments: {} },
+          { type: 'function_call', id: 'c-4', arguments: {} },
+        ],
+        'requires_action',
+      ),
+    );
+    const resultado = await crear(fetchMock).generarJson({ ...base, herramientas: [herramienta] });
+    expect(resultado.llamadas).toEqual([
+      { id: 'c-1', nombre: 'buscar_libros', argumentos: {} },
+      { id: 'c-2', nombre: 'buscar_libros', argumentos: {} },
+    ]);
+  });
+
+  it('reenvía los pasos del modelo completos y los resultados como lista de partes de texto', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([{ type: 'model_output', content: [{ type: 'text', text: '{}' }] }], 'completed'));
+    await crear(fetchMock).generarJson({
+      ...base,
+      herramientas: [herramienta],
+      rondas: [
+        {
+          pasosDelModelo: [pensamiento, llamada],
+          resultados: [{ llamadaId: 'c-1', nombre: 'buscar_libros', contenido: '{"libros":[]}' }],
+        },
+      ],
+    });
+    expect(cuerpoEnviado(fetchMock)['input']).toEqual([
+      { type: 'user_input', content: [{ type: 'text', text: 'quiero fantasía' }] },
+      pensamiento,
+      llamada,
+      { type: 'function_result', name: 'buscar_libros', call_id: 'c-1', result: [{ type: 'text', text: '{"libros":[]}' }] },
+    ]);
+  });
+
+  it('puede obligar a llamar a una herramienta concreta', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([pensamiento, llamada], 'requires_action'));
+    await crear(fetchMock).generarJson({ ...base, herramientas: [herramienta], forzarHerramientas: ['buscar_libros'] });
+    const config = cuerpoEnviado(fetchMock)['generation_config'] as Record<string, unknown>;
+    expect(config['tool_choice']).toEqual({ allowed_tools: { mode: 'any', tools: ['buscar_libros'] } });
+  });
+
+  it('una respuesta de solo texto sigue sin llamadas', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => interaccion([{ type: 'model_output', content: [{ type: 'text', text: '{"a":1}' }] }], 'completed'));
+    const resultado = await crear(fetchMock).generarJson({ ...base, herramientas: [herramienta] });
+    expect(resultado.llamadas).toEqual([]);
+    expect(resultado.texto).toBe('{"a":1}');
+  });
+});
+
 describe('ProveedorGemini — errores', () => {
   it('reintenta ante 429 y 5xx y termina bien si se recupera', async () => {
     const fetchMock = vi

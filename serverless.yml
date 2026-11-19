@@ -2467,9 +2467,13 @@ functions:
       TABLA_LIBROS: ${self:custom.nombresTablas.libros}
       TABLA_USUARIOS: ${self:custom.nombresTablas.usuarios}
       TABLA_CONOCIMIENTO: ${self:custom.nombresTablas.conocimiento}
+      # Para decir dónde está un libro (consultar_disponibilidad): ubicación → mueble → espacio.
+      TABLA_UBICACIONES: ${self:custom.nombresTablas.ubicaciones}
+      TABLA_MUEBLES: ${self:custom.nombresTablas.muebles}
+      TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
       BUCKET_INDICE: ${self:custom.bucketIndice}
       ASISTENTE_ACTIVO: ${self:custom.asistenteActivo.${sls:stage}, 'false'}
-      VERSION_PROMPT_ASISTENTE: v1
+      VERSION_PROMPT_ASISTENTE: v5
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
       GEMINI_API_KEY: ${env:GEMINI_API_KEY, ''}
     package:
@@ -2479,12 +2483,14 @@ functions:
         - 'dist-server/api/lib/almacen-indice.js'
         - 'dist-server/api/lib/asistente.js'
         - 'dist-server/api/lib/gemini.js'
+        - 'dist-server/api/lib/herramientas-asistente.js'
         - 'dist-server/api/lib/indice-vectorial.js'
         - 'dist-server/api/lib/proveedor-llm.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
-        # El prompt versionado se lee del disco en tiempo de ejecución: una sola fuente (PLAN.md T-0023).
+        # El prompt versionado y las políticas se leen del disco en tiempo de ejecución: una sola fuente (PLAN.md T-0023, T-0030).
         - 'asistente-ia/prompts/asistente-*.md'
+        - 'asistente-ia/conocimiento/politicas-libreria.md'
         - 'node_modules/**'
         - '!node_modules/@angular/**'
         - '!node_modules/firebase/**'
@@ -3755,6 +3761,10 @@ resources:
                     - !GetAtt TablaLibros.Arn
                     - !GetAtt TablaConocimiento.Arn
                     - !GetAtt TablaUsuarios.Arn
+                    # Solo para nombrar dónde está un libro (la ficha pública ya lo muestra).
+                    - !GetAtt TablaUbicaciones.Arn
+                    - !GetAtt TablaMuebles.Arn
+                    - !GetAtt TablaEspacios.Arn
           # ListBucket hace falta para que un índice inexistente responda 404 y no 403 (antes de la primera reconstrucción).
           - PolicyName: babel-asistente-role-s3-${sls:stage}
             PolicyDocument:

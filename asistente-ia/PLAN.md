@@ -103,7 +103,7 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] 31 pruebas nuevas (601 en total).
 - [x] Verificado en `staging` (2026-11-17): 25 de 25 libros indexados en 1,7 s con 6.096 tokens de entrada; la segunda corrida conservó los 25, no pidió ningún token ni escribió (94 ms); archivo de 22.676 bytes cifrado (AES256) en un bucket con acceso público bloqueado; regla de 6 horas activa.
 
-**`T-0023` — Lambda `asistente`, prompt v1 y validador (implementada, PR abierto 2026-11-18)** · bitácora [`04-asistente-minimo.md`](bitacora/04-asistente-minimo.md)
+**`T-0023` — Lambda `asistente`, prompt v1 y validador (fusionada, PR #160, 2026-11-18)** · bitácora [`04-asistente-minimo.md`](bitacora/04-asistente-minimo.md)
 
 - [x] Clave de Gemini del proyecto propio (secreto `GEMINI_API_KEY` del entorno `staging`). La de producción (prepago) se necesita solo antes de encender el asistente allí.
 - [x] Lambda `asistente` (ADR-008), `POST /api/asistente`. Conversación sin estado: el cliente envía los últimos turnos (máx. 9, 1.000 caracteres c/u) y el servidor valida límites, roles y filtros. **Cambio respecto al plan:** exige sesión de vendedor o administrador (no es público hasta las fases 6 y 7, cuando existan los topes de gasto y de tasa), además del interruptor `ASISTENTE_ACTIVO` (encendido en `staging`, apagado en producción). Decidido con el usuario el 17/11/2026.
@@ -112,16 +112,23 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] `asistente-ia/prompts/asistente-v1.md` con encabezado (versión, modelo, fecha, motivo) + `CHANGELOG.md`; el mismo archivo se empaqueta y se lee en la Lambda.
 - [x] 87 pruebas nuevas con el modelo simulado (691 en total).
 - [x] Rol IAM `AsistenteLambdaRole`: solo `GetItem` sobre libros, conocimiento y usuarios, y lectura del índice en S3.
-- [ ] Verificado en `staging` por el usuario con su sesión (instrucciones en el PR).
+- [x] Verificado en `staging` por el usuario con su sesión (18/11/2026): recomendaciones reales, filtros de idioma y precio correctos, inyección directa resistida. Producción verificada con el interruptor apagado (`503`).
 
 ### Fase 3 — Llamado de herramientas · `T-0030` · capacidad: integración con sistemas
 
-- [ ] Herramientas de solo lectura: `buscar_libros(consulta, filtros)`, `consultar_disponibilidad(bookIds)` (precio, existencias, Espacio/Mueble/Ubicación), `consultar_politicas(tema)`.
-- [ ] Lista blanca de campos: el modelo **nunca** recibe `costo`, `utilidad`, `porcentajeDescuentoEditorial` ni datos de ventas.
-- [ ] Validación de argumentos, tope de rondas de herramientas por consulta y respuesta definida cuando una herramienta falla.
-- [ ] Rol IAM de la Lambda: solo lectura sobre `babel-libros` y el bucket del índice.
-- [ ] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**: horarios, cambios, formas de pago) que el asistente cita.
-- [ ] Pruebas que ejercitan cada herramienta, incluidos los fallos.
+Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto al plan:** la búsqueda inicial de `T-0023` se conserva y las herramientas son de apoyo. Con 5 a 13 s por llamada al modelo (medido), hacer de `buscar_libros` el único camino costaría dos llamadas por pregunta, contra el límite de 30 s de API Gateway.
+
+- [x] Contrato del llamado de herramientas verificado contra la API real (`asistente-ia/scripts/verificar-herramientas-gemini.mjs`): declaración plana, `requires_action`, el pensamiento se reenvía (si no, 400), el resultado va como lista de partes de texto, herramientas + salida JSON en la misma petición, llamadas en paralelo, `tool_choice`.
+- [x] Herramientas de solo lectura: `buscar_libros(consulta, filtros)`, `consultar_disponibilidad(bookIds)` (precio, existencias, Espacio/Mueble/Ubicación). Las políticas de la librería no son herramienta: viajan siempre en el contexto (v4, tras un horario inventado en `staging`).
+- [x] Lista blanca de campos: el modelo **nunca** recibe `costo`, `utilidad`, `porcentajeDescuentoEditorial` ni datos de ventas (prueba con un libro que los trae).
+- [x] Validación de argumentos en el servidor (el modelo real omitió un parámetro obligatorio en la verificación), tope de 3 rondas y de 4 llamadas por ronda, presupuesto de tiempo, y respuesta definida cuando una herramienta falla o los argumentos son inválidos.
+- [x] Rol IAM de la Lambda: solo lectura (`GetItem`) sobre libros, conocimiento, usuarios, ubicaciones, muebles y espacios, y lectura del índice en S3.
+- [x] Prompt v2 (`herramientas: true`); v1 queda intacto como línea base sin herramientas.
+- [x] 61 pruebas nuevas (752 en total) que ejercitan cada herramienta, incluidos los fallos.
+- [x] `asistente-ia/conocimiento/politicas-libreria.md` (**contenido del usuario**, completado el 18/11/2026: horarios, formas de pago, cambios y devoluciones, ubicación, envíos y apartados). Un tema vacío hace que el asistente diga que no tiene el dato.
+- [x] Verificado en `staging` por el usuario con su sesión (prompt v2, 5 preguntas): disponibilidad, ubicación y horarios correctos; 3 fallos hallados y corregidos en el mismo PR con el prompt v3 y la fecha calculada en el servidor (bitácora 05 §5-6).
+- [x] Segunda prueba en `staging` (v3): buscar con filtros y precio/ubicación correctos; un horario inventado y un 502 → v4 (políticas siempre en el contexto, sin la herramienta `consultar_politicas`), reintento de la respuesta final y registro con motivo.
+- [x] v4 verificada: 9 de 9 en el CI contra el modelo real (`verificar-prompt-gemini.mjs`) y varias pruebas de Oliver en `staging`, incluidas preguntas de políticas. Oliver agregó al archivo de políticas el tema del parqueadero.
 
 ### Fase 4 — Suite de evaluación · `T-0040` · capacidad: pruebas funcionales y de regresión
 
@@ -130,11 +137,12 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [ ] Métricas deterministas: existencia, disponibilidad, cumplimiento de restricciones, rechazo correcto, acierto (hit@k), resistencia a inyección, tokens, costo y latencia. Recall@k del recuperador sin LLM (barato). Modelo juez opcional para la fidelidad de la explicación, con sus sesgos documentados.
 - [ ] Ejecutor con control de cuota, `--dry-run` y nueva puntuación sin llamar a la API; resultados crudos fuera de git y tabla agregada en git.
 - [ ] Compuerta: `evals:comparar` contra la línea base sale con error si alguna métrica empeora más de la tolerancia. Workflow manual de GitHub Actions, obligatorio antes de cambiar prompt o modelo.
-- [ ] Primera corrida con v1 = línea base.
+- [ ] Primera corrida con v1 = línea base; luego v2, v3 y v4 (ya existen: salieron de las pruebas de `staging` de la Fase 3).
+- [ ] **Políticas: herramienta o contexto (decidido el 18/11/2026).** Convertir la anécdota de `staging` en una medición. Base actual, sin valor estadístico: con herramienta, v2 consultó las políticas en sus 2 preguntas de horario y v3 la omitió en 1 de 2 e inventó un horario; v4 (en el contexto) pasó 9 de 9 en el CI y las pruebas de Oliver. Plan: devolver `consultar_politicas` detrás de una opción del encabezado del prompt (`politicas: contexto | herramienta`, por defecto `contexto`), unas 15 preguntas de políticas (día relativo, día concreto, tema ausente, dato que se debe citar, pregunta mixta libro + política) con varias repeticiones, contra v3 (herramienta) y v4 (contexto). Métricas: acierto, alucinación, omisión de la herramienta, latencia y tokens. Resultado esperado: una tabla en la bitácora que justifique (o revierta) la decisión de v4. Producción sigue con `contexto` mientras tanto.
 
 ### Fase 5 — Iteración de prompts · `T-0050` · capacidad: versionar y optimizar prompts
 
-- [ ] v2 y v3 guiadas solo por fallos de la suite. Por cada cambio: motivo, hipótesis, efecto medido.
+- [ ] Desde v5, cambios guiados solo por fallos de la suite (v2 a v4 salieron de pruebas manuales en `staging`, antes de que existiera la suite). Por cada cambio: motivo, hipótesis, efecto medido.
 - [ ] Ficha por prompt y tabla de resultados por versión en la bitácora.
 
 ### Fase 6 — Operación segura (backend) · `T-0060` · capacidad: uso responsable, privacidad y seguridad
@@ -142,6 +150,7 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [ ] Tabla `babel-asistente-registros` (TTL): consulta con correos, teléfonos y números de documento enmascarados, `bookId` propuestos, latencia, tokens, costo estimado, modelo, versión del prompt, valoración y banderas (rechazo, inyección sospechada). Sin IP: solo un hash con sal diaria rotativa.
 - [ ] Tabla `babel-asistente-control`: interruptor administrable, contador atómico de gasto diario (tope en USD) y de mensajes por visitante (con TTL).
 - [ ] Límites de entrada (longitud, número de turnos) y limitación de tasa en API Gateway para la ruta.
+- [ ] **Validador de fidelidad (decidido el 18/11/2026).** Mismo principio que el validador de `bookId`, aplicado a datos: toda hora, porcentaje, teléfono, dirección y precio que aparezca en `texto` debe estar en las políticas o en los datos de ese turno (libros ofrecidos y resultados de herramientas). Si no, la respuesta se descarta, se pide una vez más y se cuenta en el registro. Sirve con las políticas en el contexto o detrás de una herramienta: tenerlas a la vista no impide que el modelo las cambie. Casos en la suite: respuestas con un dato alterado.
 - [ ] Casos de seguridad agregados a la suite; ficha de riesgos actualizada con los controles reales; verificación con la skill `owasp-security-verification`.
 
 ### Fase 7 — Chat en el catálogo público · `T-0070` · capacidad: asistente conversacional → **producción**

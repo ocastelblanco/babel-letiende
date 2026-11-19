@@ -2,8 +2,10 @@ name: Asistente - verificar contrato de Gemini
 
 # Llama a la API real de Gemini con textos sintéticos: primero el contrato HTTP
 # (modelos, embeddings, Interactions API) y luego la clase real `ProveedorGemini`
-# que usa el asistente (T-0021, T-0024). Usa el secreto GEMINI_API_KEY del entorno `staging`.
-# El script nunca imprime la clave ni el contenido de las respuestas del modelo.
+# que usa el asistente (T-0021, T-0024), y por último el prompt vigente con el contexto real que arma la
+# Lambda (T-0030: caso del horario inventado). Usa el secreto GEMINI_API_KEY del entorno `staging`.
+# Ningún script imprime la clave; solo el del prompt imprime la respuesta del modelo, y únicamente cuando
+# una comprobación falla (son preguntas sintéticas sobre políticas públicas).
 # Corre solo a mano o cuando cambia el propio script.
 
 on:
@@ -12,6 +14,12 @@ on:
     paths:
       - 'asistente-ia/scripts/verificar-gemini.mjs'
       - 'asistente-ia/scripts/verificar-cliente-gemini.mjs'
+      - 'asistente-ia/scripts/verificar-herramientas-gemini.mjs'
+      - 'asistente-ia/scripts/verificar-prompt-gemini.mjs'
+      - 'asistente-ia/prompts/**'
+      - 'asistente-ia/conocimiento/**'
+      - 'server/api/lib/asistente.ts'
+      - 'server/api/lib/herramientas-asistente.ts'
       - 'server/api/lib/gemini.ts'
       - 'server/api/lib/proveedor-llm.ts'
       - 'server/api/lib/indice-vectorial.ts'
@@ -35,6 +43,10 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node asistente-ia/scripts/verificar-gemini.mjs
+      - name: Verificar el llamado de herramientas (HTTP directo)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node asistente-ia/scripts/verificar-herramientas-gemini.mjs
       - name: Instalar dependencias y compilar el backend
         run: |
           npm ci
@@ -43,3 +55,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node asistente-ia/scripts/verificar-cliente-gemini.mjs
+      - name: Verificar el prompt vigente con el modelo real (horarios y políticas)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node asistente-ia/scripts/verificar-prompt-gemini.mjs
