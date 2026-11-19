@@ -390,19 +390,20 @@ describe('cargarPrompt', () => {
     const versiones = readdirSync(carpeta)
       .map((archivo) => /^asistente-(v\d{1,3})\.md$/.exec(archivo)?.[1])
       .filter((version): version is string => version !== undefined);
-    expect(versiones).toEqual(expect.arrayContaining(['v1', 'v2', 'v3', 'v4']));
+    expect(versiones).toEqual(expect.arrayContaining(['v1', 'v2', 'v3', 'v4', 'v5']));
     for (const version of versiones) {
       expect(cargarPrompt(version).version).toBe(version);
       expect(changelog).toContain(`| ${version} |`);
     }
   });
 
-  it('el prompt v4 usa herramientas, explica los bloques de fecha y políticas y ya no menciona consultar_politicas', () => {
-    const prompt = cargarPrompt('v4');
+  it('el prompt v5 usa herramientas, explica los bloques de fecha y políticas, no afirma negaciones sin dato y ya no menciona consultar_politicas', () => {
+    const prompt = cargarPrompt('v5');
     expect(prompt.herramientas).toBe(true);
     expect(prompt.instrucciones).toContain('FECHA_Y_HORA_ACTUAL');
     expect(prompt.instrucciones).toContain('POLITICAS_DE_LA_LIBRERIA');
     expect(prompt.instrucciones).toContain('buscar_libros');
+    expect(prompt.instrucciones).toMatch(/nunca afirmes que «no hay»/);
     expect(prompt.instrucciones).not.toContain('consultar_politicas');
   });
 

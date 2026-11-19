@@ -2473,7 +2473,7 @@ functions:
       TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
       BUCKET_INDICE: ${self:custom.bucketIndice}
       ASISTENTE_ACTIVO: ${self:custom.asistenteActivo.${sls:stage}, 'false'}
-      VERSION_PROMPT_ASISTENTE: v4
+      VERSION_PROMPT_ASISTENTE: v5
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
       GEMINI_API_KEY: ${env:GEMINI_API_KEY, ''}
     package:
