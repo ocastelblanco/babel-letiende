@@ -41,17 +41,17 @@ Cada fase indica la capacidad que demuestra, el criterio de terminado (DoD) y su
 
 ### 3.1 Calendario revisado (19/11/2026)
 
-Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; si se trabaja el fin de semana, producción puede adelantarse unos dos días.
+Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; el usuario no trabaja el fin de semana del 21 y 22/11. **Se recalcula al cerrar cada fase** (aunque sea parcial) y el recorrido real, con fechas y minutos de agente, queda en [`bitacora/00-planeacion.md`](bitacora/00-planeacion.md) («Recorrido del calendario»). Última revisión: 19/11/2026, al cerrar `T-0041`: producción sigue el 27/11, con el jueves 26 como holgura.
 
 | Fecha | Trabajo | Depende del usuario |
 |---|---|---|
-| Jue 19/11 | Plan de la Fase 4 (docs) | Lanzar la carga de sinopsis en producción |
-| Vie 20/11 | 4a (`T-0041`): copia congelada, casos, puntuador, Recall@k | — |
-| Lun 23/11 | 4b (`T-0042`): ejecutor y línea base v4/v5 | Validar los candidatos de 4a (fin de semana o lunes temprano) |
-| Mar 24/11 | Fase 5 solo si 4b falla los criterios; Fase 6, parte 1 (registro, control de gasto y de tasa) | Activar la facturación prepagada con tope y crear la clave de producción |
-| Mié 25/11 | Fase 6, parte 2 (límites de entrada, validador de fidelidad, revisión OWASP) | Verificar en `staging` |
-| Jue 26/11 | Fase 7: chat en el catálogo, en `staging` | Revisar el chat en `staging` |
-| Vie 27/11 | **Producción:** índice de producción, interruptor encendido | Fusionar y verificar |
+| Jue 19/11 | Plan de la Fase 4; carga de sinopsis en producción; 4a (`T-0041`) | Clave local de Gemini en `.env`; leer los límites de cuota en AI Studio |
+| Vie 20/11 | 4b (`T-0042`): ejecutor y corrida de v4 y v5 | Validar los candidatos de 4a (1 a 2 horas) |
+| Lun 23/11 | Fase 5 solo si 4b falla los criterios; Fase 6, parte 1 (registro, control de gasto y de tasa) | Activar la facturación prepagada con tope y crear la clave de producción |
+| Mar 24/11 | Fase 6, parte 2 (límites de entrada, validador de fidelidad, revisión OWASP) | Verificar en `staging` |
+| Mié 25/11 | Fase 7: chat en el catálogo, en `staging` | Revisar el chat |
+| Jue 26/11 | Holgura; producción si 4b pasó a la primera | |
+| **Vie 27/11** | **Producción:** índice de producción, interruptor encendido | Fusionar y verificar |
 | Lun 30/11 – vie 4/12 | 4c (comparación de políticas y compuerta), Fase 9 (Azure), Fase 8 (necesita unos días de tráfico real) y Fase 10 | Cuenta de Azure, revisar 20 respuestas, video y página de caso |
 
 ### Fase 0 — Documentación y ficha de caso de uso · `T-0000` · COMPLETA (este PR)
@@ -152,14 +152,14 @@ Partida en tres PRs (19/11/2026). **4a y 4b van antes del paso a producción; 4c
 
 **Hallazgo al planearla (19/11/2026):** el único inventario con sinopsis era el de `staging`, con 25 libros. Con 25 libros la suite no mide nada: la búsqueda toma 40 candidatos (más que el inventario entero), así que Recall@k sale 100 % por construcción y los casos «sin respuesta» son artificiales. Por eso la carga de sinopsis de producción (`T-0013`, prevista para la semana del 30/11) se adelanta y la copia congelada sale de producción.
 
-**`T-0041` — 4a. Base sin LLM**
+**`T-0041` — 4a. Base sin LLM (implementada, PR abierto 2026-11-19; faltan el índice local, los candidatos y tu validación)** · bitácora [`06-evaluacion.md`](bitacora/06-evaluacion.md)
 
-- [ ] Prerrequisito (usuario): carga de sinopsis en producción (`/admin/carga-conocimiento`, «Iniciar carga»). No pisa nada, se puede repetir y deja el reporte de cobertura real para la bitácora 01.
-- [ ] Copia congelada del inventario de producción, **fuera de git**: lectura con el MCP de AWS en solo lectura y paginada a mano (un `Scan` sin `Limit` se corta en 1.000 sin avisar), con **lista blanca de campos** (nunca `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` ni `creadoPor`). Libros, conocimiento y ubicaciones.
-- [ ] Índice de la copia construido en local con la clave gratuita de `staging` (las sinopsis sí pueden ir al nivel gratuito, bitácora 02). Antes, verificar en la documentación oficial los límites del nivel gratuito para `gemini-embedding-2`.
-- [ ] Formato de caso y 40 casos en `asistente-ia/evals/casos/` (preguntas sintéticas, sin datos de personas): con libros aceptables, con restricciones explícitas (idioma, precio, edad), sin respuesta posible, ambiguos, inyección directa, inyección indirecta (sinopsis envenenada **solo en la copia congelada**) y políticas.
-- [ ] Candidatos para validar (fuera de git): para cada caso que los necesita (unos 20 a 25 de los 40), la unión de los 10 primeros del recuperador y de una búsqueda por palabras (título, autor, categoría). El usuario marca los aceptables y puede **agregar libros que conozca y no estén en la lista**: si los candidatos salieran solo del recuperador, Recall@k quedaría inflado (un libro que el recuperador no encuentra nunca podría ser «aceptable»).
-- [ ] Puntuador determinista probado con Vitest, Recall@k del recuperador (solo embeddings de las consultas), `--dry-run` y nueva puntuación sin llamar a la API.
+- [x] Prerrequisito (usuario): carga de sinopsis en producción, corrida el 19/11/2026: 2.541 libros, 2.201 con sinopsis útil (86,6 %), 0 errores, 58 minutos. Cifras en la bitácora 01. Hallazgos: ningún libro trae categorías ni clasificación por edad, y el idioma inferido por el grupo del ISBN puede equivocarse.
+- [x] Copia congelada del inventario de producción, **fuera de git** (`scripts/congelar-inventario.mjs`): solo lectura, paginada a mano, con **lista blanca en la propia petición** (`ProjectionExpression`: nunca salen `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` ni `creadoPor`). Se usó el SDK con tu perfil de AWS y no el MCP, porque el MCP no puede escribir archivos en la máquina y la copia pesa varios MB. 2.541 libros, 2.519 filas de conocimiento, 109 ubicaciones.
+- [x] Script del índice local (`scripts/construir-indice-evals.mjs`): reutiliza `reconstruirIndice` de producción con un almacén en disco y las sinopsis envenenadas aplicadas. **Pendiente de correr:** necesita `GEMINI_API_KEY` en la máquina (entorno o `.env`, ignorado por git). Los límites del nivel gratuito no están publicados (dependen del proyecto y se ven en AI Studio): pendiente que el usuario anote RPM, TPM y RPD de `gemini-3.5-flash-lite` y `gemini-embedding-2` antes de `T-0042`.
+- [x] Formato de caso y **46 casos** en `asistente-ia/evals/casos/` (preguntas sintéticas, sin datos de personas): 15 aceptables, 7 restricciones, 6 sin respuesta, 3 ambiguos, 4 inyección directa, 3 inyección indirecta (3 sinopsis envenenadas **solo en la copia**), 8 políticas. Escritos contra el inventario real; guardia en `casos-evaluacion.spec.ts`.
+- [x] Script de candidatos (`evaluar-recuperador.mjs --candidatos`) e importador (`importar-validacion.mjs`): para cada uno de los 22 casos que lo necesitan, la unión de los 10 primeros del recuperador y de una búsqueda por palabras, en orden barajado. Marcas con `x` y agregas con `+ ISBN` o `+ Título`: si los candidatos salieran solo del recuperador, Recall@k quedaría inflado. **Pendiente:** generar el archivo (necesita el índice) y tu validación.
+- [x] Puntuador determinista y Recall@k/Hit@k probados con Vitest (30 pruebas nuevas, 791 en total), `--dry-run`, y los embeddings de las preguntas se guardan para volver a puntuar sin llamar a la API.
 
 **`T-0042` — 4b. Ejecutor y línea base**
 

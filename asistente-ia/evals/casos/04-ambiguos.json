@@ -1,0 +1,35 @@
+[
+  {
+    "id": "M01",
+    "categoria": "ambiguo",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Recomiéndame un libro"
+      }
+    ],
+    "nota": "Se acepta preguntar o recomendar; solo se puntúan existencia y disponibilidad. Se reporta cuál de las dos hizo."
+  },
+  {
+    "id": "M02",
+    "categoria": "ambiguo",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "No sé qué leer, algo bueno"
+      }
+    ],
+    "nota": "Se acepta preguntar o recomendar; solo se puntúan existencia y disponibilidad. Se reporta cuál de las dos hizo."
+  },
+  {
+    "id": "M03",
+    "categoria": "ambiguo",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Necesito un regalo"
+      }
+    ],
+    "nota": "Se acepta preguntar o recomendar; solo se puntúan existencia y disponibilidad. Se reporta cuál de las dos hizo."
+  }
+]

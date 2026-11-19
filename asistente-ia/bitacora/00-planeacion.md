@@ -75,3 +75,38 @@ Con las Fases 0 a 3 cerradas en tres días, se revisó el calendario y la Fase 4
 - **Las etiquetas no pueden salir solo del recuperador.** Si los candidatos a «libro aceptable» vienen del mismo recuperador que se evalúa, un libro que no encuentra nunca cuenta como fallo. Los candidatos salen de dos fuentes y el usuario puede agregar otros.
 - **Las versiones viejas no se reproducen con el código nuevo.** v1 a v3 se escribieron para un código que ya cambió (fecha y políticas en el contexto; la herramienta `consultar_politicas` ya no existe). La línea base es v5, comparada con v4; v1 a v3 quedan para la comparación de políticas (4c), con esa advertencia.
 - La Fase 4 se partió en 4a y 4b (antes de producción) y 4c (después de las Fases 6 y 7). Producción sale con criterios manuales; la compuerta automática llega en 4c.
+
+## Recorrido del calendario
+
+Acordado el 19/11/2026: al cerrar cada fase, aunque sea parcial (4a, 4b…), se recalcula el calendario y se anota aquí con las fechas reales. Así el recorrido queda documentado con precisión y no reconstruido de memoria al final. Los «minutos de agente» salen de `tracking-detail.csv` (ventana de trabajo del agente en cada tarea; **no incluyen** el tiempo que la persona tarda en validar, verificar o decidir, que es lo que más pesa en el calendario).
+
+**Propuesta original de dos semanas (fuera de git, 16/11):** día 1 datos · 2 índice y asistente mínimo · 3 herramientas · 4 suite de evaluación · 5 iteración de prompts · 6 chat · 7 registro y tablero · 8 seguridad · 9 Azure · 10 empaque y producción.
+
+### Cierre de `T-0041` (Fase 4a) — jueves 19/11/2026, 12:08
+
+| Hito | Día de la propuesta | Fecha real | Observación |
+|---|---|---|---|
+| Fase 0, documentación | previo | lun 16/11 | PR #151 |
+| Fase 1, datos | 1 (lun 16) | 16 y 17/11 | `T-0011` a `T-0014`; 4 PRs porque no cabía en uno |
+| Fase 2, índice y asistente mínimo | 2 (mar 17) | 17 y 18/11 | `T-0021` a `T-0024`; `T-0023` (#160) fusionado el 18/11; la migración a la Interactions API (`T-0024`) no estaba prevista |
+| Fase 3, herramientas | 3 (mié 18) | mié 18/11 | PR #161 fusionado a las 21:21; tres correcciones del prompt tras pruebas en `staging` (v3, v4, v5) |
+| Carga de sinopsis en producción | día 1 (se adelantó) | jue 19/11, 10:57 a 11:55 | 2.541 libros, 2.201 con sinopsis útil; la hizo el usuario |
+| Fase 4a, base de la suite | 4 (jue 19) | jue 19/11, 11:57 a 12:08 de trabajo del agente | Código, 46 casos y bitácora listos; **faltan** la clave local de Gemini, el índice local y tu validación de candidatos |
+
+Minutos de agente registrados por día: lun 16 → 22 · mar 17 → 57 · mié 18 → 134 · jue 19 (hasta 4a) → 23. **Lectura:** el ritmo real coincide con el de la propuesta original (4a cae el día 4 como estaba previsto); lo que cambió fue el orden y el tamaño de las fases, no los días.
+
+**Calendario recalculado** (el usuario no trabaja el fin de semana del 21 y 22/11):
+
+| Fecha | Trabajo | Depende del usuario |
+|---|---|---|
+| Jue 19/11 (tarde) | Pasa el 4a a `staging`; si el usuario pone la clave local, índice y candidatos | Clave local en `.env`; leer los límites de cuota en AI Studio |
+| Vie 20/11 | Validar candidatos; 4b: ejecutor (se escribe sin la validación) y corrida de v4 y v5 | Validar los candidatos (1 a 2 horas) |
+| Lun 23/11 | Si falta, la corrida de 4b; Fase 5 solo si 4b falla los criterios; Fase 6, parte 1 | Facturación prepagada con tope y clave de producción |
+| Mar 24/11 | Fase 6, parte 2 | Verificar en `staging` |
+| Mié 25/11 | Fase 7: chat en `staging` | Revisarlo |
+| Jue 26/11 | Holgura / producción si 4b pasó a la primera | Fusionar y verificar |
+| **Vie 27/11** | **Producción** | |
+| Lun 30/11 – vie 4/12 | 4c, Fases 8, 9 y 10 | Azure, 20 respuestas, video |
+
+**Cambio respecto al calendario del 19/11 por la mañana:** ninguna fecha de producción se mueve (sigue el 27/11, con un día de holgura el 26). El viernes 20 queda como el día que decide si hay holgura: si la validación llega ese día y 4b pasa los criterios a la primera, la Fase 6 empieza el lunes sin esperar y producción puede adelantarse al jueves 26/11.
+

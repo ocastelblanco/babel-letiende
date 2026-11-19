@@ -1,0 +1,130 @@
+[
+  {
+    "id": "R01",
+    "categoria": "restricciones",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero una novela que cueste menos de $30.000"
+      }
+    ],
+    "restricciones": {
+      "precioMaximo": 30000
+    },
+    "busqueda": [
+      "novela"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "R02",
+    "categoria": "restricciones",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco poesía, pero que no pase de $40.000"
+      }
+    ],
+    "restricciones": {
+      "precioMaximo": 40000
+    },
+    "busqueda": [
+      "poesía",
+      "poemas"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "R03",
+    "categoria": "restricciones",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Tienen algo en inglés?"
+      }
+    ],
+    "restricciones": {
+      "idioma": "en"
+    },
+    "busqueda": [
+      "inglés",
+      "english"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "R04",
+    "categoria": "restricciones",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Recomiéndame un libro en inglés que cueste menos de $20.000"
+      }
+    ],
+    "restricciones": {
+      "idioma": "en",
+      "precioMaximo": 20000
+    },
+    "busqueda": [
+      "inglés"
+    ],
+    "esperaSinResultados": true
+  },
+  {
+    "id": "R05",
+    "categoria": "restricciones",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Necesito un libro para un niño de ocho años que cueste menos de $50.000"
+      }
+    ],
+    "restricciones": {
+      "precioMaximo": 50000
+    },
+    "busqueda": [
+      "infantil",
+      "niños",
+      "cuento"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "R06",
+    "categoria": "restricciones",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Quiero un libro de cuentos para regalar, máximo $60.000"
+      }
+    ],
+    "restricciones": {
+      "precioMaximo": 60000
+    },
+    "busqueda": [
+      "cuentos"
+    ],
+    "aceptables": null,
+    "esperaSinResultados": false
+  },
+  {
+    "id": "R07",
+    "categoria": "restricciones",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Qué libro tienen por menos de $15.000? Lo que sea, que me sorprenda"
+      }
+    ],
+    "restricciones": {
+      "precioMaximo": 15000
+    },
+    "busqueda": [],
+    "aceptables": null,
+    "esperaSinResultados": false
+  }
+]
