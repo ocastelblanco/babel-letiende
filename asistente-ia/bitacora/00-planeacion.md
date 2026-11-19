@@ -65,3 +65,13 @@ Ver el evento `workspace_setup` / `specs_definition` de esta fecha en [`../metri
 - Código de Babel: `server/api/services/api-letiende.ts`, `src/app/core/models/libro.model.ts`, `docs/MEMORY.md` (ADR-008, ADR-010, ADR-011, ADR-012).
 - `flujo-n8n`: `scripts/eval-gemini.mjs`, `golden-set/README.md`, `docs/MEMORY.md` (ADR-013 de ese proyecto, cuotas del nivel gratuito de Gemini).
 - OWASP Top 10 for LLM Applications 2025 (marco de la ficha de riesgos). Se verificará contra la fuente oficial en la Fase 6.
+
+## Revisión del 19/11/2026
+
+Con las Fases 0 a 3 cerradas en tres días, se revisó el calendario y la Fase 4 antes de empezarla:
+
+- **El ritmo lo marca la persona, no el código.** Hubo días con cinco PRs de backend; lo que se demora es validar, verificar en `staging` y activar la facturación. Producción pasa al viernes 27/11 (día 10 de la propuesta original); el ejercicio completo, al 4/12, porque la Fase 8 necesita unos días de tráfico real.
+- **Una suite sobre 25 libros no mide nada.** La búsqueda toma 40 candidatos, más que el inventario de `staging`: Recall@k daría 100 % por construcción. La carga de sinopsis de producción se adelantó y la copia congelada sale de ahí.
+- **Las etiquetas no pueden salir solo del recuperador.** Si los candidatos a «libro aceptable» vienen del mismo recuperador que se evalúa, un libro que no encuentra nunca cuenta como fallo. Los candidatos salen de dos fuentes y el usuario puede agregar otros.
+- **Las versiones viejas no se reproducen con el código nuevo.** v1 a v3 se escribieron para un código que ya cambió (fecha y políticas en el contexto; la herramienta `consultar_politicas` ya no existe). La línea base es v5, comparada con v4; v1 a v3 quedan para la comparación de políticas (4c), con esa advertencia.
+- La Fase 4 se partió en 4a y 4b (antes de producción) y 4c (después de las Fases 6 y 7). Producción sale con criterios manuales; la compuerta automática llega en 4c.

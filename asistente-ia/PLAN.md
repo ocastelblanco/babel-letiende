@@ -1,8 +1,8 @@
 # Plan — Asistente de Babel
 
 **Aprobado por el usuario:** 16/11/2026 (las 4 decisiones de §2, tal como se recomendaron).
-**Meta de calendario:** chat en producción la semana del 30/11/2026, a tiempo para la temporada de Navidad. Las Fases 8 a 10 pueden terminar después: no bloquean al visitante.
-**Duración estimada:** 9 a 10 sesiones de trabajo (no los 10 días hábiles fijos de la propuesta original).
+**Meta de calendario (revisada el 19/11/2026):** chat en producción el **viernes 27/11/2026** (día 10 de la propuesta original de dos semanas que empezó el 16/11); ejercicio completo, Fases 4c y 8 a 10 incluidas, el **viernes 4/12/2026**. Meta original: producción la semana del 30/11. Detalle y supuestos en §3.1.
+**Duración estimada:** 9 a 10 sesiones de trabajo. Ritmo real: Fases 0 a 3 en tres días (16 a 18/11).
 
 Reglas de ejecución (heredadas de Babel, `CLAUDE.md` §6 y memoria del proyecto):
 
@@ -39,6 +39,21 @@ Reglas de ejecución (heredadas de Babel, `CLAUDE.md` §6 y memoria del proyecto
 
 Cada fase indica la capacidad que demuestra, el criterio de terminado (DoD) y su `trace_id` para el registro de esfuerzo.
 
+### 3.1 Calendario revisado (19/11/2026)
+
+Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; si se trabaja el fin de semana, producción puede adelantarse unos dos días.
+
+| Fecha | Trabajo | Depende del usuario |
+|---|---|---|
+| Jue 19/11 | Plan de la Fase 4 (docs) | Lanzar la carga de sinopsis en producción |
+| Vie 20/11 | 4a (`T-0041`): copia congelada, casos, puntuador, Recall@k | — |
+| Lun 23/11 | 4b (`T-0042`): ejecutor y línea base v4/v5 | Validar los candidatos de 4a (fin de semana o lunes temprano) |
+| Mar 24/11 | Fase 5 solo si 4b falla los criterios; Fase 6, parte 1 (registro, control de gasto y de tasa) | Activar la facturación prepagada con tope y crear la clave de producción |
+| Mié 25/11 | Fase 6, parte 2 (límites de entrada, validador de fidelidad, revisión OWASP) | Verificar en `staging` |
+| Jue 26/11 | Fase 7: chat en el catálogo, en `staging` | Revisar el chat en `staging` |
+| Vie 27/11 | **Producción:** índice de producción, interruptor encendido | Fusionar y verificar |
+| Lun 30/11 – vie 4/12 | 4c (comparación de políticas y compuerta), Fase 9 (Azure), Fase 8 (necesita unos días de tráfico real) y Fase 10 | Cuenta de Azure, revisar 20 respuestas, video y página de caso |
+
 ### Fase 0 — Documentación y ficha de caso de uso · `T-0000` · COMPLETA (este PR)
 
 - [x] Ficha de caso de uso escrita **antes** de construir ([`fichas/caso-de-uso.md`](fichas/caso-de-uso.md)).
@@ -70,7 +85,7 @@ Partida en tres PRs (no cabía en uno): `T-0011` backend, `T-0012` Catalogar y E
 - [x] Carga del inventario existente con el patrón de ADR-012 (Lambda que se auto-invoca por lotes, progreso en tabla, disparada por el administrador), respetando los límites de las fuentes (PR abierto, 2026-11-17).
 - [x] Reporte de cobertura: libros con sinopsis útil (≥ 200 caracteres), por idioma y por fuente; libros sin nada. Solo cifras agregadas.
 - [x] Corrida en `staging` (2026-11-17): 23 libros, los 23 con sinopsis útil; fuentes: Librería Nacional 9, Tornamesa 8, Casa Tomada 5, Librería del Au 1; ninguna de Google Books. Cifras en la bitácora.
-- [ ] Correr la carga en producción (tras el paso a producción de la semana del 30/11) y anotar las cifras reales en la bitácora (sin sinopsis en git).
+- [ ] Correr la carga en producción y anotar las cifras reales en la bitácora (sin sinopsis en git). **Adelantada al 19/11/2026**: la suite de la Fase 4 necesita el inventario real (ver Fase 4).
 
 **`T-0014` — Idioma de los libros (implementada, PR abierto 2026-11-17)**
 
@@ -133,12 +148,31 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 
 ### Fase 4 — Suite de evaluación · `T-0040` · capacidad: pruebas funcionales y de regresión
 
-- [ ] 40 a 60 casos en `asistente-ia/evals/casos/`: con libros aceptables (**validados por el usuario**), con restricciones explícitas (idioma, precio, edad), sin respuesta posible, ambiguos, inyección directa, inyección indirecta (sinopsis envenenada en la copia congelada) y preguntas de políticas.
-- [ ] Copia congelada del inventario (fuera de git) para que las corridas sean comparables.
-- [ ] Métricas deterministas: existencia, disponibilidad, cumplimiento de restricciones, rechazo correcto, acierto (hit@k), resistencia a inyección, tokens, costo y latencia. Recall@k del recuperador sin LLM (barato). Modelo juez opcional para la fidelidad de la explicación, con sus sesgos documentados.
-- [ ] Ejecutor con control de cuota, `--dry-run` y nueva puntuación sin llamar a la API; resultados crudos fuera de git y tabla agregada en git.
+Partida en tres PRs (19/11/2026). **4a y 4b van antes del paso a producción; 4c, después de las Fases 6 y 7.** Producción no espera la compuerta automática: sale con los criterios manuales de 4b.
+
+**Hallazgo al planearla (19/11/2026):** el único inventario con sinopsis era el de `staging`, con 25 libros. Con 25 libros la suite no mide nada: la búsqueda toma 40 candidatos (más que el inventario entero), así que Recall@k sale 100 % por construcción y los casos «sin respuesta» son artificiales. Por eso la carga de sinopsis de producción (`T-0013`, prevista para la semana del 30/11) se adelanta y la copia congelada sale de producción.
+
+**`T-0041` — 4a. Base sin LLM**
+
+- [ ] Prerrequisito (usuario): carga de sinopsis en producción (`/admin/carga-conocimiento`, «Iniciar carga»). No pisa nada, se puede repetir y deja el reporte de cobertura real para la bitácora 01.
+- [ ] Copia congelada del inventario de producción, **fuera de git**: lectura con el MCP de AWS en solo lectura y paginada a mano (un `Scan` sin `Limit` se corta en 1.000 sin avisar), con **lista blanca de campos** (nunca `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` ni `creadoPor`). Libros, conocimiento y ubicaciones.
+- [ ] Índice de la copia construido en local con la clave gratuita de `staging` (las sinopsis sí pueden ir al nivel gratuito, bitácora 02). Antes, verificar en la documentación oficial los límites del nivel gratuito para `gemini-embedding-2`.
+- [ ] Formato de caso y 40 casos en `asistente-ia/evals/casos/` (preguntas sintéticas, sin datos de personas): con libros aceptables, con restricciones explícitas (idioma, precio, edad), sin respuesta posible, ambiguos, inyección directa, inyección indirecta (sinopsis envenenada **solo en la copia congelada**) y políticas.
+- [ ] Candidatos para validar (fuera de git): para cada caso que los necesita (unos 20 a 25 de los 40), la unión de los 10 primeros del recuperador y de una búsqueda por palabras (título, autor, categoría). El usuario marca los aceptables y puede **agregar libros que conozca y no estén en la lista**: si los candidatos salieran solo del recuperador, Recall@k quedaría inflado (un libro que el recuperador no encuentra nunca podría ser «aceptable»).
+- [ ] Puntuador determinista probado con Vitest, Recall@k del recuperador (solo embeddings de las consultas), `--dry-run` y nueva puntuación sin llamar a la API.
+
+**`T-0042` — 4b. Ejecutor y línea base**
+
+- [ ] Ejecutor que llama a `responder()` en el mismo proceso, con la copia congelada inyectada (sin `staging`, sin despliegues), control de cuota y `--limit`; resultados crudos fuera de git y tabla agregada en git.
+- [ ] Métricas deterministas: existencia, disponibilidad, cumplimiento de restricciones, rechazo correcto, acierto (hit@k), resistencia a inyección, tokens, costo y latencia.
+- [ ] Primera corrida con **v4 y v5**, 3 repeticiones por caso. Línea base = v5 (la vigente).
+- [ ] **Criterios manuales para producción** (propuestos; se confirman con la primera corrida): 0 libros inventados o agotados recomendados, 0 inyecciones que cambien el comportamiento, y restricciones cumplidas en al menos el 90 % de los casos. Si no se cumplen, se corrige antes de la Fase 6 (Fase 5).
+- [ ] Modelo juez: **fuera de la Fase 4**. Es de la misma familia que el evaluado, tiene sesgos y gasta cuota; las métricas deterministas cubren lo crítico. Se reconsidera en la Fase 5 si hace falta medir la fidelidad del motivo.
+
+**`T-0043` — 4c. Comparación de políticas y compuerta (después de las Fases 6 y 7)**
+
 - [ ] Compuerta: `evals:comparar` contra la línea base sale con error si alguna métrica empeora más de la tolerancia. Workflow manual de GitHub Actions, obligatorio antes de cambiar prompt o modelo.
-- [ ] Primera corrida con v1 = línea base; luego v2, v3, v4 y v5 (ya existen: salieron de las pruebas de `staging` de la Fase 3).
+- [ ] **v1 a v3 solo aquí, y con advertencia.** El código actual siempre envía la fecha y las políticas, y v2 y v3 piden la herramienta `consultar_politicas`, que se eliminó en v4. Correrlas mide «prompt viejo con el código nuevo», no el sistema de entonces; v2 y v3 solo tienen sentido con la herramienta restaurada detrás de la opción del encabezado.
 - [ ] **Políticas: herramienta o contexto (decidido el 18/11/2026).** Convertir la anécdota de `staging` en una medición. Base actual, sin valor estadístico: con herramienta, v2 consultó las políticas en sus 2 preguntas de horario y v3 la omitió en 1 de 2 e inventó un horario; v4 (en el contexto) pasó 9 de 9 en el CI y las pruebas de Oliver. Plan: devolver `consultar_politicas` detrás de una opción del encabezado del prompt (`politicas: contexto | herramienta`, por defecto `contexto`), unas 15 preguntas de políticas (día relativo, día concreto, tema ausente, dato que se debe citar, pregunta mixta libro + política) con varias repeticiones, contra v3 (herramienta) y v4 (contexto). Métricas: acierto, alucinación, omisión de la herramienta, latencia y tokens. Resultado esperado: una tabla en la bitácora que justifique (o revierta) la decisión de v4. Producción sigue con `contexto` mientras tanto.
 
 ### Fase 5 — Iteración de prompts · `T-0050` · capacidad: versionar y optimizar prompts
@@ -160,7 +194,7 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 - [ ] Aviso visible: "Hablas con una IA" + qué se registra y para qué (Ley 1581 de 2012).
 - [ ] Tarjetas pintadas con datos de Babel (nunca con texto del modelo), enlace a la ficha `/libro/:bookId`, pulgar arriba o abajo.
 - [ ] Interpolación estándar de Angular; nada de `innerHTML` con texto del modelo.
-- [ ] Suite en verde → producción con el interruptor encendido.
+- [ ] Criterios de 4b cumplidos → producción con el interruptor encendido (la compuerta automática llega en 4c).
 
 ### Fase 8 — Tablero y análisis · `T-0080` · capacidad: métricas de desempeño y consumo
 
@@ -190,8 +224,8 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 |---|---|
 | 2 | Crear el proyecto de AI Studio de Babel, generar la clave y cargarla como secreto en GitHub |
 | 3 | Redactar las políticas de la librería |
-| 4 | Validar los libros aceptables de cada caso (el agente propone candidatos) |
-| 6 | Activar la facturación prepagada con tope en el proyecto de AI Studio antes de producción |
+| 4 | Lanzar la carga de sinopsis en producción; validar los libros aceptables de cada caso (el agente propone candidatos y el usuario puede agregar otros) |
+| 6 | Activar la facturación prepagada con tope en el proyecto de AI Studio y crear la clave de producción (a más tardar el 24/11) |
 | 8 | Revisar las 20 respuestas reales |
 | 9 | Abrir la cuenta de Azure |
 | 10 | Grabar el video y publicar la página de caso |
@@ -203,6 +237,8 @@ Bitácora [`05-herramientas.md`](bitacora/05-herramientas.md). **Cambio respecto
 |---|---|
 | Baja cobertura de sinopsis en español en Google Books | Respaldo con los sitios `info`; indexar con título, autor y categoría; medir y reportar la cobertura en lugar de ocultarla |
 | Los términos de Google Books no permiten guardar o mostrar descripciones | Decisión 4: uso interno y citas breves |
+| Una suite sobre un inventario diminuto no mide nada (25 libros en `staging`) | Copia congelada del inventario real de producción tras su carga de sinopsis (Fase 4) |
+| Etiquetas sesgadas por el recuperador (Recall@k inflado) | Candidatos de dos fuentes y libros agregados por el usuario (Fase 4a) |
 | La cuota gratuita de Gemini no alcanza para iterar la suite | Recall@k sin LLM, `--dry-run`, nueva puntuación sin API, corridas con `--limit`; respaldo de pago con tope |
 | Abuso o costo descontrolado en un chat público | Interruptor, tope por visitante, tope de gasto diario, limitación de tasa (Fase 6, antes de la Fase 7) |
 | El modelo recomienda libros inexistentes | Validador determinista + métrica de libros inventados en la suite y en el tablero |
