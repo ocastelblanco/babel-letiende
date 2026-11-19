@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (16/11/2026):** lote "Asistente de recomendación con IA" — Fase 0 (documentación) en PR; Tareas activas: `T-0012` (Catalogar y Editar, fusionada) y `T-0013` (carga retroactiva y cobertura, fusionada y verificada en `staging`) y `T-0014` (idioma de los libros, fusionada y verificada) y `T-0021` (cliente de Gemini, fusionada) y `T-0022` (índice de embeddings, fusionada) y `T-0024` (generación con la Interactions API, fusionada) y `T-0023` (Lambda `asistente`, prompt v1 y validador, fusionada y verificada) y `T-0030` (herramientas, fusionada; prompt vigente v5). Plan completo, fases y DoD en **`asistente-ia/PLAN.md`**; ver el final de este documento.
+**Motor JIT activo (19/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 fusionadas (PRs #151 a #161; prompt vigente v5). Tareas activas: **Tarea 9** (`T-0041`, Fase 4a: base de la suite sin LLM) y **Tarea 10** (`T-0042`, Fase 4b: ejecutor y línea base). Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -674,6 +674,23 @@ Rama `feature/asistente-herramientas`. Detalle en `asistente-ia/PLAN.md` §3 y `
 - [x] Anotado en `asistente-ia/PLAN.md`: comparación herramienta/contexto para las políticas (Fase 4) y validador de fidelidad de datos (Fase 6).
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
+
+## Tarea 9 — Fase 4a: base de la suite sin LLM (`T-0041`) — SIGUIENTE
+
+Detalle en `asistente-ia/PLAN.md` (Fase 4). Una rama y un PR; no se abre hasta que termine el despliegue anterior.
+
+- [ ] **Tuyo (Oliver), ya:** lanzar la carga de sinopsis en producción (`/admin/carga-conocimiento` → «Iniciar carga») y avisar cuando el reporte diga que terminó. Sin eso no hay inventario real para la suite (en `staging` solo hay 25 libros).
+- [ ] Verificar en la documentación oficial los límites del nivel gratuito de `gemini-embedding-2`.
+- [ ] Copia congelada de producción fuera de git (solo lectura, paginada, lista blanca de campos) e índice local con la clave de `staging`.
+- [ ] Formato de caso, 40 casos, puntuador determinista con Vitest, Recall@k, `--dry-run` y nueva puntuación sin API.
+- [ ] Archivo de candidatos para tu validación (fuera de git): unión del recuperador y de una búsqueda por palabras; puedes agregar libros que no estén.
+- [ ] Bitácora 06 (evaluación, primera parte) y cifras de cobertura de producción en la bitácora 01.
+
+## Tarea 10 — Fase 4b: ejecutor y línea base (`T-0042`) — EN ESPERA de la Tarea 9 y de tu validación
+
+- [ ] Ejecutor sobre `responder()` en el mismo proceso, con la copia congelada, control de cuota y `--limit`.
+- [ ] Corrida de v4 y v5 (3 repeticiones); tabla en la bitácora.
+- [ ] Revisar los criterios manuales para producción (0 libros inventados, 0 inyecciones exitosas, ≥ 90 % de restricciones). Si fallan, Fase 5 antes de la Fase 6.
 
 ## Hotfix — Ficha pública sin datos internos (2026-11-17) — detalle
 
