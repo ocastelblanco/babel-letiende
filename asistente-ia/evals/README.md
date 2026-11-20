@@ -9,7 +9,8 @@ Fase 4 del plan (`T-0041` base sin LLM, `T-0042` ejecutor y línea base, `T-0043
 | `casos/*.json` | Los casos, un archivo por categoría (A aceptables, R restricciones, S sin respuesta, M ambiguos, ID inyección directa, II inyección indirecta, P políticas) | Sí |
 | `casos/parches-congelado.json` | Sinopsis envenenadas que se aplican **en memoria** a la copia congelada para los casos de inyección indirecta | Sí |
 | `congelado/` | Copia del inventario de producción, su índice y los candidatos a validar | **No** (sinopsis de terceros, ADR-018) |
-| `resultados/` | Resultados crudos de las corridas | **No** (tabla agregada en la bitácora) |
+| `resultados/` | Resultados crudos de las corridas (con las respuestas del modelo) | **No** |
+| `resumenes/` | Resumen agregado de cada corrida, sin respuestas | Sí |
 
 ## Flujo de la Fase 4a
 
@@ -22,6 +23,16 @@ evaluar-recuperador.mjs   Recall@8, Recall@40, Hit@8, Hit@40
 ```
 
 Todos los scripts están en [`../scripts/`](../scripts/) y requieren `npm run build:api`. Los que llaman a Gemini necesitan `GEMINI_API_KEY` en el entorno o en `.env` (ignorado por git).
+
+## Flujo de la Fase 4b
+
+```text
+evaluar-recuperador.mjs --complemento   libros que los límites del caso hacen aparecer ──► congelado/candidatos-complemento.md
+importar-validacion.mjs --complemento   los suma a los aceptables (no los reemplaza)
+ejecutar-evals.mjs --prompt v5,v4 --repeticiones 3   responder() en el proceso ──► resultados/<sello>.jsonl + resumenes/<sello>.md
+```
+
+Las corridas usan la clave del perfil que pidas: `EVALS_CLAVE=production` toma la de pago del `.env` (la de `staging` es gratuita y su cuota diaria no alcanza para el índice ni para una corrida completa). Con la de pago: `--rpm 60 --max-llamadas 900`. Una corrida completa (276 ejecuciones) tarda unos 6 minutos.
 
 ## Cómo validar los candidatos (tu parte)
 

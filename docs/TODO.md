@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (19/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 fusionadas (PRs #151 a #161; prompt vigente v5). Tareas activas: **Tarea 9** (`T-0041`, Fase 4a: base de la suite sin LLM) y **Tarea 10** (`T-0042`, Fase 4b: ejecutor y línea base). Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
+**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tareas activas: **Tarea 11** (Casa del Libro como fuente de portadas, fuera del asistente) y **Tarea 12** (`T-0050`, Fase 5: corrección guiada por la suite). Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -675,23 +675,39 @@ Rama `feature/asistente-herramientas`. Detalle en `asistente-ia/PLAN.md` §3 y `
 
 **Hallazgo de seguridad previo, detectado de paso (2026-11-16) — CORREGIDO en el hotfix `fix/ficha-publica-sin-datos-internos` (2026-11-17, ver abajo):** `GET /api/libros/:bookId` (ficha pública, sin autenticación) devuelve el ítem completo de `babel-libros`: además de lo que ve el visitante, expone `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` y `creadoPor` (correo de quien catalogó). Verificado contra `staging` con una consulta real. Es un caso de A01/A02 de `CLAUDE.md` §5 que ya existía; no tiene relación con el asistente, pero el asistente no puede heredarlo (sus herramientas usarán una lista blanca de campos, ADR-014). Pendiente de decisión del usuario: hotfix aparte (`fix/ficha-publica-sin-datos-internos`) que devuelva solo campos públicos, con una prueba que falle si reaparece alguno.
 
-## Tarea 9 — Fase 4a: base de la suite sin LLM (`T-0041`) — IMPLEMENTADA, PR abierto (2026-11-19)
+## Tarea 9 — Fase 4a: base de la suite sin LLM (`T-0041`) — FUSIONADA (PR #165, 2026-11-19)
 
 Detalle en `asistente-ia/PLAN.md` (Fase 4). Una rama y un PR; no se abre hasta que termine el despliegue anterior.
 
 - [x] Carga de sinopsis en producción corrida por Oliver (19/11/2026): 2.541 libros, 2.201 con sinopsis útil.
 - [x] Límites del nivel gratuito: la documentación no los publica; **tuyo:** leer en AI Studio RPM, TPM y RPD de `gemini-3.5-flash-lite` y `gemini-embedding-2`.
 - [x] Copia congelada de producción fuera de git (solo lectura, paginada, lista blanca de campos).
-- [ ] **Tuyo (Oliver):** poner `GEMINI_API_KEY=<la clave de staging>` en `.env` (ignorado por git). Con eso construyo el índice local.
+- [x] **Tuyo (Oliver):** `GEMINI_API_KEY` de `staging` y de `production` (de pago) en `.env` (ignorado por git). Índice local completo (2.541 libros) con la de pago.
 - [x] Formato de caso, 46 casos, puntuador determinista con Vitest, Recall@k, `--dry-run` y nueva puntuación sin API.
-- [ ] Archivo de candidatos para tu validación (`asistente-ia/evals/congelado/candidatos.md`, fuera de git): lo genero cuando exista el índice. **Tuyo:** marcar los aceptables (1 a 2 horas) y avisarme.
+- [x] Archivo de candidatos (22 preguntas, 351 candidatos) validado por Oliver el 20/11/2026, más un complemento de 23 libros: 216 aceptables.
 - [x] Bitácora 06 (evaluación, primera parte) y cifras de cobertura de producción en la bitácora 01.
 
-## Tarea 10 — Fase 4b: ejecutor y línea base (`T-0042`) — SIGUIENTE (el ejecutor se puede escribir antes de tu validación; la corrida la necesita)
+## Tarea 10 — Fase 4b: ejecutor y línea base (`T-0042`) — IMPLEMENTADA, PR abierto (2026-11-20)
 
-- [ ] Ejecutor sobre `responder()` en el mismo proceso, con la copia congelada, control de cuota y `--limit`.
-- [ ] Corrida de v4 y v5 (3 repeticiones); tabla en la bitácora.
-- [ ] Revisar los criterios manuales para producción (0 libros inventados, 0 inyecciones exitosas, ≥ 90 % de restricciones). Si fallan, Fase 5 antes de la Fase 6.
+- [x] Ejecutor sobre `responder()` en el mismo proceso, con la copia congelada, control de cuota y `--limit`.
+- [x] Recuperador con la validación completa: Recall@8 0,59, Recall@40 0,78, Hit@8 0,95.
+- [x] Corrida de v4 y v5 (3 repeticiones, 276 ejecuciones, 0 errores); tabla en la bitácora 06.
+- [x] Criterios manuales: v5 **no cumple** (restricciones 86 %; los demás en 0); v4, 90 %. Entra la Fase 5 antes de la Fase 6.
+
+## Tarea 11 — Casa del Libro como fuente de portadas (fuera del asistente) — SIGUIENTE (tras el despliegue de 4b)
+
+Decidido por Oliver el 20/11/2026, después de evaluar el sitio (Planeta de Libros se descartó: su `robots.txt` prohíbe el buscador).
+
+- [ ] Adaptador `www.casadellibro.com.co` en `server/api/services/scraping.ts`, **solo portada**: URL derivada del ISBN (`imagessl{último dígito}.casadellibro.com/a/l/t5/{últimos 2}/{isbn}.jpg`), comprobada con una petición que debe dar 200 (404 = sin portada). Sin fichas ni búsqueda: el `robots.txt` del sitio prohíbe la búsqueda, y las fichas no hacen falta para la portada.
+- [ ] Toda petición por `fetchSeguro` (guardia SSRF, ADR-011); pruebas con respuestas simuladas.
+- [ ] Fila en `babel-sitios-scraping` de `staging` y `production`: `info` activo, `pvp` apagado y la prioridad más baja (la última fuente).
+
+## Tarea 12 — Fase 5: corrección guiada por la suite (`T-0050`) — SIGUIENTE (alcance en `asistente-ia/PLAN.md`, Fase 5)
+
+- [ ] Guarda contra «anuncia y no actúa» (R01: «Permíteme revisar…» sin recomendar ni buscar).
+- [ ] Precio antes del top-40, o más candidatos cuando hay `precioMaximo` (R07).
+- [ ] Casos redefinidos: libros cercanos con aviso honesto en «sin respuesta»; S06 corregido; bilingües válidos en R03 si se dice que lo son.
+- [ ] v6 si hace falta; nueva corrida contra la línea base y los criterios de 4b.
 
 ## Hotfix — Ficha pública sin datos internos (2026-11-17) — detalle
 

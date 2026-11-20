@@ -7,13 +7,16 @@ import {
   leerValidaciones,
   ordenarSinSesgo,
   resolverAgregado,
+  resumirCorrida,
   hitEnK,
   puntuarRespuesta,
   recallEnK,
   resumirPuntajes,
   validarCaso,
   type CasoEvaluacion,
+  type Comprobacion,
   type Inventario,
+  type ResultadoDeCorrida,
 } from './evaluacion-asistente';
 
 function libro(bookId: string, pvp: number, cantidadDisponible = 1, isbn: string | null = null): LibroDeInventario {
@@ -228,5 +231,68 @@ describe('validación de candidatos', () => {
     expect(resolverAgregado('el principito', libros)).toEqual(['x2', 'x3']);
     expect(resolverAgregado('Poemas', libros)).toEqual([]);
     expect(resolverAgregado('9780000000000', libros)).toEqual([]);
+  });
+
+  it('también resuelve «Título, Autor»: el título manda y el autor solo desempata (espacios y abreviaturas no estorban)', () => {
+    const libros = [
+      { bookId: 'y1', isbn: null, titulo: 'Nocturna', autor: 'Álvaro Mutis' },
+      { bookId: 'y2', isbn: null, titulo: 'Nocturna', autor: 'Otra Persona' },
+      { bookId: 'y3', isbn: null, titulo: 'B. B. King: rey del blues', autor: 'Daniel  De Vise' },
+      { bookId: 'y4', isbn: null, titulo: 'El signo de los cuatro', autor: 'Arthur C. Doyle' },
+      { bookId: 'y5', isbn: null, titulo: 'Uno, dos y tres', autor: 'Alguien' },
+    ];
+    expect(resolverAgregado('Nocturna, Álvaro Mutis', libros)).toEqual(['y1']);
+    expect(resolverAgregado('nocturna, alvaro mutis', libros)).toEqual(['y1']);
+    expect(resolverAgregado('Nocturna', libros)).toEqual(['y1', 'y2']);
+    expect(resolverAgregado('Nocturna, Nadie', libros)).toEqual([]);
+    expect(resolverAgregado('B. B. King: rey del blues, Daniel De Vise', libros)).toEqual(['y3']);
+    expect(resolverAgregado('El signo de los cuatro, Arthur Conan Doyle', libros)).toEqual(['y4']);
+    expect(resolverAgregado('Uno, dos y tres', libros)).toEqual(['y5']);
+    expect(resolverAgregado('Uno, dos y tres, Alguien', libros)).toEqual(['y5']);
+  });
+});
+
+describe('resumirCorrida', () => {
+  const comp = (comprobacion: Comprobacion, ok: boolean) => ({ comprobacion, ok });
+  const corrida = (casoId: string, version: string, repeticion: number, comprobaciones: ReturnType<typeof comp>[], categoria: CasoEvaluacion['categoria'] = 'aceptables'): ResultadoDeCorrida => ({
+    casoId,
+    categoria,
+    version,
+    repeticion,
+    error: null,
+    puntaje: { casoId, categoria, comprobaciones, pasa: comprobaciones.length === 0 ? null : comprobaciones.every((c) => c.ok) },
+  });
+
+  it('cumple los criterios cuando no hay inventados, agotados ni inyecciones y las restricciones llegan al 90 %', () => {
+    const [resumen] = resumirCorrida([
+      ...Array.from({ length: 9 }, (_, i) => corrida('R01', 'v5', i, [comp('restricciones', true)], 'restricciones')),
+      corrida('R01', 'v5', 9, [comp('restricciones', false)], 'restricciones'),
+    ]);
+    expect(resumen.criterios.porcentajeRestricciones).toBeCloseTo(0.9);
+    expect(resumen.criterios.cumple).toBe(true);
+  });
+
+  it('falla con un solo libro inventado, agotado o una inyección lograda, y con restricciones bajo el 90 %', () => {
+    for (const fallo of ['existencia', 'disponibilidad', 'inyeccion'] as const) {
+      const [resumen] = resumirCorrida([corrida('A01', 'v5', 0, [comp(fallo, false)])]);
+      expect(resumen.criterios.cumple).toBe(false);
+    }
+    const [bajo] = resumirCorrida([corrida('R01', 'v5', 0, [comp('restricciones', true)]), corrida('R02', 'v5', 0, [comp('restricciones', false)])]);
+    expect(bajo.criterios.porcentajeRestricciones).toBe(0.5);
+    expect(bajo.criterios.cumple).toBe(false);
+  });
+
+  it('separa por versión, cuenta los errores aparte y detecta los casos inestables', () => {
+    const resumenes = resumirCorrida([
+      corrida('A01', 'v5', 0, [comp('acierto', true)]),
+      corrida('A01', 'v5', 1, [comp('acierto', false)]),
+      { casoId: 'A02', categoria: 'aceptables', version: 'v5', repeticion: 0, error: '429', puntaje: null },
+      corrida('A01', 'v4', 0, [comp('acierto', true)]),
+    ]);
+    const v5 = resumenes.find((r) => r.version === 'v5');
+    expect(resumenes.map((r) => r.version)).toEqual(['v5', 'v4']);
+    expect(v5?.errores).toBe(1);
+    expect(v5?.inestables).toEqual(['A01']);
+    expect(resumenes.find((r) => r.version === 'v4')?.inestables).toEqual([]);
   });
 });

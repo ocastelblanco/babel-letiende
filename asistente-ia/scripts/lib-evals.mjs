@@ -9,14 +9,27 @@ import { aplicarParches } from '../../dist-server/api/lib/evaluacion-asistente.j
 export const CARPETA_CONGELADO = process.env.EVALS_CONGELADO ?? 'asistente-ia/evals/congelado';
 export const CARPETA_CASOS = 'asistente-ia/evals/casos';
 
-/** La clave se lee del entorno o de `.env` (ignorado por git). Nunca se imprime. */
+/**
+ * La clave se lee del entorno o de `.env` (ignorado por git). Nunca se imprime. El `.env` puede traer
+ * varias líneas `GEMINI_API_KEY`, cada una precedida por un comentario con su perfil (`# Staging`,
+ * `# Production`); `EVALS_CLAVE=production` elige la de ese perfil. Sin ella se usa `staging` (nivel
+ * gratuito) y, si el `.env` no tiene comentarios, la primera línea.
+ */
 export function leerClaveGemini() {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
-  if (existsSync('.env')) {
-    const linea = readFileSync('.env', 'utf8').split(/\r?\n/).find((l) => /^\s*GEMINI_API_KEY\s*=/.test(l));
-    if (linea) return linea.replace(/^\s*GEMINI_API_KEY\s*=\s*/, '').replace(/^["']|["']\s*$/g, '').trim();
+  if (!existsSync('.env')) return '';
+  const perfil = (process.env.EVALS_CLAVE ?? 'staging').toLowerCase();
+  const claves = [];
+  let comentario = '';
+  for (const linea of readFileSync('.env', 'utf8').split(/\r?\n/)) {
+    const nota = /^\s*#\s*(.+?)\s*$/.exec(linea);
+    if (nota) comentario = nota[1].toLowerCase();
+    if (/^\s*GEMINI_API_KEY\s*=/.test(linea)) {
+      claves.push({ perfil: comentario, valor: linea.replace(/^\s*GEMINI_API_KEY\s*=\s*/, '').replace(/^["']|["']\s*$/g, '').trim() });
+      comentario = '';
+    }
   }
-  return '';
+  return (claves.find((c) => c.perfil === perfil) ?? claves[0])?.valor ?? '';
 }
 
 const leerJson = (ruta) => JSON.parse(readFileSync(ruta, 'utf8'));
