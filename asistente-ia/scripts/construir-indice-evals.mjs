@@ -46,7 +46,7 @@ for (let vuelta = 1; vuelta <= 20; vuelta += 1) {
     proveedor,
     almacen,
     dimensiones: 768,
-    leerLibros: async () => inventario.listaDeLibros.map((l) => ({ bookId: l.bookId, titulo: l.titulo, autor: l.autor })),
+    leerLibros: async () => inventario.listaDeLibros.map((l) => ({ bookId: l.bookId, titulo: l.titulo, autor: l.autor, pvp: l.pvp })),
     leerConocimiento: async () => [...inventario.conocimiento.values()],
   });
   console.log(`Vuelta ${vuelta}: indexados ${resumen.indexados}/${resumen.totalLibros}, nuevos ${resumen.nuevos}, conservados ${resumen.conservados}, pendientes ${resumen.pendientes}, parada: ${resumen.motivoParada}, tokens ${resumen.tokensEntrada}.`);

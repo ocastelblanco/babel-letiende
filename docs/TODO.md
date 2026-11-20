@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tareas activas: **Tarea 11** (Casa del Libro como fuente de portadas, fuera del asistente; PR abierto) y **Tarea 12** (`T-0050`, Fase 5: corrección guiada por la suite). Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
+**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tarea 11 (Casa del Libro como fuente de portadas) fusionada (#167). Tarea activa: **Tarea 12** (`T-0050`, Fase 5: corrección guiada por la suite; PR abierto, cierre el lunes 23 con la validación). Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -694,7 +694,7 @@ Detalle en `asistente-ia/PLAN.md` (Fase 4). Una rama y un PR; no se abre hasta q
 - [x] Corrida de v4 y v5 (3 repeticiones, 276 ejecuciones, 0 errores); tabla en la bitácora 06.
 - [x] Criterios manuales: v5 **no cumple** (restricciones 86 %; los demás en 0); v4, 90 %. Entra la Fase 5 antes de la Fase 6.
 
-## Tarea 11 — Casa del Libro como fuente de portadas (fuera del asistente) — IMPLEMENTADA, PR abierto (2026-11-20)
+## Tarea 11 — Casa del Libro como fuente de portadas (fuera del asistente) — FUSIONADA (#167, 2026-11-20)
 
 Decidido por Oliver el 20/11/2026, después de evaluar el sitio (Planeta de Libros se descartó: su `robots.txt` prohíbe el buscador).
 
@@ -703,12 +703,14 @@ Decidido por Oliver el 20/11/2026, después de evaluar el sitio (Planeta de Libr
 - [ ] Fila en `babel-sitios-scraping` de `staging` y `production`: `info` activo, `pvp` apagado y la prioridad más baja (la última fuente). **Pendiente de Oliver desde `/admin/sitios`**: el agente no tiene permiso de escritura en DynamoDB. Valores: dominio `www.casadellibro.com.co`, nombre `Casa del Libro`, URL `https://www.casadellibro.com.co`, prioridad `7` (hoy las dos tablas usan 1 a 6), sin palabras clave inválidas. Si la fila llega antes que el código, el sitio se registra y se omite sin error (ADR-010).
 - [ ] Tras el despliegue a `staging`: catalogar o validar un libro sin portada en los demás sitios y comprobar que trae la de Casa del Libro.
 
-## Tarea 12 — Fase 5: corrección guiada por la suite (`T-0050`) — SIGUIENTE (alcance en `asistente-ia/PLAN.md`, Fase 5)
+## Tarea 12 — Fase 5: corrección guiada por la suite (`T-0050`) — IMPLEMENTADA, PR abierto (2026-11-20); cierre pendiente de la validación
 
-- [ ] Guarda contra «anuncia y no actúa» (R01: «Permíteme revisar…» sin recomendar ni buscar).
-- [ ] Precio antes del top-40, o más candidatos cuando hay `precioMaximo` (R07).
-- [ ] Casos redefinidos: libros cercanos con aviso honesto en «sin respuesta»; S06 corregido; bilingües válidos en R03 si se dice que lo son.
-- [ ] v6 si hace falta; nueva corrida contra la línea base y los criterios de 4b.
+- [x] Guarda contra «anuncia y no actúa» (R01: «Permíteme revisar…» sin recomendar ni buscar), ampliada a «no hay» sin haber buscado.
+- [x] Precio antes del top-40: el precio vive en el índice (R07: Recall@8 de 0 a 1).
+- [x] Casos redefinidos: libros cercanos con aviso honesto en «sin respuesta»; S06 → A16; bilingües válidos en R03 si el motivo lo dice.
+- [x] v6 medida y no adoptada; corridas contra la línea base: v5 cumple (95 % en la principal). Bitácora 07.
+- [ ] **Oliver:** validar `asistente-ia/evals/congelado/candidatos-complemento.md` (26 libros en 6 preguntas) y decidir R03. Luego: `importar-validacion.mjs --complemento` y `ejecutar-evals.mjs --repuntuar` sobre la corrida `20261120-1756-v6+v5`.
+- [ ] Tras el despliegue a `staging`: la próxima reconstrucción del índice (cada 6 h) agrega el precio a todas las entradas sin pedir embeddings; una pregunta como «una novela por menos de $30.000» debe recomendar libros de ese precio.
 
 ## Hotfix — Ficha pública sin datos internos (2026-11-17) — detalle
 

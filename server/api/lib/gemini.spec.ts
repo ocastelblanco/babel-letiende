@@ -334,6 +334,8 @@ describe('ProveedorGemini — herramientas', () => {
     await crear(fetchMock).generarJson({ ...base, herramientas: [herramienta], forzarHerramientas: ['buscar_libros'] });
     const config = cuerpoEnviado(fetchMock)['generation_config'] as Record<string, unknown>;
     expect(config['tool_choice']).toEqual({ allowed_tools: { mode: 'any', tools: ['buscar_libros'] } });
+    // La API responde 400 si se fuerza una herramienta y además se pide JSON.
+    expect(cuerpoEnviado(fetchMock)['response_format']).toBeUndefined();
   });
 
   it('una respuesta de solo texto sigue sin llamadas', async () => {

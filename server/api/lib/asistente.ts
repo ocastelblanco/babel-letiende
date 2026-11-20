@@ -159,6 +159,12 @@ export function filtroDelIndice(filtros: FiltrosAsistente): (entrada: EntradaInd
     if (filtros.excluirContenidoAdulto && entrada.clasificacionEdad === 'MATURE') {
       return false;
     }
+    // Antes de la similitud: con el precio después del top-40, una pregunta sin tema y un límite
+    // bajo nunca veía los libros baratos (R07, línea base de 4b). Un libro sin precio en el índice pasa,
+    // y `seleccionarCandidatos` revisa el precio vigente contra la base de datos en todos los casos.
+    if (filtros.precioMaximo !== undefined && typeof entrada.pvp === 'number' && entrada.pvp > filtros.precioMaximo) {
+      return false;
+    }
     return true;
   };
 }
@@ -326,6 +332,63 @@ export const ESQUEMA_SALIDA: Record<string, unknown> = {
 // ---------------------------------------------------------------------------
 // Validación de la respuesta del modelo
 // ---------------------------------------------------------------------------
+
+/**
+ * Frase con la que el modelo promete buscar («Permíteme revisar…», «Déjame consultar…») en vez de
+ * hacerlo. También cuenta ofrecer la búsqueda («podemos buscar en el inventario completo»): sin
+ * recomendaciones, ofrecerla es no hacerla; pero solo con el verbo pegado, para no confundir la
+ * amabilidad de un rechazo («puedo ayudarte a buscar un libro»). Exige el verbo de búsqueda cerca del anuncio para no confundir una pregunta aclaratoria
+ * («¿qué género te gustaría buscar?») ni una respuesta de políticas.
+ */
+const ANUNCIO_DE_BUSQUEDA =
+  /\b(perm[ií]teme|d[eé]jame|voy a|vamos a|dame un momento|un momento|enseguida)\b[^.?!]{0,40}?\b(revis|busc|consult|verific|chequ|mir[oa]r?\b|ver\b)|\b(puedo|podemos)\s+(revisar|buscar|consultar|verificar)\b/i;
+
+/**
+ * «Anuncia y no actúa» (línea base de 4b, R01 en 3 de 3 con v5): la respuesta final no recomienda
+ * nada y su texto promete una búsqueda que no hizo. `sinResultados` no cuenta: en la primera corrida
+ * de la Fase 5 el modelo anunció «Déjame revisar…» y a la vez marcó `sinResultados`. Lee el JSON crudo
+ * del modelo; si no se puede leer, no es este caso (lo resuelve la validación normal).
+ */
+export function anunciaSinActuar(textoJson: string): boolean {
+  let objeto: unknown;
+  try {
+    objeto = JSON.parse(textoJson);
+  } catch {
+    return false;
+  }
+  if (!esObjeto(objeto) || typeof objeto['texto'] !== 'string') {
+    return false;
+  }
+  const recomendaciones = objeto['recomendaciones'];
+  if (Array.isArray(recomendaciones) && recomendaciones.length > 0) {
+    return false;
+  }
+  return ANUNCIO_DE_BUSQUEDA.test(objeto['texto']);
+}
+
+/**
+ * Por qué el servidor debe obligar al modelo a buscar antes de entregar su respuesta, o `null`.
+ * `LIBROS_DISPONIBLES` son solo los 8 libros más parecidos y no conocen el precio ni el idioma que la
+ * persona escribió en su mensaje: un «no hay» dicho sin buscar puede ser falso (R01 y R07 de la suite,
+ * Fase 5: «no tenemos novelas por menos de $30.000» con 9 en inventario). Solo aplica si en este turno
+ * todavía no se buscó: después de buscar, «no hay» se respeta.
+ */
+export function motivoParaBuscar(textoJson: string): 'anuncio' | 'sin-resultados' | null {
+  if (anunciaSinActuar(textoJson)) {
+    return 'anuncio';
+  }
+  let objeto: unknown;
+  try {
+    objeto = JSON.parse(textoJson);
+  } catch {
+    return null;
+  }
+  if (!esObjeto(objeto) || objeto['sinResultados'] !== true) {
+    return null;
+  }
+  const recomendaciones = objeto['recomendaciones'];
+  return Array.isArray(recomendaciones) && recomendaciones.length > 0 ? null : 'sin-resultados';
+}
 
 /** La salida del modelo no sirve (no es JSON, no cumple el esquema o se cortó). */
 export class ErrorRespuestaInvalida extends Error {

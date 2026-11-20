@@ -36,6 +36,12 @@ export interface EntradaIndice {
   /** Para filtrar sin volver a leer la base de datos. */
   idioma: string | null;
   clasificacionEdad: string | null;
+  /**
+   * PVP en COP, para filtrar por precio ANTES de la similitud (Fase 5): si se filtra después del top-k,
+   * con un límite bajo los libros baratos nunca llegan al modelo. Opcional porque los índices escritos
+   * antes no lo traen; sin él, el libro pasa este filtro y el precio se revisa contra la base de datos.
+   */
+  pvp?: number | null;
 }
 
 export interface IndiceVectorial {
@@ -62,6 +68,7 @@ export interface DatosLibroParaIndice {
   bookId: string;
   titulo: string;
   autor: string;
+  pvp?: number | null;
 }
 
 export interface ConocimientoParaIndice {
@@ -79,6 +86,7 @@ export interface DocumentoIndice {
   sinSinopsis: boolean;
   idioma: string | null;
   clasificacionEdad: string | null;
+  pvp: number | null;
 }
 
 /** «Título + autor + categorías + sinopsis»; lo que falte simplemente no entra. */
@@ -110,6 +118,8 @@ export function documentoParaIndice(
     sinSinopsis: sinopsis === '',
     idioma: conocimiento?.idioma ?? null,
     clasificacionEdad: conocimiento?.clasificacionEdad ?? null,
+    // El precio no entra en la huella: cambiarlo no exige un vector nuevo.
+    pvp: typeof libro.pvp === 'number' && Number.isFinite(libro.pvp) && libro.pvp > 0 ? libro.pvp : null,
   };
 }
 
@@ -292,7 +302,7 @@ export function planificarReconstruccion(
   for (const documento of documentos) {
     const previo = previos.get(documento.bookId);
     if (previo && previo.entrada.hash === documento.hash) {
-      // Los datos para filtrar pueden cambiar sin que cambie el texto (p. ej. el idioma): se refrescan sin pedir un vector nuevo.
+      // Los datos para filtrar pueden cambiar sin que cambie el texto (p. ej. el idioma o el precio): se refrescan sin pedir un vector nuevo.
       conservados.push({
         entrada: {
           bookId: documento.bookId,
@@ -300,6 +310,7 @@ export function planificarReconstruccion(
           sinSinopsis: documento.sinSinopsis,
           idioma: documento.idioma,
           clasificacionEdad: documento.clasificacionEdad,
+          pvp: documento.pvp,
         },
         vector: previo.vector,
       });

@@ -438,5 +438,26 @@
       "be5af6a1-8c82-4e6d-9892-d8333186c673"
     ],
     "esperaSinResultados": false
+  },
+  {
+    "id": "A16",
+    "antes": "S06",
+    "categoria": "aceptables",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco un tratado de derecho penal"
+      }
+    ],
+    "busqueda": [
+      "penal",
+      "juicio",
+      "castigo"
+    ],
+    "aceptables": [
+      "d4406af5-7f0e-4ffa-a4c8-3a15c32429d8"
+    ],
+    "esperaSinResultados": false,
+    "nota": "Antes S06 (sin respuesta). La línea base de 4b mostró que el inventario sí tiene teoría penal (Teorías e instituciones penales, de Foucault): la etiqueta estaba mal (Fase 5, 20/11/2026)."
   }
 ]

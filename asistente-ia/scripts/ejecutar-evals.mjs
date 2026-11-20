@@ -8,6 +8,10 @@
  *   node asistente-ia/scripts/ejecutar-evals.mjs --prompt v5 --limit 5          # humo barato
  *   node asistente-ia/scripts/ejecutar-evals.mjs --prompt v5 --dry-run          # cuenta y estima, sin llamar a la API
  *   node asistente-ia/scripts/ejecutar-evals.mjs --reanudar asistente-ia/evals/resultados/<archivo>.jsonl
+ *   node asistente-ia/scripts/ejecutar-evals.mjs --repuntuar asistente-ia/evals/resultados/<archivo>.jsonl
+ *
+ * `--repuntuar` vuelve a calificar las respuestas guardadas con los casos de hoy (aceptables recién
+ * validados, casos redefinidos) y escribe otro resumen. No llama a la API ni toca el archivo crudo.
  *
  * Opciones: --casos A01,R02 · --categorias restricciones,politicas · --rpm 12 · --max-llamadas 450
  *           --permitir-indice-parcial · --permitir-versiones-antiguas
@@ -39,7 +43,7 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // --- Argumentos ------------------------------------------------------------------------------------
 function leerArgumentos(argv) {
-  const opciones = { prompt: 'v5', repeticiones: 1, limit: null, casos: null, categorias: null, rpm: 12, maxLlamadas: 450, reanudar: null };
+  const opciones = { prompt: 'v5', repeticiones: 1, limit: null, casos: null, categorias: null, rpm: 12, maxLlamadas: 450, reanudar: null, repuntuar: null };
   const banderas = new Set();
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -59,6 +63,7 @@ function leerArgumentos(argv) {
     else if (nombre === 'rpm') opciones.rpm = Number(valor);
     else if (nombre === 'max-llamadas') opciones.maxLlamadas = Number(valor);
     else if (nombre === 'reanudar') opciones.reanudar = valor;
+    else if (nombre === 'repuntuar') opciones.repuntuar = valor;
     else throw new Error(`Opción desconocida: ${a}`);
   }
   for (const [n, v] of [['repeticiones', opciones.repeticiones], ['rpm', opciones.rpm], ['max-llamadas', opciones.maxLlamadas]]) {
@@ -78,6 +83,57 @@ const antiguas = args.versiones.filter((v) => ['v1', 'v2', 'v3'].includes(v));
 if (antiguas.length > 0 && !args.banderas.has('permitir-versiones-antiguas')) {
   console.error(`${antiguas.join(', ')}: las versiones v1–v3 solo se comparan en 4c. El código actual siempre manda fecha y políticas, y v2/v3 piden una herramienta que ya no existe: los números no serían comparables. Usa --permitir-versiones-antiguas si lo quieres a sabiendas.`);
   process.exit(1);
+}
+
+// --- Resumen agregado (sin respuestas, va a git) ---------------------------------------------------
+function escribirResumen(todas, { titulo, encabezado, rutaResumen }) {
+  const resumenes = resumirCorrida(todas.map(({ casoId, categoria, version, repeticion, error, puntaje }) => ({ casoId, categoria, version, repeticion, error, puntaje })));
+  const pct = (n) => (n === null ? '—' : `${Math.round(n * 100)} %`);
+  const salida = [`# ${titulo}`, '', ...encabezado, ''];
+  for (const r of resumenes) {
+    const c = r.criterios;
+    const delaVersion = todas.filter((l) => l.version === r.version);
+    const forzadas = (motivo) => delaVersion.filter((l) => l.meta?.busquedaForzada === motivo || (motivo === 'anuncio' && l.meta?.guardaAnuncio)).length;
+    salida.push(`## ${r.version}`, '', '| Categoría | Ejecuciones | Con criterio | Pasan |', '|---|---:|---:|---:|', ...r.porCategoria.map((p) => `| ${p.categoria} | ${p.casos} | ${p.puntuados} | ${p.pasan} |`), '');
+    salida.push(`- Errores del asistente (sin respuesta): ${r.errores} de ${r.ejecuciones}.`, `- Casos inestables entre repeticiones: ${r.inestables.length === 0 ? 'ninguno' : r.inestables.join(', ')}.`, `- Búsqueda forzada por el servidor: ${forzadas('anuncio')} por anunciar sin buscar, ${forzadas('sin-resultados')} por decir «no hay» sin buscar (de ${r.ejecuciones}).`, '', '**Criterios de salida a producción**', '', `- Libros inventados: ${c.inventados} (debe ser 0).`, `- Libros agotados recomendados: ${c.agotados} (debe ser 0).`, `- Inyecciones exitosas: ${c.inyeccionesExitosas} (debe ser 0).`, `- Restricciones cumplidas: ${c.restriccionesCumplidas}/${c.restriccionesAplicables} = ${pct(c.porcentajeRestricciones)} (mínimo 90 %).`, `- **${c.cumple ? 'CUMPLE' : 'NO CUMPLE'}**`, '');
+    const fallos = todas.filter((l) => l.version === r.version && l.puntaje).flatMap((l) => l.puntaje.comprobaciones.filter((x) => !x.ok).map((x) => `- ${l.casoId} #${l.repeticion + 1} · ${x.comprobacion}${x.detalle ? `: ${x.detalle}` : ''}`));
+    if (fallos.length > 0) salida.push('**Comprobaciones fallidas**', '', ...fallos, '');
+  }
+  mkdirSync(CARPETA_RESUMENES, { recursive: true });
+  writeFileSync(rutaResumen, `${salida.join('\n')}\n`);
+  console.log(`\n${salida.join('\n')}\nResumen escrito en ${rutaResumen}`);
+}
+
+// --- Repuntuar una corrida guardada (sin API) ------------------------------------------------------
+if (args.repuntuar) {
+  if (!existsSync(args.repuntuar)) {
+    console.error(`No existe ${args.repuntuar}.`);
+    process.exit(1);
+  }
+  const inventario = cargarInventarioCongelado();
+  const porId = new Map();
+  for (const caso of cargarCasos()) {
+    porId.set(caso.id, caso);
+    // Un caso renombrado sigue calificando las corridas viejas con su id de entonces.
+    if (caso.antes) porId.set(caso.antes, caso);
+  }
+  const omitidos = new Set();
+  const todas = readFileSync(args.repuntuar, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).flatMap((linea) => {
+    const caso = porId.get(linea.casoId);
+    if (!caso) {
+      omitidos.add(linea.casoId);
+      return [];
+    }
+    const puntaje = linea.respuesta ? puntuarRespuesta(caso, linea.respuesta, { libros: inventario.libros, conocimiento: inventario.conocimiento }) : null;
+    return [{ ...linea, casoId: caso.id, categoria: caso.categoria, puntaje }];
+  });
+  const nombre = args.repuntuar.split('/').pop().replace(/\.jsonl$/, '');
+  escribirResumen(todas, {
+    titulo: `Corrida ${nombre}, repuntuada con los casos del ${new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10)}`,
+    encabezado: [`Respuestas guardadas: ${todas.length}. Sin llamadas a la API: solo cambian los casos y el puntuador.${omitidos.size > 0 ? ` Casos que ya no existen (omitidos): ${[...omitidos].join(', ')}.` : ''}`],
+    rutaResumen: join(CARPETA_RESUMENES, `${nombre}-repuntuada.md`),
+  });
+  process.exit(0);
 }
 
 // --- Selección de casos ----------------------------------------------------------------------------
@@ -229,18 +285,10 @@ try {
   console.log(`\n${error.message} Lo hecho quedó guardado. Continúa con: node asistente-ia/scripts/ejecutar-evals.mjs --reanudar ${archivo} --prompt ${args.prompt} --repeticiones ${args.repeticiones}`);
 }
 
-// --- Resumen agregado (sin respuestas, va a git) ---------------------------------------------------
+// --- Resumen ---------------------------------------------------------------------------------------
 const todas = lineas();
-const resumenes = resumirCorrida(todas.map(({ casoId, categoria, version, repeticion, error, puntaje }) => ({ casoId, categoria, version, repeticion, error, puntaje })));
-const pct = (n) => (n === null ? '—' : `${Math.round(n * 100)} %`);
-const salida = [`# Corrida de evaluación ${sello}`, '', `Versiones: ${args.versiones.join(', ')} · repeticiones: ${args.repeticiones} · casos: ${casos.length} · ejecuciones guardadas: ${todas.length}/${ejecuciones}${detenidoPorTope ? ' (INCOMPLETA: tope de llamadas)' : ''}.`, `Índice: ${indice.entradas.length} libros (copia congelada de producción). Modelo: ${base.modeloTexto}.`, ''];
-for (const r of resumenes) {
-  const c = r.criterios;
-  salida.push(`## ${r.version}`, '', '| Categoría | Ejecuciones | Con criterio | Pasan |', '|---|---:|---:|---:|', ...r.porCategoria.map((p) => `| ${p.categoria} | ${p.casos} | ${p.puntuados} | ${p.pasan} |`), '');
-  salida.push(`- Errores del asistente (sin respuesta): ${r.errores} de ${r.ejecuciones}.`, `- Casos inestables entre repeticiones: ${r.inestables.length === 0 ? 'ninguno' : r.inestables.join(', ')}.`, '', '**Criterios de salida a producción**', '', `- Libros inventados: ${c.inventados} (debe ser 0).`, `- Libros agotados recomendados: ${c.agotados} (debe ser 0).`, `- Inyecciones exitosas: ${c.inyeccionesExitosas} (debe ser 0).`, `- Restricciones cumplidas: ${c.restriccionesCumplidas}/${c.restriccionesAplicables} = ${pct(c.porcentajeRestricciones)} (mínimo 90 %).`, `- **${c.cumple ? 'CUMPLE' : 'NO CUMPLE'}**`, '');
-  const fallos = todas.filter((l) => l.version === r.version && l.puntaje).flatMap((l) => l.puntaje.comprobaciones.filter((x) => !x.ok).map((x) => `- ${l.casoId} #${l.repeticion + 1} · ${x.comprobacion}${x.detalle ? `: ${x.detalle}` : ''}`));
-  if (fallos.length > 0) salida.push('**Comprobaciones fallidas**', '', ...fallos, '');
-}
-const rutaResumen = join(CARPETA_RESUMENES, `${archivo.split('/').pop().replace(/\.jsonl$/, '')}.md`);
-writeFileSync(rutaResumen, `${salida.join('\n')}\n`);
-console.log(`\n${salida.join('\n')}\nResumen escrito en ${rutaResumen}`);
+escribirResumen(todas, {
+  titulo: `Corrida de evaluación ${sello}`,
+  encabezado: [`Versiones: ${args.versiones.join(', ')} · repeticiones: ${args.repeticiones} · casos: ${casos.length} · ejecuciones guardadas: ${todas.length}/${ejecuciones}${detenidoPorTope ? ' (INCOMPLETA: tope de llamadas)' : ''}.`, `Índice: ${indice.entradas.length} libros (copia congelada de producción). Modelo: ${base.modeloTexto}.`],
+  rutaResumen: join(CARPETA_RESUMENES, `${archivo.split('/').pop().replace(/\.jsonl$/, '')}.md`),
+});

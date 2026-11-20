@@ -35,6 +35,7 @@ interface LibroMinimo {
   bookId: string;
   titulo: string;
   autor: string;
+  pvp?: number | null;
 }
 
 interface ConocimientoFila extends ConocimientoParaIndice {
@@ -137,6 +138,7 @@ export async function reconstruirIndice(
             sinSinopsis: documento.sinSinopsis,
             idioma: documento.idioma,
             clasificacionEdad: documento.clasificacionEdad,
+            pvp: documento.pvp,
           },
           vector: cuantizar(resultado.vectores[posicion]),
         });
@@ -217,7 +219,7 @@ export const handler: Handler<unknown, ResumenReconstruccion> = async () => {
     proveedor: crearProveedorLlm(),
     almacen: crearAlmacenS3(variable('BUCKET_INDICE')),
     leerLibros: () =>
-      escanearProyeccion<LibroMinimo>(variable('TABLA_LIBROS'), ['bookId', 'titulo', 'autor']),
+      escanearProyeccion<LibroMinimo>(variable('TABLA_LIBROS'), ['bookId', 'titulo', 'autor', 'pvp']),
     leerConocimiento: () => escanearTodo<ConocimientoFila>(variable('TABLA_CONOCIMIENTO')),
     dimensiones: 768,
   });

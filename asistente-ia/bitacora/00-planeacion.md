@@ -136,3 +136,14 @@ Minutos de agente registrados por día: jue 19 → 61 (23 hasta 4a y 38 después
 | Lun 30/11 – vie 4/12 | 4c, Fases 8, 9 y 10 | Azure, 20 respuestas, video |
 
 **Cambio respecto al calendario del 19/11:** producción no se mueve (27/11), pero se pierde la opción de adelantarla al jueves 26, que dependía de que la 4b pasara a la primera. La Fase 5 ocupa el lugar que el calendario ya le tenía reservado el lunes 23, junto con la parte 1 de la Fase 6. Si la Fase 5 se alarga más de un día, la holgura del jueves 26 la absorbe.
+
+### Avance de `T-0050` (Fase 5, parcial) — viernes 20/11/2026, 18:15
+
+| Hito | Día del calendario | Fecha real | Observación |
+|---|---|---|---|
+| Casa del Libro como fuente de portadas (#167) | vie 20 (tarde) | vie 20/11, 15:17 a 15:21 | Fuera del asistente; fusionado y desplegado |
+| Fase 5: guardas, precio en el índice, casos redefinidos | lun 23 | vie 20/11, 17:35 a 18:15 | Adelantada al viernes por la tarde |
+| v6 medida | lun 23 | vie 20/11 | No se adopta: no mejora a v5 |
+| Corridas contra los criterios | lun 23 | vie 20/11 | v5 cumple: 95 % en la principal; 86 % a 95 % en las de comprobación, según R03 |
+
+Viernes 20 después del cierre de 4b: 4 minutos de Casa del Libro (fila del CSV) y, en la Fase 5, 36,5 minutos de reloj con 13,8 de agente activo (evento de `T-0050`). **Lectura:** la Fase 5 se adelantó casi completa. El lunes 23 solo queda el cierre, que depende de que el usuario valide 26 libros y decida R03, y el resto del día va para la Fase 6. El calendario no cambia de fechas (producción el 27/11, el jueves 26 de holgura), pero la holgura ya no tiene que absorber la Fase 5.
