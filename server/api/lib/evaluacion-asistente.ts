@@ -165,9 +165,12 @@ export function puntuarRespuesta(caso: CasoEvaluacion, respuesta: RespuestaEvalu
       if (restricciones.precioMaximo !== undefined && !(libro.pvp <= restricciones.precioMaximo)) {
         violaciones.push(`${libro.bookId}: $${libro.pvp} supera $${restricciones.precioMaximo}`);
       }
-      // Un libro bilingüe figura con un solo idioma en el inventario; vale si el motivo lo dice (Fase 5, decisión del 20/11/2026).
+      // El idioma del inventario es una sola etiqueta. Cumple también un libro bilingüe cuyo motivo lo dice, y uno
+      // que la persona validó como aceptable para esta pregunta: su criterio pesa más que la etiqueta (Fase 5,
+      // decisiones del 20/11/2026; p. ej. Caldo de ojo en R03). El precio, en cambio, se exige siempre.
       const declaraBilingue = /biling/i.test(sinTildes(respuesta.recomendaciones[posicion].motivo ?? ''));
-      if (restricciones.idioma !== undefined && inventario.conocimiento.get(libro.bookId)?.idioma !== restricciones.idioma && !declaraBilingue) {
+      const validadoParaElCaso = (caso.aceptables ?? []).includes(libro.bookId);
+      if (restricciones.idioma !== undefined && inventario.conocimiento.get(libro.bookId)?.idioma !== restricciones.idioma && !declaraBilingue && !validadoParaElCaso) {
         violaciones.push(`${libro.bookId}: idioma distinto de ${restricciones.idioma}`);
       }
     });

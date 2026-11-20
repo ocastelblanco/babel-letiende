@@ -41,13 +41,13 @@ Cada fase indica la capacidad que demuestra, el criterio de terminado (DoD) y su
 
 ### 3.1 Calendario revisado (19/11/2026)
 
-Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; el usuario no trabaja el fin de semana del 21 y 22/11. **Se recalcula al cerrar cada fase** (aunque sea parcial) y el recorrido real, con fechas y minutos de agente, queda en [`bitacora/00-planeacion.md`](bitacora/00-planeacion.md) («Recorrido del calendario»). Última revisión: 20/11/2026, 18:15, con la Fase 5 adelantada al viernes por la tarde: el código, los casos y las corridas están hechos (v5 cumple con 90-95 % según la corrida); el lunes 23 solo queda cerrarla con la validación del usuario, así que la Fase 6 tiene el día casi completo. Producción sigue el 27/11, con el jueves 26 de holgura.
+Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; el usuario no trabaja el fin de semana del 21 y 22/11. **Se recalcula al cerrar cada fase** (aunque sea parcial) y el recorrido real, con fechas y minutos de agente, queda en [`bitacora/00-planeacion.md`](bitacora/00-planeacion.md) («Recorrido del calendario»). Última revisión: 20/11/2026, 18:51, al cerrar `T-0050`: la Fase 5 se hizo completa el viernes por la tarde (v5 cumple con 100 % de restricciones en la corrida principal), así que el lunes 23 queda entero para la Fase 6. Producción sigue el 27/11, con el jueves 26 de holgura.
 
 | Fecha | Trabajo | Depende del usuario |
 |---|---|---|
 | Jue 19/11 | Plan de la Fase 4; carga de sinopsis en producción; 4a (`T-0041`, PR #165) ✓ | Clave local de Gemini en `.env` ✓; límites de cuota ✓; cuenta de pago para `production` ✓ |
 | Vie 20/11 | 4b (`T-0042`): validación, ejecutor y línea base v5 contra v4 ✓ (v5 no cumple); Casa del Libro (#167) ✓; Fase 5 (`T-0050`): guardas, precio en el índice, casos redefinidos, v6 medida y no adoptada ✓, PR abierto | Validar candidatos y complemento ✓; fusionar 4b ✓ |
-| Lun 23/11 | Cierre de la Fase 5 (importar la validación y recalificar sin API); Fase 6, parte 1 (registro, control de gasto y de tasa) | Validar los 26 candidatos nuevos y decidir R03; revisar en `staging` y fusionar |
+| Lun 23/11 | Fase 6, parte 1 (registro, control de gasto y de tasa) | Revisar la Fase 5 en `staging` y fusionar #168 |
 | Mar 24/11 | Fase 6, parte 2 (límites de entrada, validador de fidelidad, revisión OWASP) | Verificar en `staging` |
 | Mié 25/11 | Fase 7: chat en el catálogo, en `staging` | Revisar el chat |
 | Jue 26/11 | Holgura; producción si 4b pasó a la primera | |
@@ -185,7 +185,7 @@ Entra porque v5 no cumple los criterios de 4b (20/11/2026). Alcance decidido con
 - [x] **Casos redefinidos:** en «sin respuesta» se acepta recomendar libros cercanos si el asistente dice que no hay uno exacto; S06 se corrige (el inventario sí tiene teoría penal); en R03 un libro bilingüe vale si el asistente dice que es bilingüe. **Hecho:** `avisoCercanos` en S01 a S05; S06 pasa a A16; la regla de bilingües mira el motivo de cada libro.
 - [x] **v6**, si después de lo anterior todavía hace falta, con motivo, hipótesis y efecto medido. Desde v5, cambios guiados solo por fallos de la suite. **Medida y no adoptada:** empata con v5 en el criterio (20/21) y pasa menos casos de restricciones (11 contra 15). Producción sigue con v5.
 - [x] Nueva corrida contra la línea base y los criterios de 4b; ficha por prompt y tabla de resultados por versión en la bitácora ([`bitacora/07-iteracion.md`](bitacora/07-iteracion.md)). v5 cumple: 20/21 = 95 % en la corrida principal, y entre 86 % y 95 % en las de comprobación, según R03.
-- [ ] **Cierre (lunes 23):** el usuario valida los 26 candidatos del archivo complementario y decide sobre R03 (si *Caldo de ojo* cuenta como bilingüe y si basta con decirlo en el texto). Después se importa y se recalifica con `--repuntuar`, sin llamar a la API.
+- [x] **Cierre (adelantado al viernes 20, 18:51):** el usuario validó el complemento (16 aceptables nuevos) y decidió R03 (*Caldo de ojo* cuenta como libro en inglés). Recalificado con `--repuntuar`, sin API: **v5 cumple con 21/21 = 100 %** en la corrida principal (95 % y 100 % en las de comprobación).
 
 ### Fase 6 — Operación segura (backend) · `T-0060` · capacidad: uso responsable, privacidad y seguridad
 

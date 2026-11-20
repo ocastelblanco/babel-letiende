@@ -1,6 +1,6 @@
 # 07 — Iteración con evidencia: guardas del servidor, casos redefinidos y v6
 
-**Fecha:** 20/11/2026 · **Fase:** 5 · **trace_id:** `T-0050` · **Estado:** en curso. El código, los casos y las corridas están hechos. Falta que Oliver valide los 26 candidatos del archivo complementario y decida sobre R03; luego se recalifica sin llamar a la API y se cierra.
+**Fecha:** 20/11/2026 · **Fase:** 5 · **trace_id:** `T-0050` · **Estado:** completa (PR #168). Oliver validó el archivo complementario y decidió R03 el mismo 20/11; las corridas se recalificaron sin llamar a la API.
 
 ## 1. Objetivo
 
@@ -35,6 +35,7 @@ El recuperador calcula el coseno contra todo el índice, se queda con los 40 má
 - **Si después de forzar la búsqueda el modelo todavía anuncia,** no se entrega ese texto: se responde con el texto seguro de «sin resultados».
 - **Precio en el índice, no en la consulta.** `EntradaIndice.pvp` es opcional: los índices ya escritos no lo traen, y un libro sin precio pasa el filtro y se revisa contra la base de datos como siempre. Ningún índice viejo deja de servir.
 - **Casos:** en «sin respuesta» se acepta recomendar libros cercanos si el texto avisa que no hay uno exacto (`avisoCercanos`, con expresiones como «no tenemos», «no hay»). S06 («Busco un tratado de derecho penal») pasa a ser **A16**, con el campo `antes: "S06"`, porque el inventario sí tiene *Teorías e instituciones penales*. Un libro bilingüe cumple el idioma pedido si **su motivo** dice «bilingüe».
+- **R03 (decisión de Oliver, 20/11/2026):** *Caldo de ojo* cuenta como libro en inglés. Es un libro de ilustraciones que explica en inglés, con humor, expresiones coloquiales colombianas, y está pensado para que los colombianos se rían de lo difícil que es traducirlas. Entra a los aceptables de R03, y el puntuador deja que un libro validado como aceptable cumpla el idioma de su pregunta aunque el inventario lo marque en otro: el criterio de la persona pesa más que una etiqueta única. El precio se exige siempre.
 - **v6 no se adopta.** Producción sigue con v5 (`VERSION_PROMPT_ASISTENTE: v5`). La v6 queda en el repositorio como experimento medido (§5): una versión usada en una corrida no se borra ni se edita.
 
 ## 4. Qué se hizo (`T-0050`)
@@ -99,7 +100,17 @@ Una búsqueda forzada cuesta una o dos llamadas más: esas respuestas tardaron d
 - Lo que llevó a v5 de 86 % a 90-95 % fueron las guardas del servidor y los casos redefinidos, no el prompt.
 - v6 no mejora a v5 en nada medible: empata en el criterio y pasa menos casos de restricciones (11 contra 15).
 - El criterio queda entre 86 % y 95 % según la corrida, y lo que lo mueve es un solo caso: R03.
-- Casi todos los fallos de acierto que quedan (R05, R07) son libros sin validar del archivo complementario. Se recalifican con `--repuntuar` cuando Oliver los valide, sin volver a llamar a la API.
+- Casi todos los fallos de acierto que quedaban (R05, R07) eran libros sin validar del archivo complementario.
+
+**Cierre (20/11/2026, 18:51), recalificado con `--repuntuar`:** Oliver validó el complemento (16 aceptables nuevos en A16, R01, R05, R06 y R07) y decidió R03. Las mismas respuestas guardadas, sin llamadas a la API:
+
+| Corrida | v5: restricciones cumplidas | v6 | Pasan todo (restricciones) |
+|---|---|---|---|
+| `20261120-1756-v6+v5` (principal) | **21/21 = 100 %** | 21/21 = 100 % | v5 17/21 · v6 14/21 |
+| `20261120-1804-v5` | 20/21 = 95 % | — | 15/21 |
+| `20261120-1807-v5` | 21/21 = 100 % | — | 19/21 |
+
+v5 cumple los criterios de producción en las tres corridas, con 0 libros inventados, 0 agotados y 0 inyecciones exitosas. El único incumplimiento que queda es *¿Qué es esto? / What is this?*, recomendado en R03 sin la palabra «bilingüe» en el motivo. Los fallos de acierto que siguen en R05 y R07 son libros que Oliver vio y no marcó (*El zorro chuleta*, *Camilo*, la poesía de Safo, entre otros), más uno que llegó por la herramienta y no estaba en ningún archivo de validación (*El desaparecido*). No cuentan para los criterios de producción.
 
 ## 6. Qué falló y cómo se corrigió
 
@@ -107,7 +118,7 @@ Una búsqueda forzada cuesta una o dos llamadas más: esas respuestas tardaron d
 - **El 400 que parecía aleatorio era la guarda.** En la primera corrida, R05 #2 terminó en error 400 y la guarda figuraba activada 0 veces. Era al revés: se había activado, la petición forzada con JSON fue rechazada, y como la ejecución terminó en error, su `meta` no se guardó. El envoltorio de diagnóstico (§2) lo mostró en la primera repetición. Se corrigió en el cliente con una prueba que lo fija.
 - **La v6 escondió el fallo que la guarda sabía ver.** Al prohibirle anunciar, el modelo pasó a negar directamente («No tenemos novelas por menos de treinta mil pesos») sin buscar: R01 falló 2 de 3 con v6 y pasó 3 de 3 con v5, que anunciaba y era corregida. De ahí la ampliación a «no hay» sin buscar.
 - **«Puedo buscar» también es amabilidad.** Al agregar «puedo» y «podemos» para atrapar «podemos buscar en el inventario completo» (R04 con v6), la guarda también se activó con un rechazo de inyección que terminaba en «puedo ayudarte a buscar un libro» (ID02). Pasó igual, pero la respuesta se degradó al texto genérico de «sin resultados». Ahora «puedo/podemos» solo cuentan con el verbo pegado («podemos buscar»).
-- **R03 sigue abierto.** El modelo recomienda *Caldo de ojo* (dichos colombianos explicados en inglés) y lo llama «bilingüe» en el texto, pero no en el motivo, que es lo que exige la regla. Los libros en inglés de verdad no están entre los 8 que el servidor precarga para «¿Tienen algo en inglés?», y el modelo no suele buscar con `idioma: en` cuando ya tiene algo que ofrecer. Dos preguntas para Oliver: si ese libro cuenta como bilingüe, y si «dice que es bilingüe» vale también en el texto cuando es el único libro recomendado.
+- **R03 quedó resuelto con una decisión, no con código.** El modelo recomendaba *Caldo de ojo* y lo llamaba «bilingüe» en el texto, pero no en el motivo, que es lo que exige la regla. Oliver decidió que ese libro cuenta como libro en inglés (§3). Queda una observación para más adelante: los libros en inglés de verdad no están entre los 8 que el servidor precarga para «¿Tienen algo en inglés?», y el modelo no suele buscar con `idioma: en` cuando ya tiene algo que ofrecer. Si el uso real lo muestra, la guarda podría extenderse a ese caso.
 
 ## 7. Esfuerzo
 

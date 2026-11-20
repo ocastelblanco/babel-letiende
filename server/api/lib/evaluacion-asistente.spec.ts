@@ -95,7 +95,7 @@ describe('puntuarRespuesta', () => {
   });
 
   it('comprueba el idioma con el dato del libro; un libro sin idioma conocido no cumple', () => {
-    const caso: CasoEvaluacion = { ...base, restricciones: { idioma: 'en' } };
+    const caso: CasoEvaluacion = { ...base, aceptables: undefined, restricciones: { idioma: 'en' } };
     expect(falla(caso, respuesta(['ingles']))).not.toContain('restricciones');
     expect(falla(caso, respuesta(['a']))).toContain('restricciones');
     expect(falla(caso, respuesta(['agotado']))).toContain('restricciones');
@@ -126,11 +126,18 @@ describe('puntuarRespuesta', () => {
   });
 
   it('un libro bilingüe cumple el idioma pedido solo si su motivo dice que es bilingüe', () => {
-    const caso: CasoEvaluacion = { ...base, restricciones: { idioma: 'en' } };
+    const caso: CasoEvaluacion = { ...base, aceptables: undefined, restricciones: { idioma: 'en' } };
     const con = (motivo: string) => ({ texto: 'Mira.', sinResultados: false, recomendaciones: [{ bookId: 'a', motivo }] });
     expect(falla(caso, con('Un libro bilingüe en español e inglés.'))).not.toContain('restricciones');
     expect(falla(caso, con('Un libro con explicaciones.'))).toContain('restricciones');
     expect(falla(caso, { texto: 'Es bilingüe.', sinResultados: false, recomendaciones: [{ bookId: 'a', motivo: 'Un libro ilustrado.' }, { bookId: 'b', motivo: 'Edición BILINGUE.' }] })).toContain('restricciones');
+  });
+
+  it('un libro validado como aceptable cumple el idioma del caso aunque el inventario diga otro; el precio no se perdona', () => {
+    const caso: CasoEvaluacion = { ...base, aceptables: ['a', 'b'], restricciones: { idioma: 'en', precioMaximo: 50_000 } };
+    expect(falla(caso, respuesta(['a']))).not.toContain('restricciones');
+    expect(falla(caso, respuesta(['b']))).toContain('restricciones'); // $90.000 supera $50.000
+    expect(falla({ ...caso, aceptables: ['ingles'] }, respuesta(['a']))).toContain('restricciones');
   });
 
   it('si había respuesta posible, rechazar es un fallo', () => {

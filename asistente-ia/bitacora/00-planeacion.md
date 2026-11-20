@@ -147,3 +147,8 @@ Minutos de agente registrados por día: jue 19 → 61 (23 hasta 4a y 38 después
 | Corridas contra los criterios | lun 23 | vie 20/11 | v5 cumple: 95 % en la principal; 86 % a 95 % en las de comprobación, según R03 |
 
 Viernes 20 después del cierre de 4b: 4 minutos de Casa del Libro (fila del CSV) y, en la Fase 5, 36,5 minutos de reloj con 13,8 de agente activo (evento de `T-0050`). **Lectura:** la Fase 5 se adelantó casi completa. El lunes 23 solo queda el cierre, que depende de que el usuario valide 26 libros y decida R03, y el resto del día va para la Fase 6. El calendario no cambia de fechas (producción el 27/11, el jueves 26 de holgura), pero la holgura ya no tiene que absorber la Fase 5.
+
+### Cierre de `T-0050` (Fase 5) — viernes 20/11/2026, 18:51
+
+El usuario validó el archivo complementario y decidió R03 a las 18:49, y el cierre se hizo con `--repuntuar`, sin llamar a la API: **v5 cumple con 21/21 = 100 %** en la corrida principal. La Fase 5, que el calendario tenía el lunes 23, terminó el viernes 20. **Calendario recalculado:** el lunes 23 queda entero para la Fase 6 (parte 1 y, si alcanza, el comienzo de la parte 2); el resto no cambia (Fase 7 el miércoles 25, holgura el jueves 26, producción el viernes 27/11). La holgura del jueves vuelve a abrir la opción de adelantar producción si la Fase 6 y la 7 salen a la primera.
+
