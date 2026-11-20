@@ -13,10 +13,11 @@
  *      cada salto — defensa en profundidad aplicada a todas las peticiones,
  *      incluidas las de "mismo dominio" (ej. Tornamesa paso 2).
  *
- *   2. Los 6 adaptadores por `dominio` (Librería Lerner, Librería Nacional,
- *      Tornamesa, Busca Libre, Casa Tomada, Librería de la U): cada uno
- *      extrae solo texto/números planos (nunca HTML crudo — CLAUDE.md A03)
- *      desde el JSON/HTML del sitio.
+ *   2. Los 7 adaptadores por `dominio` (Librería Lerner, Librería Nacional,
+ *      Tornamesa, Busca Libre, Casa Tomada, Librería de la U, Casa del
+ *      Libro): cada uno extrae solo texto/números planos (nunca HTML crudo —
+ *      CLAUDE.md A03) desde el JSON/HTML del sitio. Casa del Libro es la
+ *      excepción: solo aporta la portada, comprobada con un `HEAD`.
  *
  * `scrapearSitio` es la única función pública de consumo externo: dado un
  * `SitioScraping` (política, ADR-010) y un ISBN, invoca el adaptador que
@@ -706,6 +707,47 @@ async function scrapearBuscaLibre(isbn: string): Promise<ResultadoScraping> {
 }
 
 // ---------------------------------------------------------------------------
+// Adaptador Casa del Libro — solo portada, derivada del ISBN
+// ---------------------------------------------------------------------------
+
+/**
+ * Normaliza a ISBN-13 (sin guiones). Convierte un ISBN-10 con el prefijo 978 y
+ * recalcula el dígito de control. Devuelve `null` si no tiene 10 ni 13 dígitos.
+ */
+function aIsbn13(isbn: string): string | null {
+  const limpio = isbn.replace(/[^0-9Xx]/g, '').toUpperCase();
+  if (/^\d{13}$/.test(limpio)) {
+    return limpio;
+  }
+  if (!/^\d{9}[\dX]$/.test(limpio)) {
+    return null;
+  }
+  const base = `978${limpio.slice(0, 9)}`;
+  const suma = [...base].reduce((total, digito, i) => total + Number(digito) * (i % 2 === 0 ? 1 : 3), 0);
+  return `${base}${(10 - (suma % 10)) % 10}`;
+}
+
+/**
+ * Casa del Libro (Tarea 11 de `TODO.md`) solo aporta la portada. Su CDN la
+ * publica en una ruta que se deriva del ISBN-13: el subdominio usa el último
+ * dígito y la carpeta los dos últimos. No se piden fichas ni se usa el
+ * buscador, que su `robots.txt` prohíbe. Un `HEAD` basta para saber si existe:
+ * el CDN responde 200 con `image/*` cuando hay portada y 404 con HTML cuando no.
+ */
+async function scrapearCasaDelLibro(isbn: string): Promise<ResultadoScraping> {
+  const isbn13 = aIsbn13(isbn);
+  if (!isbn13) {
+    return RESULTADO_VACIO;
+  }
+  const portadaUrl = `https://imagessl${isbn13.slice(-1)}.casadellibro.com/a/l/t5/${isbn13.slice(-2)}/${isbn13}.jpg`;
+  const respuesta = await fetchSeguro(portadaUrl, { metodo: 'HEAD', timeoutMs: TIMEOUT_MS_PORTADA });
+  if (!respuesta || !(respuesta.headers.get('content-type') ?? '').toLowerCase().startsWith('image/')) {
+    return RESULTADO_VACIO;
+  }
+  return { portadaUrl };
+}
+
+// ---------------------------------------------------------------------------
 // Punto de entrada público
 // ---------------------------------------------------------------------------
 
@@ -716,6 +758,7 @@ const ADAPTADORES_POR_DOMINIO: Record<string, (isbn: string) => Promise<Resultad
   'www.buscalibre.com.co': scrapearBuscaLibre,
   'www.libreriacasatomada.com': scrapearCasaTomada,
   'www.libreriadelau.com': scrapearLibreriaDeLaU,
+  'www.casadellibro.com.co': scrapearCasaDelLibro,
 };
 
 /**

@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tareas activas: **Tarea 11** (Casa del Libro como fuente de portadas, fuera del asistente) y **Tarea 12** (`T-0050`, Fase 5: corrección guiada por la suite). Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
+**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tareas activas: **Tarea 11** (Casa del Libro como fuente de portadas, fuera del asistente; PR abierto) y **Tarea 12** (`T-0050`, Fase 5: corrección guiada por la suite). Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -694,13 +694,14 @@ Detalle en `asistente-ia/PLAN.md` (Fase 4). Una rama y un PR; no se abre hasta q
 - [x] Corrida de v4 y v5 (3 repeticiones, 276 ejecuciones, 0 errores); tabla en la bitácora 06.
 - [x] Criterios manuales: v5 **no cumple** (restricciones 86 %; los demás en 0); v4, 90 %. Entra la Fase 5 antes de la Fase 6.
 
-## Tarea 11 — Casa del Libro como fuente de portadas (fuera del asistente) — SIGUIENTE (tras el despliegue de 4b)
+## Tarea 11 — Casa del Libro como fuente de portadas (fuera del asistente) — IMPLEMENTADA, PR abierto (2026-11-20)
 
 Decidido por Oliver el 20/11/2026, después de evaluar el sitio (Planeta de Libros se descartó: su `robots.txt` prohíbe el buscador).
 
-- [ ] Adaptador `www.casadellibro.com.co` en `server/api/services/scraping.ts`, **solo portada**: URL derivada del ISBN (`imagessl{último dígito}.casadellibro.com/a/l/t5/{últimos 2}/{isbn}.jpg`), comprobada con una petición que debe dar 200 (404 = sin portada). Sin fichas ni búsqueda: el `robots.txt` del sitio prohíbe la búsqueda, y las fichas no hacen falta para la portada.
-- [ ] Toda petición por `fetchSeguro` (guardia SSRF, ADR-011); pruebas con respuestas simuladas.
-- [ ] Fila en `babel-sitios-scraping` de `staging` y `production`: `info` activo, `pvp` apagado y la prioridad más baja (la última fuente).
+- [x] Adaptador `www.casadellibro.com.co` en `server/api/services/scraping.ts`, **solo portada**: URL derivada del ISBN (`imagessl{último dígito}.casadellibro.com/a/l/t5/{últimos 2}/{isbn}.jpg`), comprobada con una petición que debe dar 200 (404 = sin portada). Sin fichas ni búsqueda: el `robots.txt` del sitio prohíbe la búsqueda, y las fichas no hacen falta para la portada.
+- [x] Toda petición por `fetchSeguro` (guardia SSRF, ADR-011); pruebas con respuestas simuladas. Es un solo `HEAD` por libro y exige `content-type` de imagen; un ISBN-10 se convierte a ISBN-13 antes de armar la ruta. Verificado contra el CDN real: portada existente → 200 `image/jpeg`; ISBN sin portada → 404 HTML. El `robots.txt` del CDN de imágenes no prohíbe esas rutas. 6 pruebas nuevas (801 en verde).
+- [ ] Fila en `babel-sitios-scraping` de `staging` y `production`: `info` activo, `pvp` apagado y la prioridad más baja (la última fuente). **Pendiente de Oliver desde `/admin/sitios`**: el agente no tiene permiso de escritura en DynamoDB. Valores: dominio `www.casadellibro.com.co`, nombre `Casa del Libro`, URL `https://www.casadellibro.com.co`, prioridad `7` (hoy las dos tablas usan 1 a 6), sin palabras clave inválidas. Si la fila llega antes que el código, el sitio se registra y se omite sin error (ADR-010).
+- [ ] Tras el despliegue a `staging`: catalogar o validar un libro sin portada en los demás sitios y comprobar que trae la de Casa del Libro.
 
 ## Tarea 12 — Fase 5: corrección guiada por la suite (`T-0050`) — SIGUIENTE (alcance en `asistente-ia/PLAN.md`, Fase 5)
 

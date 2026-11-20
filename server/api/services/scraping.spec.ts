@@ -380,6 +380,63 @@ describe('scrapearSitio', () => {
     });
   });
 
+  describe('Casa del Libro (solo portada, derivada del ISBN y comprobada con HEAD)', () => {
+    function respuestaHead(status: number, contentType: string) {
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        headers: new Headers({ 'content-type': contentType }),
+        json: () => Promise.reject(new Error('no es JSON')),
+        text: () => Promise.resolve(''),
+      } as unknown as Response;
+    }
+
+    it('devuelve solo la portada cuando el CDN responde 200 con una imagen', async () => {
+      fetchMock.mockResolvedValueOnce(respuestaHead(200, 'image/jpeg'));
+
+      const resultado = await scrapearSitio(sitio('www.casadellibro.com.co'), ISBN);
+
+      expect(resultado).toEqual({ portadaUrl: 'https://imagessl9.casadellibro.com/a/l/t5/19/9788433981219.jpg' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://imagessl9.casadellibro.com/a/l/t5/19/9788433981219.jpg',
+        expect.objectContaining({ method: 'HEAD', redirect: 'manual' }),
+      );
+    });
+
+    it('devuelve {} cuando el CDN responde 404 (no hay portada)', async () => {
+      fetchMock.mockResolvedValueOnce(respuestaHead(404, 'text/html'));
+      const resultado = await scrapearSitio(sitio('www.casadellibro.com.co'), ISBN);
+      expect(resultado).toEqual({});
+    });
+
+    it('devuelve {} si responde 200 pero no con una imagen', async () => {
+      fetchMock.mockResolvedValueOnce(respuestaHead(200, 'text/html; charset=utf-8'));
+      const resultado = await scrapearSitio(sitio('www.casadellibro.com.co'), ISBN);
+      expect(resultado).toEqual({});
+    });
+
+    it('convierte un ISBN-10 con guiones a ISBN-13 antes de armar la ruta', async () => {
+      fetchMock.mockResolvedValueOnce(respuestaHead(200, 'image/jpeg'));
+      // 84-339-8121-X -> 978843398121 + dígito de control 9
+      const resultado = await scrapearSitio(sitio('www.casadellibro.com.co'), '84-339-8121-X');
+      expect(resultado).toEqual({ portadaUrl: 'https://imagessl9.casadellibro.com/a/l/t5/19/9788433981219.jpg' });
+    });
+
+    it('no hace ninguna petición si el ISBN no tiene 10 ni 13 dígitos', async () => {
+      const resultado = await scrapearSitio(sitio('www.casadellibro.com.co'), '12345');
+      expect(resultado).toEqual({});
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('no pide nada si la guardia SSRF rechaza el host del CDN', async () => {
+      dnsLookupMock.mockResolvedValueOnce([{ address: '169.254.169.254', family: 4 }]);
+      const resultado = await scrapearSitio(sitio('www.casadellibro.com.co'), ISBN);
+      expect(resultado).toEqual({});
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('parseo de precio (a través de los adaptadores)', () => {
     it('un precio inválido (negativo) desde VTEX se trata como ausente', async () => {
       const fixture = JSON.parse(leerFixture('librerialerner-api-encontrado.json'));
