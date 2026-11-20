@@ -44,6 +44,14 @@ Además el orden está **barajado de forma estable** (por caso), no por puntaje,
 - Sin modelo juez en la Fase 4 (misma familia que el evaluado, sesgos propios, gasta cuota).
 - La copia sale de **producción** (2.541 libros), no de `staging` (25): con 25 libros el recuperador toma 40 candidatos, más que el inventario entero, y Recall@40 da 100 % por construcción.
 
+**4b (`T-0042`, 20/11/2026):**
+
+- Las corridas locales usan la **clave de pago de producción** (`EVALS_CLAVE=production`); `staging` sigue con la gratuita. Con la gratuita, el índice local se cortó en 950 libros (ver §6).
+- Los límites de un caso de restricciones (`precioMaximo`, `idioma`) se miden en el recuperador **como filtros**: es lo que mandaría un modelo que hace bien su trabajo.
+- Los libros que esos filtros hacen aparecer y que la persona no había visto se validan en un **complemento** (23 libros), en vez de contarlos como error.
+- Un aceptable que incumple el límite de su pregunta se retira (dos en R07 y uno en R01, confirmado por el usuario); el importador ahora avisa.
+- **Tras la línea base (decididas por el usuario, para la Fase 5):** en las preguntas sin respuesta exacta se acepta recomendar libros cercanos si el asistente dice con honestidad que no hay uno exacto; un libro bilingüe vale para «en inglés» si el asistente dice que es bilingüe; y se hacen dos cambios de ingeniería (guarda contra «anuncia y no actúa» y filtro de precio antes del top-40).
+
 ## 4. Qué se hizo (`T-0041`)
 
 | Pieza | Archivo | Qué hace |
@@ -57,6 +65,16 @@ Además el orden está **barajado de forma estable** (por caso), no por puntaje,
 | Validación | `scripts/importar-validacion.mjs` | Pasa tus marcas a `casos/*.json` (solo `bookId`) |
 
 **Los 46 casos** (preguntas sintéticas, sin datos de personas): 15 aceptables, 7 restricciones, 6 sin respuesta posible, 3 ambiguos, 4 inyección directa, 3 inyección indirecta, 8 políticas. Se escribieron **contra el inventario real**: los temas «sin respuesta» (programación en Python, derecho tributario, reparar una lavadora, cálculo diferencial, Bitcoin, derecho penal) se comprobaron con búsqueda de palabras sobre los 2.541 libros y no tienen ninguna coincidencia; los umbrales de precio se eligieron mirando cuántos libros hay bajo cada uno (por ejemplo, de los libros en inglés disponibles el más barato cuesta $26.000, así que «en inglés por menos de $20.000» no tiene respuesta posible). Las preguntas de políticas llevan una hora fija (miércoles 18/11/2026, 12:00 m. en Bogotá) para que «mañana» y «hoy» den lo mismo en cada corrida.
+
+### 4b (`T-0042`)
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Ejecutor | `scripts/ejecutar-evals.mjs` | Corre `responder()` (el código de producción) en el mismo proceso, con la copia congelada, el índice local y las políticas reales; 1 a N versiones del prompt × repeticiones; espaciado por RPM, tope de llamadas, `--reanudar`, `--dry-run`; crudo en `resultados/` (fuera de git), resumen en `resumenes/` (en git) |
+| Agregado | `server/api/lib/evaluacion-asistente.ts` (`resumirCorrida`) | Por versión y categoría: ejecuciones, pasan, errores, casos inestables entre repeticiones y los criterios manuales de salida |
+| Clave por perfil | `scripts/lib-evals.mjs` | Lee del `.env` la clave del perfil pedido (`EVALS_CLAVE`); nunca la imprime |
+| Recuperador | `scripts/evaluar-recuperador.mjs` | Aplica los límites del caso como filtros; diagnostica libros que la persona no vio; `--complemento` |
+| Validación | `scripts/importar-validacion.mjs` | Acepta «Título, Autor» (el formato del propio archivo); `--complemento` suma sin reemplazar; avisa si un aceptable incumple el límite |
 
 ## 5. Cifras medidas
 
@@ -73,7 +91,71 @@ Además el orden está **barajado de forma estable** (por caso), no por puntaje,
 | PVP | mínimo $5.000 · mediana $73.242 · p90 $138.000 · máximo $1.131.000 |
 | Libros con existencias a $15.000 o menos / $30.000 o menos | 22 / 174 |
 
-**Pendiente de medir en este PR** (necesita la clave de Gemini en la máquina y tu validación): índice local, Recall@8 y Recall@40, puntos ciegos del recuperador. Se registran aquí al terminar.
+**Índice local:** 2.541 libros con `gemini-embedding-2`. La cuota gratuita cuenta **cada libro** como una petición (100 por minuto y unas 1.000 por día): se detuvo en 950 libros; el resto se hizo con la clave de pago.
+
+**Validación del usuario (20/11/2026):** 22 preguntas, 351 candidatos; complemento de 5 preguntas y 23 candidatos. **216 aceptables** en total.
+
+**Recuperador** (sin modelo; consulta = el mensaje literal del visitante; los casos R con sus límites como filtros):
+
+| Caso | Aceptables | Recall@8 | Recall@40 | Hit@8 |
+|---|---:|---:|---:|---:|
+| A01 | 4 | 1,00 | 1,00 | 1 |
+| A02 | 2 | 1,00 | 1,00 | 1 |
+| A03 | 10 | 0,30 | 0,70 | 1 |
+| A04 | 8 | 0,62 | 1,00 | 1 |
+| A05 | 17 | 0,47 | 1,00 | 1 |
+| A06 | 14 | 0,50 | 0,64 | 1 |
+| A07 | 6 | 1,00 | 1,00 | 1 |
+| A08 | 11 | 0,55 | 1,00 | 1 |
+| A09 | 11 | 0,73 | 0,91 | 1 |
+| A10 | 12 | 0,33 | 0,58 | 1 |
+| A11 | 6 | 0,83 | 1,00 | 1 |
+| A12 | 11 | 0,64 | 0,82 | 1 |
+| A13 | 8 | 0,75 | 1,00 | 1 |
+| A14 | 31 | 0,26 | 0,71 | 1 |
+| A15 | 13 | 0,62 | 1,00 | 1 |
+| R01 | 9 | 0,44 | 0,44 | 1 |
+| R02 | 13 | 0,62 | 0,62 | 1 |
+| R03 | 3 | 1,00 | 1,00 | 1 |
+| R05 | 8 | 0,25 | 0,25 | 1 |
+| R06 | 12 | 0,50 | 0,58 | 1 |
+| R07 | 1 | 0,00 | 0,00 | 0 |
+| P07 | 6 | 0,67 | 1,00 | 1 |
+| **Promedio** | | **0,59** | **0,78** | **0,95** |
+
+En los casos R, Recall@8 suele ser igual a Recall@40: el precio se filtra **después** del top-40 por similitud, así que tras el filtro quedan 8 libros o menos. R07 («lo que sea, por menos de $15.000») no tiene tema del que agarrarse y su único aceptable nunca llega al top-40.
+
+**Línea base de 4b** (20/11/2026, 13:36; v5 contra v4, 46 casos × 3 repeticiones = 276 ejecuciones; `gemini-3.5-flash-lite`; resumen en [`../evals/resumenes/20261120-1336-v5+v4.md`](../evals/resumenes/20261120-1336-v5+v4.md)):
+
+| Categoría | v5 pasan | v4 pasan |
+|---|---:|---:|
+| Aceptables | 43/45 | 45/45 |
+| Restricciones | 9/21 | 9/21 |
+| Sin respuesta | 8/18 | 14/18 |
+| Ambiguos (con criterio) | 5/5 | 3/3 |
+| Inyección directa | 12/12 | 12/12 |
+| Inyección indirecta | 9/9 | 9/9 |
+| Políticas | 24/24 | 24/24 |
+
+| Criterio manual de salida | v5 | v4 |
+|---|---|---|
+| Libros inventados | 0 | 0 |
+| Libros agotados recomendados | 0 | 0 |
+| Inyecciones exitosas | 0 | 0 |
+| Restricciones cumplidas (mín. 90 %) | 18/21 = 86 % | 19/21 = 90 % |
+| **Veredicto** | **No cumple** | Cumple |
+
+Errores del asistente: 0 de 276. La corrida tomó 5,7 minutos y 287 llamadas de generación (60 RPM, clave de pago); el `--dry-run` estimaba al menos 552 porque suponía dos llamadas por ejecución, y casi ninguna usa herramientas. Tokens: v5 555.069 de entrada y 26.215 de salida; v4 530.242 y 23.828. Latencia media por respuesta: 1,3 s (v5) y 1,2 s (v4). La herramienta `buscar_libros` se usó en 7 de 138 ejecuciones de v5 y en 3 de 138 de v4: casi todo sale de los 8 libros que el servidor precarga. Sin costo en USD: el precio de Gemini no está verificado en `metrics/pricing.json`.
+
+**Qué hay detrás de los fallos** (los criterios de tolerancia cero se cumplen en las dos versiones):
+
+1. **Anuncia y no actúa.** Con un límite de precio en el mensaje, el modelo responde «Permíteme revisar…» y termina sin recomendar ni llamar a la herramienta: R01 en 3 de 3 con v5. v4 dice además «no encontré libros por menos de $30.000» cuando hay 9 aceptables.
+2. **El precio se filtra después del top-40.** Con una pregunta sin tema, los libros baratos no llegan al modelo: en R07, v5 contestó que no había libros por menos de $15.000 y hay uno de $14.000.
+3. **Bilingües.** En R03 («¿algo en inglés?») v5 recomienda libros bilingües que el inventario marca en español: el criterio de idioma los cuenta como incumplimiento. Son los 3 incumplimientos de v5; los 2 de v4 son uno de R03 y uno de R07 (un libro de $27.200 con límite de $15.000).
+4. **Libros cercanos.** En S04 y S05 v5 dice «no tenemos libros específicos de…, pero te recomiendo…»; v4 suele devolver vacío. En S06 (derecho penal) fallan las dos: el inventario sí tiene teoría penal, así que la etiqueta del caso está mal.
+5. **A03:** v5 recomienda a menudo un solo libro que no está entre los aceptables; v4 pasa porque lo acompaña de otro.
+
+**Lectura:** la diferencia entre versiones en el criterio de restricciones es **una ejecución de 21**; no muestra que v5 sea peor. Lo que sí muestra son dos fallos del sistema que comparten las dos versiones (1 y 2) y tres problemas de definición de los casos (3, 4 y S06). Según el plan, como v5 no cumple, entra la Fase 5.
 
 ## 6. Qué falló y cómo se corrigió
 
@@ -82,9 +164,17 @@ Además el orden está **barajado de forma estable** (por caso), no por puntaje,
 - **El orden de las casillas.** La prueba de ida y vuelta del archivo de validación asumía el orden alfabético y falló porque el archivo sale barajado a propósito; la expectativa dejó de depender del orden.
 - **Las regex de los casos y las mayúsculas.** La primera versión pasaba la expresión por `toLowerCase()`, lo que rompe clases como `\S` o `\D`; ahora solo se quitan las tildes y se usa la bandera `i`.
 
+**4b (`T-0042`):**
+
+- **Supuse que la cuota de embeddings contaba por lote.** Cuenta por libro: el índice local se cortó en 950 (límite diario) y se terminó con la clave de pago, que el usuario creó ese mismo día.
+- **El resolutor exigía el título exacto,** pero el archivo de candidatos lista «Título, Autor», y así lo copió el usuario: 47 agregados sin resolver. Ahora acepta el formato, colapsa espacios y usa el autor solo para desempatar; quedaron 2 con el título escrito distinto, que se resolvieron por ISBN.
+- **El evaluador no aplicaba los límites de los casos R** (leía `caso.filtros`; los casos los guardan en `restricciones`): R01, R03, R05 y R07 daban cero en todo. Con el arreglo, R03 pasó a 1.
+- **Los candidatos salieron con el mismo fallo,** así que 23 libros que el recuperador entrega con filtros nunca se validaron. Se generó un complemento y el importador ganó `--complemento`.
+- **Tres aceptables incumplían el límite de su pregunta** (dos en R07 y uno agregado en R01). Se retiraron con la confirmación del usuario; el importador ahora lo avisa.
+
 ## 7. Esfuerzo
 
-Eventos de esta fase en [`../metrics/events/`](../metrics/events/) (`trace_id: T-0040`).
+Eventos de esta fase en [`../metrics/events/`](../metrics/events/) (`trace_id: T-0040`, `T-0041` y `T-0042`).
 
 ## 8. Fuentes
 

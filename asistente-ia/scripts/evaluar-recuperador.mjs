@@ -6,6 +6,7 @@
  *
  *   node asistente-ia/scripts/evaluar-recuperador.mjs --candidatos   # escribe congelado/candidatos.md
  *   node asistente-ia/scripts/evaluar-recuperador.mjs                # Recall@k y Hit@k con los aceptables validados
+ *   node asistente-ia/scripts/evaluar-recuperador.mjs --complemento # candidatos que la persona no vio (los límites del caso cambian lo que se recupera)
  *   node asistente-ia/scripts/evaluar-recuperador.mjs --dry-run      # qué haría, sin llamar a la API
  *
  * El recuperador es el mismo de producción: filtros del índice → coseno (40) → existencias y precio →
@@ -66,10 +67,22 @@ function inventarioDe(bookIds) {
   return new Map(bookIds.map((id) => [id, inventario.libros.get(id)]).filter(([, l]) => l));
 }
 
+/**
+ * Los casos de «restricciones» guardan el límite que la respuesta debe cumplir (`precioMaximo`, `idioma`);
+ * un modelo que hace bien su trabajo lo manda como filtro de `buscar_libros`, y el recuperador se mide así.
+ * (Medirlos sin filtro daba cero en todos: fallo del evaluador, no del recuperador.)
+ */
+function filtrosDeRestricciones(restricciones) {
+  const filtros = {};
+  if (restricciones?.precioMaximo !== undefined) filtros.precioMaximo = restricciones.precioMaximo;
+  if (restricciones?.idioma !== undefined) filtros.idioma = restricciones.idioma;
+  return filtros;
+}
+
 /** Ranking del índice (40) y lo que de él llega al modelo (hasta 8, con existencias y precio). */
 async function recuperar(caso) {
   const consulta = textoDeConsulta(caso.mensajes);
-  const filtros = caso.filtros ?? {};
+  const filtros = caso.filtros ?? filtrosDeRestricciones(caso.restricciones);
   const similares = buscarSimilares(indice, await vectorDe(consulta), { k: CANDIDATOS_DEL_INDICE, filtro: filtroDelIndice(filtros) });
   const alModelo = seleccionarCandidatos(similares, inventarioDe(similares.map((s) => s.bookId)), filtros, LIBROS_AL_MODELO);
   return { top40: similares.map((s) => s.bookId), al8: alModelo.map((l) => l.bookId), similares, filtros };
@@ -130,4 +143,43 @@ const media = (valores) => valores.filter((v) => v !== null).reduce((s, v, _, a)
 const tabla = medibles.map((r) => ({ caso: r.caso.id, aceptables: r.caso.aceptables.length, 'recall@8': recallEnK(r.al8, r.caso.aceptables, 8), 'recall@40': recallEnK(r.top40, r.caso.aceptables, 40), 'hit@8': hitEnK(r.al8, r.caso.aceptables, 8), 'hit@40': hitEnK(r.top40, r.caso.aceptables, 40) }));
 console.table(tabla);
 console.log(`Promedio sobre ${medibles.length} casos — Recall@8: ${media(tabla.map((t) => t['recall@8'])).toFixed(2)} · Recall@40: ${media(tabla.map((t) => t['recall@40'])).toFixed(2)} · Hit@8: ${media(tabla.map((t) => t['hit@8'])).toFixed(2)} · Hit@40: ${media(tabla.map((t) => t['hit@40'])).toFixed(2)}`);
+
+// Diagnóstico de sesgo: libros que llegan al modelo con los filtros del caso y que la persona nunca vio.
+const archivoCandidatos = join(CARPETA_CONGELADO, 'candidatos.md');
+const archivoComplemento = join(CARPETA_CONGELADO, 'candidatos-complemento.md');
+const identidad = (id) => inventario.libros.get(id)?.isbn ?? id;
+/** `bookId` de cada caso en un archivo de candidatos, por identidad (ISBN): el archivo original quitó duplicados por ISBN. */
+function vistosEn(archivo) {
+  const porCaso = new Map();
+  if (!existsSync(archivo)) return porCaso;
+  for (const bloque of readFileSync(archivo, 'utf8').split(/^## /m).slice(1)) {
+    porCaso.set(bloque.slice(0, bloque.indexOf(' ')), new Set([...bloque.matchAll(/`([0-9a-f-]{36})`/g)].map((m) => identidad(m[1]))));
+  }
+  return porCaso;
+}
+if (existsSync(archivoCandidatos)) {
+  const generandoComplemento = argumentos.has('--complemento');
+  const vistos = vistosEn(archivoCandidatos);
+  const vistosComplemento = generandoComplemento ? new Map() : vistosEn(archivoComplemento);
+  const sinVer = medibles
+    .map((r) => ({
+      r,
+      sinVer: r.al8.filter((id) => {
+        const clave = identidad(id);
+        return !vistos.get(r.caso.id)?.has(clave) && !vistosComplemento.get(r.caso.id)?.has(clave) && !r.caso.aceptables.some((a) => identidad(a) === clave);
+      }),
+    }))
+    .filter((x) => x.sinVer.length > 0);
+  console.log(`Libros entregados al modelo que la persona no ha visto (no se pueden contar como acierto ni como error): ${sinVer.map((x) => `${x.r.caso.id}:${x.sinVer.length}`).join(' ') || 'ninguno'}`);
+  if (generandoComplemento) {
+    if (existsSync(archivoComplemento)) {
+      console.error(`Ya existe ${archivoComplemento}: no lo sobrescribo para no perder marcas. Bórralo o renómbralo si de verdad quieres generarlo otra vez.`);
+      process.exit(1);
+    }
+    const bloques = ['# Candidatos complementarios para validar', '', 'Son libros que el recuperador entrega al modelo cuando se aplican los límites de la pregunta (precio, idioma) y que no estaban en la primera lista. Marca con una `x` los que serían una buena respuesta y agrega con `+` los que falten. **Este archivo está fuera de git** (contiene extractos de sinopsis de terceros). Cuando termines, avísame.', ''];
+    for (const x of sinVer) bloques.push(formatearBloqueDeValidacion(x.r.caso, x.sinVer.map(candidatoPara)));
+    writeFileSync(archivoComplemento, bloques.join('\n'));
+    console.log(`Escribí ${archivoComplemento}: ${sinVer.length} preguntas, ${sinVer.reduce((n, x) => n + x.sinVer.length, 0)} candidatos.`);
+  }
+}
 writeFileSync(join(CARPETA_CONGELADO, 'recuperador.json'), JSON.stringify({ generadoEn: new Date().toISOString(), tabla }, null, 2));

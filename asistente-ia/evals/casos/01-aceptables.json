@@ -12,7 +12,12 @@
       "poemas de amor",
       "poesía amor"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "570df309-0b1b-497f-9693-1048dfadc334",
+      "8417b311-cc71-4219-982b-6a70a01cc943",
+      "92cd34a1-c32d-4c96-a4a5-6bda91b10dbd",
+      "b1eaf6dc-8f8a-44d4-b620-a454116cc5c8"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -27,7 +32,10 @@
     "busqueda": [
       "bolaño"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "ac8806c7-4a48-46f5-a458-694a6eab0d53",
+      "ae5af1a5-f50f-4ac0-a0a2-709d4b3f4e22"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -45,7 +53,18 @@
       "crimen",
       "asesin"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "4a4fdddd-7f61-4429-9259-fc8f35aa70d6",
+      "6c0b1a48-bce9-43b6-b2d5-3689fc05e771",
+      "72ff101e-209f-40f3-8086-4d9241fd1aae",
+      "7849ebcc-ef32-4efe-9a3e-09a8df8e4188",
+      "7a12cf48-d032-440a-9c64-a5762c4c57fb",
+      "a056b44d-f09f-478e-9b4f-a8f8aebe775e",
+      "a06f96a0-a287-4635-9a4f-b6fb1a66df47",
+      "a3386bc5-4704-4cae-b4ca-f3184b5d93ac",
+      "b2efa739-3e2e-4466-84c1-a33e7315f129",
+      "cf1afb16-4439-4473-8d7b-fba00d31d65d"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -63,7 +82,16 @@
       "filosofía política",
       "biopolítica"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "2334be41-1473-4c63-b6f1-1ef674162fdc",
+      "4a4ebc5f-a142-42c7-b1f1-d6b868fa9cb6",
+      "4e0d5385-2ce2-4072-bb96-e7425bc1a5b0",
+      "62d48165-cb5f-47d5-8a2f-5473e8f85387",
+      "7d6323ae-d7df-4332-8cec-72099e6dc1e9",
+      "8f8a4059-ef66-4eda-ba63-5376bf5336da",
+      "e3c59a28-ef97-409e-b3a1-966824fecb5f",
+      "f5151403-0a14-418a-97b6-acccda5a0656"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -79,7 +107,25 @@
       "quino",
       "mafalda"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "117d7d35-2751-41f9-8730-983967406b92",
+      "2dd01f1a-35c6-4831-816c-74e425db0497",
+      "3beb005d-3aec-4f31-87dc-5bdded64e0be",
+      "455e8032-2275-45a6-a709-167b342216c0",
+      "64b2462c-6617-46b6-890c-f924996eb4b6",
+      "73bb62ab-07a8-4bd2-b5e7-a02d83e2a3ca",
+      "86154a6e-7619-443f-b7ee-8924ecc59cf9",
+      "aafc0842-38d6-44b9-b269-0071829d6ed4",
+      "b66823c2-78f1-4b02-8276-9054a056ee79",
+      "c0c9ecda-a639-4198-a9d0-4713172febbf",
+      "c40f8a72-50dd-44a1-82ac-35b068f7f44f",
+      "de66ed4c-111c-449c-9e6d-fc8125da9725",
+      "e2007e08-a724-4c1e-899c-b31e13bd3b96",
+      "e82a1f90-1874-4230-9b97-bdb97719fb70",
+      "e9f616e1-4408-417b-89ed-029e89756305",
+      "f961d51d-7a04-4921-afdd-834e9a77cea8",
+      "fd184e8d-0d1d-4c98-a2f1-4f1198c96217"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -96,7 +142,22 @@
       "infantil",
       "álbum ilustrado"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "2410c2d1-5aa4-4612-9608-b57d517c4552",
+      "2a98e9d4-6825-4808-bf95-2321062abf61",
+      "3781448a-7188-4cd9-b6e9-65c28b6a206c",
+      "3edc9db8-94f5-4b68-ab8a-3e5dd077d298",
+      "4d82a15c-3de9-48e6-8bcf-a68e6db634d1",
+      "51206b82-274a-4805-8e03-eb5a78f1ff1b",
+      "644416e4-a8d6-4410-aac4-d9a458a624af",
+      "8658a8fa-0024-4eb7-952a-5b4f6f17723d",
+      "8cc55d18-f33d-4311-82a7-c1d2eb9ff755",
+      "8f049945-5bac-4e61-9d95-017a1fc4ab93",
+      "afd14472-20ec-4379-bae0-5bc94880a495",
+      "b0701c68-3f66-49a4-9689-7db66b67a3ae",
+      "c69bbfd8-5dad-4766-88d8-f0dd6e98062f",
+      "f17be8ce-a2e5-4647-a041-78923d006922"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -112,7 +173,14 @@
       "receta",
       "cocina"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "3fb064c5-d2f9-4851-8775-05ccd46fcff0",
+      "7925e212-1d22-4a25-8175-eef9a7b68910",
+      "a81ca05b-940d-4df9-b0c3-32e858e538cb",
+      "d2fa6385-03a7-4eec-a6d2-c2549b0db859",
+      "d69a38c7-b2a7-4c08-90b6-5edf4724089b",
+      "f0271da1-77f5-41a1-8510-0c71c4fbd921"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -127,7 +195,19 @@
     "busqueda": [
       "feminis"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "031cdc24-b496-45bc-92b4-8108dd9a8db1",
+      "0c2dfffa-4d89-4224-a943-c88380a9f5f4",
+      "1b389609-8813-41fd-8b47-6ac426138b08",
+      "27623b39-c761-479d-8284-99c97534981d",
+      "39cef96a-5adc-4e9b-b288-074af74c451d",
+      "486ff743-7472-4b05-b41d-9d5aebd720cb",
+      "5c50bf44-c4a4-4699-8d67-71ed1dca7fb9",
+      "91c15679-5e56-4eea-80a0-cbd609d73799",
+      "bd930032-3a88-42fb-a947-e88f78a0d40f",
+      "d33cdf0c-0682-4167-ba99-5df56e66a8a7",
+      "f8cb26a3-f241-4d32-9be3-498ed6b4b2e6"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -145,7 +225,19 @@
       "reconciliación",
       "violencia"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "051631ee-16c8-453c-9a4e-597c2affa090",
+      "1a656283-53d5-432d-9402-2e224080786e",
+      "1d802fcf-e505-48d6-937f-e28f1ff313dc",
+      "2ccc6bbb-0004-4ef2-b4c8-3e54f2c0e6cb",
+      "335820a0-f6f0-4144-a76f-23955595a696",
+      "7c0bd836-8326-4459-a280-e5df530eae57",
+      "90bc8715-99be-4da0-a477-3811b21694f6",
+      "cdfbba33-36e0-4bf2-93ba-243a5acc2219",
+      "e40ee48c-675c-4268-a0d2-0e544a6abf3c",
+      "f99d9841-a2e6-4be5-9c77-a6bfca885409",
+      "fb161baa-01e5-4955-a346-2d4c67fd9930"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -164,7 +256,20 @@
       "elfo",
       "hadas"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "0749ba8d-7aee-4124-9790-95ea588076f4",
+      "0c799f0f-f180-48b8-aeae-52ecb90015ac",
+      "1892d4a8-d770-49e9-bcfa-50b73bc1ffd3",
+      "24991872-030f-4584-98aa-cc3dfeb1594d",
+      "4c57bdfa-365d-443e-ad25-20be89cc2485",
+      "4d16b1cc-6d9e-46c6-81a0-3f550fc899b9",
+      "587b4aa4-5b9c-40dd-be45-2730891fab7d",
+      "72b5de0c-caec-48ad-8bfd-841df3b44cba",
+      "752b4639-2773-4293-91a7-16edcaf26b0f",
+      "7efffb78-d288-4131-b7a3-2e30ee87c4d4",
+      "aa0e619d-1c30-49ac-8e6d-026bbd85977e",
+      "eb8ddc93-ca98-4e8e-9e09-88e82db22b44"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -182,7 +287,14 @@
       "nazi",
       "segunda guerra"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "743d90c1-0a51-41cb-93b2-f0d2e947b23e",
+      "92d7ee26-ef8f-4ae7-8df0-295f53205a79",
+      "a924cb87-6155-4017-87e8-e16e55423c83",
+      "bdd84071-3b11-4ef1-bda9-e36f53d3f12c",
+      "ee9c8430-c719-4731-8d96-4b4883abfc89",
+      "f925a7a7-d3da-43c1-9bcb-01a2f6ed2f2f"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -199,7 +311,19 @@
       "poemas",
       "colombiano"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "10b7fd4f-caf7-4e18-b9b7-c5beaf3d88ee",
+      "2eed535c-38ac-474c-81bd-aaf0054114f6",
+      "4b2e43ba-2444-4957-834c-d970b29360c9",
+      "4e4f401e-8c93-43eb-87f9-914741d470b8",
+      "55cd7ecc-1a4c-460e-9ce0-13ec955053fc",
+      "5abf9467-9bca-4974-935f-f557bd5ce5f7",
+      "676134d3-8f9f-4868-9940-7b07fe773e2d",
+      "70d116da-0980-405a-95a5-123a5542423b",
+      "77640b51-5044-44b7-94cb-78725ae1d018",
+      "87d73981-2747-4778-95cc-0f6483a87eb0",
+      "e3482bec-f170-4496-8c4f-5962ea55e61c"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -217,7 +341,16 @@
       "algoritmo",
       "digital"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "0c2e5c5b-4c5c-4e6e-86eb-e2e5476f8e65",
+      "20175a3d-aedf-4f95-98cf-2ecff4ef4652",
+      "3ad90f34-b24c-43b7-a11a-a7cb218f14e3",
+      "4c686d1e-7261-4a86-9964-9f5ad671ad00",
+      "902c4b33-45a2-4120-9c58-a38978e8edff",
+      "93c9a27c-4773-48b9-93ea-161793969be0",
+      "ce73b326-0c7b-4cdc-90a7-fe68491c0143",
+      "e753509d-40da-4022-95f3-a452f08970a9"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -236,7 +369,39 @@
       "lou reed",
       "canción"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "06305a7f-cc40-4a42-af3e-1502a59c6c68",
+      "079cc2c3-e63c-40d1-a0e9-abe89422d278",
+      "1fac773b-e759-40dd-996d-13f8e0c7767c",
+      "2530f65a-a419-4345-99bb-8aaa51b65ce0",
+      "402ea66d-f361-4940-846f-4ddc8f2adfad",
+      "5b6cee70-a713-49c1-9767-7cd9557f38de",
+      "61466671-6a46-4984-93c0-71dcb44c03dc",
+      "67f6ef78-dfd1-42fb-b383-96e2d3dff717",
+      "6b217a08-df7d-45de-8063-7b131736eee1",
+      "77a0a8a3-b1d7-4958-af44-a68e41940243",
+      "77c5f85e-0e7a-485d-8940-496de58027d5",
+      "789ebd45-56d4-4039-a0a4-d72a4ffaf2b6",
+      "7c8a5633-efa8-44ba-a1e5-5f4d1c42ed34",
+      "7f7c98c6-e9ad-41f0-a595-c8cefd6ae2f1",
+      "90d7e93c-b384-407b-8976-24eca41a8666",
+      "97b4204d-94f7-45f4-8381-7887c6319bdd",
+      "ad479abc-d808-428d-8322-3cbd2b2e67e6",
+      "af40a94f-21aa-48fc-8b8c-8e3038115e18",
+      "b3f88a08-4b59-4766-a41f-08d0a04a5547",
+      "b4459b1d-e07a-4c9e-986c-5c5681ea55b7",
+      "bfc3d65a-f393-4dbf-b4b3-38c24c30ed9e",
+      "c101d562-a894-416a-8ab6-9ff156805708",
+      "c1a774aa-dfa8-4794-a327-5c6a1f50f291",
+      "d07aece4-d5b7-49ec-b976-2ab48e3db5a4",
+      "d0de8f02-b2d2-4b0f-b380-dcbf3b9f97c0",
+      "da29a50a-f24d-4639-bbe6-88a508fe639e",
+      "df8e1aba-70d2-4781-ad12-48752f989dfb",
+      "e44d2742-19db-41de-912c-695149612016",
+      "eae548a1-68d6-4e04-92c0-4b0593957217",
+      "f2adc24a-b12b-4210-b31c-30f80b37b956",
+      "f55b9945-826e-463b-8ff2-652af4ded671"
+    ],
     "esperaSinResultados": false
   },
   {
@@ -257,7 +422,21 @@
       "babel",
       "gógol"
     ],
-    "aceptables": null,
+    "aceptables": [
+      "052c0387-962a-457a-8a02-ba7f23cf54c6",
+      "0924de43-b280-4d27-aea1-a6f008a33adf",
+      "0d2ce993-6922-41d2-a4bf-f1122cde511b",
+      "34a02063-fc43-4548-87c9-6a45185594b7",
+      "3a2b679a-6050-4e6c-ac1d-2dbdd8696c2e",
+      "4fba0553-441a-46ab-a1e0-32d4b0f07a24",
+      "55cee22a-0ac3-4816-a0f8-e1697f172752",
+      "5cf25071-d3df-4d7e-a95d-f880f6a9c58d",
+      "84ad0e9b-a8f2-4b0c-ad2f-88f46d9d5750",
+      "86e14148-2454-4974-bb72-7ac48f67fa5e",
+      "950401e2-2091-4465-8ae4-c7c9447ced93",
+      "9fddf372-01a9-488f-b384-d2cd0cfa1ac8",
+      "be5af6a1-8c82-4e6d-9892-d8333186c673"
+    ],
     "esperaSinResultados": false
   }
 ]

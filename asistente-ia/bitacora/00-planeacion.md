@@ -110,3 +110,29 @@ Minutos de agente registrados por día: lun 16 → 22 · mar 17 → 57 · mié 1
 
 **Cambio respecto al calendario del 19/11 por la mañana:** ninguna fecha de producción se mueve (sigue el 27/11, con un día de holgura el 26). El viernes 20 queda como el día que decide si hay holgura: si la validación llega ese día y 4b pasa los criterios a la primera, la Fase 6 empieza el lunes sin esperar y producción puede adelantarse al jueves 26/11.
 
+### Cierre de `T-0042` (Fase 4b) — viernes 20/11/2026, 13:58
+
+| Hito | Día de la propuesta | Fecha real | Observación |
+|---|---|---|---|
+| Índice local y candidatos (resto de 4a) | 4 (jue 19) | jue 19/11, 13:04 a 13:40 | La cuota gratuita de embeddings cuenta cada libro: se detuvo en 950 de 2.541 |
+| Cuenta de pago para `production` | no previsto | jue 19/11, 16:24 | La creó el usuario; el índice local se completó con esa clave |
+| Ejecutor de 4b | 4 (jue 19) | jue 19/11 | Probado con un proveedor simulado; la primera corrida real fue el 20/11 |
+| Validación de candidatos | 4 (vie 20 en el calendario del 19/11) | vie 20/11, hasta las 12:41 | La hizo el usuario: 22 preguntas, 351 candidatos |
+| Complemento de validación | no previsto | vie 20/11, 12:49 a 13:35 | 23 libros que no se habían visto por un fallo del evaluador (bitácora 06 §6) |
+| Línea base v5 contra v4 | 4 | vie 20/11, 13:36 a 13:42 | 276 ejecuciones en 5,7 minutos; **v5 no cumple** (restricciones 86 %) |
+
+Minutos de agente registrados por día: jue 19 → 61 (23 hasta 4a y 38 después) · vie 20 → 42 (incluye 11 de la evaluación de dos fuentes de scraping, Planeta de Libros y Casa del Libro, ajena al asistente). **Lectura:** la 4b terminó en el día previsto. Lo que no estaba previsto fue el tope diario de la cuota gratuita, resuelto por el usuario con la cuenta de pago en dos horas, y los dos fallos del evaluador, que costaron una ronda más de validación. Ninguno movió el calendario.
+
+**Calendario recalculado:**
+
+| Fecha | Trabajo | Depende del usuario |
+|---|---|---|
+| Vie 20/11 (tarde) | PR de 4b a `staging`; al terminar su despliegue, PR pequeño de Casa del Libro como fuente de portadas por ISBN (fuera del asistente); la Fase 5 empieza en local | Fusionar 4b y Casa del Libro |
+| Lun 23/11 | Fase 5 (`T-0050`): guarda contra «anuncia y no actúa», precio antes del top-40, casos redefinidos, v6 si hace falta y nueva corrida; Fase 6, parte 1 | Revisar en `staging` y fusionar |
+| Mar 24/11 | Fase 6, parte 2 | Verificar en `staging` |
+| Mié 25/11 | Fase 7: chat en `staging` | Revisarlo |
+| Jue 26/11 | Holgura | |
+| **Vie 27/11** | **Producción** | Fusionar y verificar |
+| Lun 30/11 – vie 4/12 | 4c, Fases 8, 9 y 10 | Azure, 20 respuestas, video |
+
+**Cambio respecto al calendario del 19/11:** producción no se mueve (27/11), pero se pierde la opción de adelantarla al jueves 26, que dependía de que la 4b pasara a la primera. La Fase 5 ocupa el lugar que el calendario ya le tenía reservado el lunes 23, junto con la parte 1 de la Fase 6. Si la Fase 5 se alarga más de un día, la holgura del jueves 26 la absorbe.

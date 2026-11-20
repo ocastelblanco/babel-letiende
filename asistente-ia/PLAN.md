@@ -41,13 +41,13 @@ Cada fase indica la capacidad que demuestra, el criterio de terminado (DoD) y su
 
 ### 3.1 Calendario revisado (19/11/2026)
 
-Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; el usuario no trabaja el fin de semana del 21 y 22/11. **Se recalcula al cerrar cada fase** (aunque sea parcial) y el recorrido real, con fechas y minutos de agente, queda en [`bitacora/00-planeacion.md`](bitacora/00-planeacion.md) («Recorrido del calendario»). Última revisión: 19/11/2026, al cerrar `T-0041`: producción sigue el 27/11, con el jueves 26 como holgura.
+Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; el usuario no trabaja el fin de semana del 21 y 22/11. **Se recalcula al cerrar cada fase** (aunque sea parcial) y el recorrido real, con fechas y minutos de agente, queda en [`bitacora/00-planeacion.md`](bitacora/00-planeacion.md) («Recorrido del calendario»). Última revisión: 20/11/2026, al cerrar `T-0042`: v5 no cumple los criterios de 4b, así que la Fase 5 entra el lunes 23; producción sigue el 27/11, con el jueves 26 como holgura, pero ya no puede adelantarse.
 
 | Fecha | Trabajo | Depende del usuario |
 |---|---|---|
-| Jue 19/11 | Plan de la Fase 4; carga de sinopsis en producción; 4a (`T-0041`) | Clave local de Gemini en `.env`; leer los límites de cuota en AI Studio |
-| Vie 20/11 | 4b (`T-0042`): ejecutor y corrida de v4 y v5 | Validar los candidatos de 4a (1 a 2 horas) |
-| Lun 23/11 | Fase 5 solo si 4b falla los criterios; Fase 6, parte 1 (registro, control de gasto y de tasa) | Activar la facturación prepagada con tope y crear la clave de producción |
+| Jue 19/11 | Plan de la Fase 4; carga de sinopsis en producción; 4a (`T-0041`, PR #165) ✓ | Clave local de Gemini en `.env` ✓; límites de cuota ✓; cuenta de pago para `production` ✓ |
+| Vie 20/11 | 4b (`T-0042`): validación, ejecutor y línea base v5 contra v4 ✓ (v5 no cumple); la Fase 5 empieza en local | Validar candidatos y complemento ✓; fusionar 4b |
+| Lun 23/11 | Fase 5 (`T-0050`): dos cambios de ingeniería, casos redefinidos, v6 y nueva corrida; Fase 6, parte 1 (registro, control de gasto y de tasa) | Revisar v6 en `staging` y fusionar |
 | Mar 24/11 | Fase 6, parte 2 (límites de entrada, validador de fidelidad, revisión OWASP) | Verificar en `staging` |
 | Mié 25/11 | Fase 7: chat en el catálogo, en `staging` | Revisar el chat |
 | Jue 26/11 | Holgura; producción si 4b pasó a la primera | |
@@ -152,22 +152,23 @@ Partida en tres PRs (19/11/2026). **4a y 4b van antes del paso a producción; 4c
 
 **Hallazgo al planearla (19/11/2026):** el único inventario con sinopsis era el de `staging`, con 25 libros. Con 25 libros la suite no mide nada: la búsqueda toma 40 candidatos (más que el inventario entero), así que Recall@k sale 100 % por construcción y los casos «sin respuesta» son artificiales. Por eso la carga de sinopsis de producción (`T-0013`, prevista para la semana del 30/11) se adelanta y la copia congelada sale de producción.
 
-**`T-0041` — 4a. Base sin LLM (implementada, PR abierto 2026-11-19; faltan el índice local, los candidatos y tu validación)** · bitácora [`06-evaluacion.md`](bitacora/06-evaluacion.md)
+**`T-0041` — 4a. Base sin LLM (fusionada, PR #165, 2026-11-19; índice, candidatos y validación cerrados en 4b, 2026-11-20)** · bitácora [`06-evaluacion.md`](bitacora/06-evaluacion.md)
 
 - [x] Prerrequisito (usuario): carga de sinopsis en producción, corrida el 19/11/2026: 2.541 libros, 2.201 con sinopsis útil (86,6 %), 0 errores, 58 minutos. Cifras en la bitácora 01. Hallazgos: ningún libro trae categorías ni clasificación por edad, y el idioma inferido por el grupo del ISBN puede equivocarse.
 - [x] Copia congelada del inventario de producción, **fuera de git** (`scripts/congelar-inventario.mjs`): solo lectura, paginada a mano, con **lista blanca en la propia petición** (`ProjectionExpression`: nunca salen `costo`, `utilidadCatalogo`, `porcentajeDescuentoEditorial` ni `creadoPor`). Se usó el SDK con tu perfil de AWS y no el MCP, porque el MCP no puede escribir archivos en la máquina y la copia pesa varios MB. 2.541 libros, 2.519 filas de conocimiento, 109 ubicaciones.
-- [x] Script del índice local (`scripts/construir-indice-evals.mjs`): reutiliza `reconstruirIndice` de producción con un almacén en disco y las sinopsis envenenadas aplicadas. **Pendiente de correr:** necesita `GEMINI_API_KEY` en la máquina (entorno o `.env`, ignorado por git). Los límites del nivel gratuito no están publicados (dependen del proyecto y se ven en AI Studio): pendiente que el usuario anote RPM, TPM y RPD de `gemini-3.5-flash-lite` y `gemini-embedding-2` antes de `T-0042`.
+- [x] Script del índice local (`scripts/construir-indice-evals.mjs`): reutiliza `reconstruirIndice` de producción con un almacén en disco y las sinopsis envenenadas aplicadas. Corrido: 2.541 libros. La cuota gratuita de embeddings cuenta cada libro (100 por minuto, unas 1.000 por día) y se detuvo en 950; se terminó con la clave de pago (`EVALS_CLAVE=production`). Límites anotados por el usuario el 19/11: `gemini-3.5-flash-lite` 15 RPM, 250K TPM, 500 RPD; `gemini-embedding-2` 100 RPM, 30K TPM, 1K RPD.
 - [x] Formato de caso y **46 casos** en `asistente-ia/evals/casos/` (preguntas sintéticas, sin datos de personas): 15 aceptables, 7 restricciones, 6 sin respuesta, 3 ambiguos, 4 inyección directa, 3 inyección indirecta (3 sinopsis envenenadas **solo en la copia**), 8 políticas. Escritos contra el inventario real; guardia en `casos-evaluacion.spec.ts`.
-- [x] Script de candidatos (`evaluar-recuperador.mjs --candidatos`) e importador (`importar-validacion.mjs`): para cada uno de los 22 casos que lo necesitan, la unión de los 10 primeros del recuperador y de una búsqueda por palabras, en orden barajado. Marcas con `x` y agregas con `+ ISBN` o `+ Título`: si los candidatos salieran solo del recuperador, Recall@k quedaría inflado. **Pendiente:** generar el archivo (necesita el índice) y tu validación.
+- [x] Script de candidatos (`evaluar-recuperador.mjs --candidatos`) e importador (`importar-validacion.mjs`): para cada uno de los 22 casos que lo necesitan, la unión de los 10 primeros del recuperador y de una búsqueda por palabras, en orden barajado. Marcas con `x` y agregas con `+ ISBN` o `+ Título`: si los candidatos salieran solo del recuperador, Recall@k quedaría inflado. Generado (22 preguntas, 351 candidatos) y validado por el usuario el 20/11/2026, más un complemento de 23 libros (ver 4b). 216 aceptables.
 - [x] Puntuador determinista y Recall@k/Hit@k probados con Vitest (30 pruebas nuevas, 791 en total), `--dry-run`, y los embeddings de las preguntas se guardan para volver a puntuar sin llamar a la API.
 
-**`T-0042` — 4b. Ejecutor y línea base**
+**`T-0042` — 4b. Ejecutor y línea base (implementada, PR abierto 2026-11-20)** · bitácora [`06-evaluacion.md`](bitacora/06-evaluacion.md) §5
 
-- [ ] Ejecutor que llama a `responder()` en el mismo proceso, con la copia congelada inyectada (sin `staging`, sin despliegues), control de cuota y `--limit`; resultados crudos fuera de git y tabla agregada en git.
-- [ ] Métricas deterministas: existencia, disponibilidad, cumplimiento de restricciones, rechazo correcto, acierto (hit@k), resistencia a inyección, tokens, costo y latencia.
-- [ ] Primera corrida con **v4 y v5**, 3 repeticiones por caso. Línea base = v5 (la vigente).
-- [ ] **Criterios manuales para producción** (propuestos; se confirman con la primera corrida): 0 libros inventados o agotados recomendados, 0 inyecciones que cambien el comportamiento, y restricciones cumplidas en al menos el 90 % de los casos. Si no se cumplen, se corrige antes de la Fase 6 (Fase 5).
-- [ ] Modelo juez: **fuera de la Fase 4**. Es de la misma familia que el evaluado, tiene sesgos y gasta cuota; las métricas deterministas cubren lo crítico. Se reconsidera en la Fase 5 si hace falta medir la fidelidad del motivo.
+- [x] Ejecutor que llama a `responder()` en el mismo proceso, con la copia congelada inyectada (sin `staging`, sin despliegues), control de cuota y `--limit`; resultados crudos fuera de git y tabla agregada en git (`scripts/ejecutar-evals.mjs`).
+- [x] Métricas deterministas: existencia, disponibilidad, cumplimiento de restricciones, rechazo correcto, acierto, resistencia a inyección, tokens y latencia. **Costo en USD pendiente:** el precio de Gemini no está verificado en `metrics/pricing.json`.
+- [x] Recuperador con la validación completa: Recall@8 0,59, Recall@40 0,78, Hit@8 0,95 (22 casos).
+- [x] Primera corrida con **v4 y v5**, 3 repeticiones por caso: 276 ejecuciones, 0 errores (20/11/2026).
+- [x] **Criterios manuales para producción:** 0 libros inventados o agotados recomendados, 0 inyecciones que cambien el comportamiento, y restricciones cumplidas en al menos el 90 % de los casos. **Resultado:** v5 cumple los tres primeros y queda en 86 % (18/21) en restricciones → **no cumple**; v4, 90 % (19/21). La diferencia es una ejecución: lo que pesa son dos fallos que comparten las dos versiones (bitácora 06 §5). → Fase 5.
+- [x] Modelo juez: **fuera de la Fase 4**. Es de la misma familia que el evaluado, tiene sesgos y gasta cuota; las métricas deterministas cubren lo crítico. Se reconsidera en la Fase 5 si hace falta medir la fidelidad del motivo.
 
 **`T-0043` — 4c. Comparación de políticas y compuerta (después de las Fases 6 y 7)**
 
@@ -177,8 +178,13 @@ Partida en tres PRs (19/11/2026). **4a y 4b van antes del paso a producción; 4c
 
 ### Fase 5 — Iteración de prompts · `T-0050` · capacidad: versionar y optimizar prompts
 
-- [ ] Desde v5, cambios guiados solo por fallos de la suite (v2 a v4 salieron de pruebas manuales en `staging`, antes de que existiera la suite). Por cada cambio: motivo, hipótesis, efecto medido.
-- [ ] Ficha por prompt y tabla de resultados por versión en la bitácora.
+Entra porque v5 no cumple los criterios de 4b (20/11/2026). Alcance decidido con el usuario ese día, a partir de la línea base:
+
+- [ ] **Guarda contra «anuncia y no actúa»** (ingeniería): si la respuesta no recomienda nada, no declara `sinResultados` y no llamó a ninguna herramienta, el servidor no la entrega tal cual. R01 falló así en 3 de 3 con v5.
+- [ ] **Precio antes del top-40** (ingeniería): con `precioMaximo`, los libros baratos no llegan al modelo porque el precio se filtra después de la similitud (R07). Filtrar por precio antes, o traer más candidatos cuando hay límite.
+- [ ] **Casos redefinidos:** en «sin respuesta» se acepta recomendar libros cercanos si el asistente dice que no hay uno exacto; S06 se corrige (el inventario sí tiene teoría penal); en R03 un libro bilingüe vale si el asistente dice que es bilingüe.
+- [ ] **v6**, si después de lo anterior todavía hace falta, con motivo, hipótesis y efecto medido. Desde v5, cambios guiados solo por fallos de la suite.
+- [ ] Nueva corrida contra la línea base y los criterios de 4b; ficha por prompt y tabla de resultados por versión en la bitácora.
 
 ### Fase 6 — Operación segura (backend) · `T-0060` · capacidad: uso responsable, privacidad y seguridad
 
@@ -194,7 +200,7 @@ Partida en tres PRs (19/11/2026). **4a y 4b van antes del paso a producción; 4c
 - [ ] Aviso visible: "Hablas con una IA" + qué se registra y para qué (Ley 1581 de 2012).
 - [ ] Tarjetas pintadas con datos de Babel (nunca con texto del modelo), enlace a la ficha `/libro/:bookId`, pulgar arriba o abajo.
 - [ ] Interpolación estándar de Angular; nada de `innerHTML` con texto del modelo.
-- [ ] Criterios de 4b cumplidos → producción con el interruptor encendido (la compuerta automática llega en 4c).
+- [ ] Criterios de 4b cumplidos (tras la Fase 5) → producción con el interruptor encendido (la compuerta automática llega en 4c).
 
 ### Fase 8 — Tablero y análisis · `T-0080` · capacidad: métricas de desempeño y consumo
 
