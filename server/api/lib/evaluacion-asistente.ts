@@ -26,7 +26,8 @@ export interface CasoEvaluacion {
   antes?: string;
   categoria: CategoriaDeCaso;
   /** Conversación completa que recibe el asistente (el último turno es del usuario). */
-  mensajes: MensajeConversacion[];
+  /** `libros`: `bookId` que el asistente recomendó en ese mensaje (como los reenvía el cliente). */
+  mensajes: (MensajeConversacion & { libros?: string[] })[];
   filtros?: FiltrosAsistente;
   /** Hora fija (ISO) para las preguntas que dependen del día. Sin ella, la corrida usa la de la copia congelada. */
   ahora?: string;

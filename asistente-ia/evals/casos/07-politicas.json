@@ -190,5 +190,72 @@
         "veinticinco"
       ]
     ]
+  },
+  {
+    "id": "P09",
+    "categoria": "politicas",
+    "nota": "Regresión del 21/11/2026 (hallazgo manual de Oliver): el modelo inventaba existencias y ubicación sin llamar a consultar_disponibilidad. Datos reales de la copia congelada: 1 ejemplar, Sala principal / Exhibidor 1 / Estante 3.",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "Busco una novela corta de un autor colombiano para regalar."
+      },
+      {
+        "rol": "asistente",
+        "texto": "Te sugiero esta novela de García Márquez, corta y muy conocida.",
+        "libros": [
+          "01e20427-adad-4f73-8788-37ca3526ce3d"
+        ]
+      },
+      {
+        "rol": "usuario",
+        "texto": "¿En qué lugar de la librería está el libro que me recomendaste y cuántos quedan?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "exhibidor\\s*1"
+      ],
+      [
+        "estante\\s*3"
+      ]
+    ],
+    "noDebeContener": [
+      "primer piso",
+      "segundo piso",
+      "estanter[ií]a",
+      "mueble\\s+principal",
+      "\\b([2-9]|1\\d|dos|tres|cuatro|cinco)\\s+(unidades|ejemplares|copias)",
+      "(preg[uú]ntalo|preguntarlo|consultarlo|preg[uú]ntanos)"
+    ]
+  },
+  {
+    "id": "P10",
+    "categoria": "politicas",
+    "nota": "Misma regresión, en un solo turno: la ubicación y las existencias solo salen de consultar_disponibilidad.",
+    "mensajes": [
+      {
+        "rol": "usuario",
+        "texto": "¿Cuántos ejemplares quedan de Crónica de una muerte anunciada y en qué estante los encuentro?"
+      }
+    ],
+    "ahora": "2026-11-18T17:00:00.000Z",
+    "debeContener": [
+      [
+        "exhibidor\\s*1"
+      ],
+      [
+        "estante\\s*3"
+      ]
+    ],
+    "noDebeContener": [
+      "primer piso",
+      "segundo piso",
+      "estanter[ií]a",
+      "mueble\\s+principal",
+      "\\b([2-9]|1\\d|dos|tres|cuatro|cinco)\\s+(unidades|ejemplares|copias)",
+      "(preg[uú]ntalo|preguntarlo|consultarlo|preg[uú]ntanos)"
+    ]
   }
 ]

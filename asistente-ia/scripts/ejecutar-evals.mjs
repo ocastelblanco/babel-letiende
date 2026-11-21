@@ -246,7 +246,7 @@ console.log(`Resultados crudos: ${archivo} (${hechas.size} ya hechos). Índice: 
 // --- Corrida ---------------------------------------------------------------------------------------
 async function ejecutarUno(caso, version, repeticion) {
   const ahoraFijo = caso.ahora ? Date.parse(caso.ahora) : null;
-  const peticion = validarPeticion({ mensajes: caso.mensajes.map((m) => ({ rol: m.rol, texto: m.texto })), filtros: caso.filtros ?? {} });
+  const peticion = validarPeticion({ mensajes: caso.mensajes.map((m) => ({ rol: m.rol, texto: m.texto, ...(m.libros ? { libros: m.libros } : {}) })), filtros: caso.filtros ?? {} });
   for (let intento = 0; ; intento += 1) {
     try {
       return { respuesta: await responder(dependenciasDe(version, ahoraFijo), peticion), error: null };

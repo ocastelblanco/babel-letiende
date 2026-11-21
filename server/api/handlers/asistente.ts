@@ -8,12 +8,15 @@ import {
   MAXIMO_CARACTERES_CUERPO,
   TEXTO_BLOQUEADO,
   TEXTO_DEMORA,
+  TEXTO_SIN_CONFIRMAR,
   TEXTO_SIN_RESULTADOS,
+  afirmaDatosDeInventario,
   anunciaSinActuar,
   cargarPrompt,
   filtroDelIndice,
   libroParaModelo,
   motivoParaBuscar,
+  pideDatosDeInventario,
   mensajesParaModelo,
   seleccionarCandidatos,
   textoDeConsulta,
@@ -124,6 +127,11 @@ export interface RespuestaAsistente {
      * búsqueda sin hacerla (`anuncio`) o porque dijo «no hay» sin haber buscado (`sin-resultados`).
      */
     busquedaForzada: 'anuncio' | 'sin-resultados' | null;
+    /**
+     * El servidor obligó al modelo a llamar `consultar_disponibilidad` porque su respuesta daba existencias
+     * o ubicación sin haberla consultado (datos que el modelo no tiene en el contexto).
+     */
+    disponibilidadForzada: boolean;
   };
 }
 
@@ -137,6 +145,8 @@ const MAXIMO_TOKENS_SALIDA = 2048;
  * 18/11/2026). Una vuelta más de herramientas solo se intenta si queda tiempo para ella y para la respuesta.
  */
 const LIMITE_PARA_OTRA_VUELTA_MS = 14_000;
+/** Libros recomendados antes que se releen de la base por petición (los más recientes caben de sobra en 9 mensajes). */
+const MAXIMO_LIBROS_RECOMENDADOS_ANTES = 6;
 
 interface Busqueda {
   candidatos: LibroDeInventario[];
@@ -242,6 +252,23 @@ async function ejecutarLlamada(
   }
 }
 
+/**
+ * El historial trae solo texto. De los mensajes del asistente se recogen los libros que recomendó (los `bookId`
+ * que el cliente reenvía), se LEEN DE LA BASE (nunca se confía en lo que diga el cliente: título y autor salen de
+ * ahí) y viajan como bloque de datos del último turno, para que «el libro que me recomendaste» se pueda
+ * resolver y consultar con `consultar_disponibilidad`.
+ */
+async function librosRecomendadosAntes(
+  dependencias: DependenciasAsistente,
+  peticion: PeticionAsistente,
+): Promise<{ bookId: string; titulo: string; autor: string }[]> {
+  const ids = [...new Set((peticion.librosPorMensaje ?? []).flat())].slice(0, MAXIMO_LIBROS_RECOMENDADOS_ANTES);
+  const libros = await Promise.all(ids.map((id) => dependencias.leerLibro(id)));
+  return libros
+    .filter((libro): libro is LibroDeInventario => libro !== null)
+    .map(({ bookId, titulo, autor }) => ({ bookId, titulo, autor }));
+}
+
 export async function responder(
   dependencias: DependenciasAsistente,
   peticion: PeticionAsistente,
@@ -276,6 +303,11 @@ export async function responder(
   let reintentoFinal = false;
   let busquedaForzada: 'anuncio' | 'sin-resultados' | null = null;
   let forzarBusqueda = false;
+  let disponibilidadForzada = false;
+  let forzarDisponibilidad = false;
+  let vecesForzadaDisponibilidad = 0;
+  const ultimoDeLaPersona = peticion.mensajes[peticion.mensajes.length - 1].texto;
+  const preguntaPorInventario = pideDatosDeInventario(ultimoDeLaPersona);
 
   const meta = (extra: Partial<RespuestaAsistente['meta']>): RespuestaAsistente['meta'] => ({
     versionPrompt: prompt.version,
@@ -292,6 +324,7 @@ export async function responder(
     tiempoAgotado: false,
     reintentoFinal,
     busquedaForzada,
+    disponibilidadForzada,
     ...extra,
   });
 
@@ -301,15 +334,16 @@ export async function responder(
   }
 
   const librosIniciales = await paraModelo(dependencias, inicial.candidatos);
-  const generar = async (conHerramientas: boolean, forzar = false): Promise<ResultadoGeneracion> => {
+  const recomendadosAntes = await librosRecomendadosAntes(dependencias, peticion);
+  const generar = async (conHerramientas: boolean, forzar: string[] | null = null): Promise<ResultadoGeneracion> => {
     const resultado = await proveedor.generarJson({
       instrucciones: prompt.instrucciones,
-      mensajes: mensajesParaModelo(peticion.mensajes, librosIniciales, ahora(), politicasParaModelo(dependencias.politicas)),
+      mensajes: mensajesParaModelo(peticion.mensajes, librosIniciales, ahora(), politicasParaModelo(dependencias.politicas), recomendadosAntes),
       esquemaSalida: ESQUEMA_SALIDA,
       maximoTokensSalida: MAXIMO_TOKENS_SALIDA,
       nivelPensamiento: 'low',
       ...(conHerramientas ? { herramientas: HERRAMIENTAS } : {}),
-      ...(conHerramientas && forzar ? { forzarHerramientas: ['buscar_libros'] } : {}),
+      ...(conHerramientas && forzar !== null ? { forzarHerramientas: forzar } : {}),
       ...(rondasHechas.length > 0 ? { rondas: rondasHechas } : {}),
     });
     tokensGeneracionEntrada += resultado.tokensEntrada;
@@ -330,9 +364,37 @@ export async function responder(
         meta: meta({ tiempoAgotado: true }),
       };
     }
-    generacion = await generar(puedeUsarHerramientas, forzarBusqueda);
+    generacion = await generar(
+      puedeUsarHerramientas,
+      forzarDisponibilidad
+        ? // Si el libro no está en la lista, hay que poder buscarlo antes de consultarlo.
+          herramientasLlamadas.includes('buscar_libros')
+          ? ['consultar_disponibilidad']
+          : ['consultar_disponibilidad', 'buscar_libros']
+        : forzarBusqueda
+          ? ['buscar_libros']
+          : null,
+    );
     forzarBusqueda = false;
+    forzarDisponibilidad = false;
     if (generacion.llamadas.length === 0 || !puedeUsarHerramientas) {
+      // Guarda de existencias y ubicación (21/11/2026): esos datos solo salen de `consultar_disponibilidad`.
+      // Si la persona los pidió, o la respuesta los da (inventados, porque el modelo no los tiene), sin haber
+      // llamado la herramienta, se repite la generación obligándolo a consultarla (máximo dos veces: la primera
+      // puede ser una búsqueda del libro).
+      if (
+        puedeUsarHerramientas &&
+        vecesForzadaDisponibilidad < 2 &&
+        !herramientasLlamadas.includes('consultar_disponibilidad') &&
+        !generacion.bloqueado &&
+        !generacion.truncado &&
+        (preguntaPorInventario || afirmaDatosDeInventario(generacion.texto))
+      ) {
+        disponibilidadForzada = true;
+        forzarDisponibilidad = true;
+        vecesForzadaDisponibilidad += 1;
+        continue;
+      }
       // Guarda de la Fase 5: si anuncia una búsqueda sin hacerla, o dice «no hay» sin haber buscado en
       // este turno, se repite la generación UNA vez obligándolo a llamar `buscar_libros`.
       const motivo: ReturnType<typeof motivoParaBuscar> =
@@ -397,6 +459,15 @@ export async function responder(
       return respuestaBloqueada();
     }
     validada = validarFinal(generacion);
+  }
+  if (!herramientasLlamadas.includes('consultar_disponibilidad') && afirmaDatosDeInventario(generacion.texto)) {
+    // Ni la guarda pudo obligarlo a consultar (sin tiempo o rondas): no se entrega un dato inventado.
+    return {
+      texto: TEXTO_SIN_CONFIRMAR,
+      recomendaciones: [],
+      sinResultados: false,
+      meta: meta({ descartados: validada.descartados }),
+    };
   }
   if (validada.recomendaciones.length === 0 && anunciaSinActuar(generacion.texto)) {
     // Sigue prometiendo una búsqueda que ya no va a hacer: no se entrega así.
