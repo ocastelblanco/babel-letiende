@@ -10,6 +10,8 @@ import {
   MAXIMO_TURNOS,
   TEXTO_SIN_RESULTADOS,
   cargarPrompt,
+  afirmaDatosDeInventario,
+  pideDatosDeInventario,
   anunciaSinActuar,
   filtroDelIndice,
   motivoParaBuscar,
@@ -94,7 +96,7 @@ describe('validarPeticion', () => {
       filtros: { idioma: 'es', rol: 'administrador' },
       rol: 'administrador',
     });
-    expect(peticion).toEqual({ mensajes: [usuario('hola')], filtros: { idioma: 'es' } });
+    expect(peticion).toEqual({ mensajes: [usuario('hola')], filtros: { idioma: 'es' }, librosPorMensaje: [[]] });
   });
 });
 
@@ -428,6 +430,96 @@ describe('anunciaSinActuar', () => {
     // Primera corrida de la Fase 5 (R07): anunció la búsqueda y a la vez marcó sinResultados.
     expect(anunciaSinActuar(respuesta('Hola. Déjame revisar con calma si tenemos alguna opción por ese precio.', { sinResultados: true }))).toBe(true);
     expect(anunciaSinActuar('{no es json')).toBe(false);
+  });
+});
+
+describe('validarPeticion — libros recomendados antes', () => {
+  const UUID = '7d2829a5-b463-4a28-80d9-93c6db2b7f6f';
+  const conversacion = (libros: unknown) => ({
+    mensajes: [usuario('una novela'), { rol: 'asistente', texto: 'Te sugiero esta.', ...(libros === undefined ? {} : { libros }) }, usuario('¿dónde está?')],
+  });
+
+  it('recoge los bookId que el asistente recomendó, mensaje por mensaje', () => {
+    expect(validarPeticion(conversacion([UUID])).librosPorMensaje).toEqual([[], [UUID], []]);
+  });
+
+  it('sin «libros» o con la lista vacía no hay nada que recoger', () => {
+    expect(validarPeticion(conversacion(undefined)).librosPorMensaje).toEqual([[], [], []]);
+    expect(validarPeticion(conversacion([])).librosPorMensaje).toEqual([[], [], []]);
+  });
+
+  it('ignora «libros» en los mensajes de la persona', () => {
+    const peticion = validarPeticion({ mensajes: [{ rol: 'usuario', texto: 'hola', libros: [UUID] }] });
+    expect(peticion.librosPorMensaje).toEqual([[]]);
+  });
+
+  it.each([
+    ['no es lista', UUID],
+    ['demasiados', [UUID, UUID, UUID, UUID]],
+    ['no es texto', [42]],
+    ['formato que no es un bookId', ['a b; DROP TABLE']],
+    ['demasiado largo', ['a'.repeat(65)]],
+  ])('rechaza «libros» inválido: %s', (_nombre, libros) => {
+    expect(() => validarPeticion(conversacion(libros))).toThrow(ErrorPeticion);
+  });
+});
+
+describe('pideDatosDeInventario', () => {
+  it.each([
+    '¿En qué lugar de la librería está el libro que me recomendaste y cuántos quedan?',
+    '¿Cuántos ejemplares quedan de Crónica de una muerte anunciada y en qué estante los encuentro?',
+    'Hay existencias de ese libro?',
+    '¿Dónde lo encuentro?',
+    '¿Dónde está el libro que me recomendaste?',
+  ])('detecta la pregunta por existencias o ubicación: %s', (texto) => {
+    expect(pideDatosDeInventario(texto), texto).toBe(true);
+  });
+
+  it.each([
+    '¿Dónde queda la librería?',
+    '¿Dónde está ubicado Le Tiende?',
+    'Quiero una novela de misterio para regalar',
+    '¿A qué hora abren los sábados?',
+    '¿Cuántos años tiene el protagonista?',
+  ])('no confunde otra pregunta: %s', (texto) => {
+    expect(pideDatosDeInventario(texto), texto).toBe(false);
+  });
+});
+
+describe('afirmaDatosDeInventario', () => {
+  const r = (texto: string) => JSON.stringify({ texto, recomendaciones: [], sinResultados: false });
+
+  it.each([
+    'El libro cuesta 59000 pesos y quedan 5 unidades disponibles. Lo puedes encontrar en el primer piso, en el estante de terror.',
+    'Tenemos 1 ejemplar disponible y lo encuentras en el espacio principal, mueble 2, estante B.',
+    'Nos queda un ejemplar.',
+    'Lo encuentras en la estantería principal, mueble B, ubicación 3.',
+    'Está en la Sala VIP, en la Biblioteca 2.',
+    'Hay dos copias.',
+    'El libro cuesta 59000 pesos y lo tenemos disponible en la estantería de terror, en el mueble principal, ubicación 3B.',
+    'Para decirte exactamente en qué lugar de la librería está el libro, permíteme consultarlo.',
+    'Para saber el lugar exacto del libro que te recomendé, permíteme consultarlo.',
+    'El libro se encuentra disponible en la librería en la zona general, estantería superior.',
+    'Para saber la ubicación exacta del libro en la librería, te sugiero consultarlo directamente.',
+    'Para consultar el precio, las existencias y la ubicación de ese libro, te invito a preguntarlo con gusto.',
+  ])('detecta existencias o ubicación: %s', (texto) => {
+    expect(afirmaDatosDeInventario(r(texto)), texto).toBe(true);
+  });
+
+  it.each([
+    'Estamos ubicados en la Carrera 24 número 37-44, frente al Parkway en Bogotá.',
+    'Abrimos de lunes a sábado de 10 a. m. a 6 p. m.',
+    'Te recomiendo estos dos libros de terror, con trece historias escalofriantes.',
+    'El libro cuesta 59000 pesos.',
+    '¿Qué género te gustaría leer?',
+    'Para cambios y devoluciones, pregúntanos en la librería con tu factura.',
+    'Estamos ubicados en la Carrera 24, y puedes consultarlo en nuestra página.',
+  ])('no confunde una respuesta que no da datos de inventario: %s', (texto) => {
+    expect(afirmaDatosDeInventario(r(texto)), texto).toBe(false);
+  });
+
+  it('si no es JSON, no es este caso', () => {
+    expect(afirmaDatosDeInventario('quedan 5 unidades')).toBe(false);
   });
 });
 

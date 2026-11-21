@@ -120,7 +120,7 @@ function mostrar(respuesta, filtros) {
     console.log(`     ${r.motivo}`);
   });
   if (respuesta.recomendaciones.length > 0) console.log('');
-  const forzada = meta.busquedaForzada ? ` · búsqueda forzada: ${meta.busquedaForzada}` : '';
+  const forzada = (meta.busquedaForzada ? ` · búsqueda forzada: ${meta.busquedaForzada}` : '') + (meta.disponibilidadForzada ? ' · disponibilidad forzada' : '');
   const herramientas = meta.herramientas.length > 0 ? meta.herramientas.join(', ') : 'ninguna';
   const filtrosTexto = Object.keys(filtros).length > 0 ? ` · filtros ${JSON.stringify(filtros)}` : '';
   console.log(`  [prompt ${meta.versionPrompt} · ${meta.modelo} · ${meta.latenciaMs} ms · ${meta.candidatos} candidatos · herramientas: ${herramientas}${forzada} · descartados: ${meta.descartados}${filtrosTexto}]`);
@@ -192,7 +192,8 @@ async function turno(texto) {
     const propuestos = [...mensajes, { rol: 'usuario', texto: linea }];
     const respuesta = await preguntar(propuestos, filtros);
     // Solo se conserva el turno si hubo respuesta; el servidor es sin estado y recibe el historial completo cada vez.
-    if (respuesta) mensajes = [...propuestos, { rol: 'asistente', texto: respuesta.texto }];
+    // Como hará el cliente: el asistente devuelve los bookId recomendados y se reenvían en su mensaje (`libros`).
+    if (respuesta) mensajes = [...propuestos, { rol: 'asistente', texto: respuesta.texto, libros: respuesta.recomendaciones.map((r) => r.bookId) }];
   }
   return true;
 }

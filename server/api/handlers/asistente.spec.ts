@@ -2,7 +2,7 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AlmacenIndice } from '../lib/almacen-indice';
 import type { LibroDeInventario } from '../lib/asistente';
-import { ErrorRespuestaInvalida, TEXTO_BLOQUEADO, TEXTO_DEMORA, TEXTO_SIN_RESULTADOS } from '../lib/asistente';
+import { ErrorRespuestaInvalida, TEXTO_BLOQUEADO, TEXTO_DEMORA, TEXTO_SIN_CONFIRMAR, TEXTO_SIN_RESULTADOS } from '../lib/asistente';
 import { cuantizar, serializarIndice, type IndiceVectorial } from '../lib/indice-vectorial';
 import {
   ErrorProveedorLlm,
@@ -572,6 +572,129 @@ describe('responder — guarda «anuncia y no actúa»', () => {
     expect(generarJson).toHaveBeenCalledTimes(1);
     expect(respuesta.texto).toBe(TEXTO_SIN_RESULTADOS);
     expect(respuesta.meta.busquedaForzada).toBeNull();
+  });
+});
+
+describe('responder — guarda de existencias y ubicación inventadas', () => {
+  const conHerramientas = (p: ProveedorLlm, extra: Partial<DependenciasAsistente> = {}) =>
+    dependencias(p, { prompt: PROMPT_CON_HERRAMIENTAS, ...extra });
+  const inventado = { texto: 'El libro cuesta 30000 pesos y quedan 5 unidades. Lo encuentras en el primer piso, estante de terror.', recomendaciones: [], sinResultados: false };
+  type ConForzar = { forzarHerramientas?: string[] };
+
+  it('si da existencias o ubicación sin consultar, se le obliga a llamar consultar_disponibilidad una vez', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([
+      final(inventado),
+      pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
+      final({ texto: 'Cuesta 30000 pesos, queda 1 ejemplar en la Sala principal, Estante 3.', recomendaciones: [], sinResultados: false }),
+    ]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('Libro A'));
+    expect(generarJson).toHaveBeenCalledTimes(3);
+    // Puede que el libro no esté en la lista: se permite buscarlo antes de consultarlo.
+    expect((llamadaN(generarJson, 1) as ConForzar).forzarHerramientas).toEqual(['consultar_disponibilidad', 'buscar_libros']);
+    expect((llamadaN(generarJson, 2) as ConForzar).forzarHerramientas).toBeUndefined();
+    expect(respuesta.texto).toContain('Sala principal');
+    expect(respuesta.meta).toMatchObject({ disponibilidadForzada: true, herramientas: ['consultar_disponibilidad'] });
+  });
+
+  it('si ya consultó la herramienta, no se la vuelve a exigir', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([
+      pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
+      final({ texto: 'Queda 1 ejemplar, en la Sala principal.', recomendaciones: [], sinResultados: false }),
+    ]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('Libro A'));
+    expect(generarJson).toHaveBeenCalledTimes(2);
+    expect(respuesta.meta.disponibilidadForzada).toBe(false);
+  });
+
+  it('si la persona pregunta dónde está o cuántos quedan y no consultó, se le obliga aunque el texto no dé datos', async () => {
+    const esquiva = { texto: 'Para saber el lugar y cuántos quedan, te invito a consultar en la librería.', recomendaciones: [], sinResultados: false };
+    const { proveedor, generarJson } = proveedorSecuencia([
+      final(esquiva),
+      pide({ id: 'c1', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
+      final({ texto: 'Queda 1 ejemplar en la Sala principal.', recomendaciones: [], sinResultados: false }),
+    ]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('¿En qué lugar está el libro y cuántos quedan?'));
+    expect(generarJson).toHaveBeenCalledTimes(3);
+    expect(respuesta.texto).toContain('Sala principal');
+    expect(respuesta.meta).toMatchObject({ disponibilidadForzada: true, herramientas: ['consultar_disponibilidad'] });
+  });
+
+  it('una pregunta de políticas («¿dónde queda la librería?») no obliga a consultar disponibilidad', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final({ texto: 'Estamos en la Carrera 24.', recomendaciones: [], sinResultados: false })]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('¿Dónde queda la librería?'));
+    expect(generarJson).toHaveBeenCalledTimes(1);
+    expect(respuesta.meta.disponibilidadForzada).toBe(false);
+  });
+
+  it('si ya buscó, la segunda obligación ofrece solo consultar_disponibilidad', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([
+      pide({ id: 'c1', nombre: 'buscar_libros', argumentos: { consulta: 'libro a' } }),
+      final(inventado),
+      pide({ id: 'c2', nombre: 'consultar_disponibilidad', argumentos: { book_ids: ['a'] } }),
+      final({ texto: 'Queda 1 ejemplar.', recomendaciones: [], sinResultados: false }),
+    ]);
+    await responder(conHerramientas(proveedor), peticion('Libro A'));
+    expect((llamadaN(generarJson, 2) as ConForzar).forzarHerramientas).toEqual(['consultar_disponibilidad']);
+  });
+
+  it('se obliga como mucho dos veces: si insiste sin consultar, no se entrega el dato inventado', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(inventado), final(inventado), final(inventado)]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('Libro A'));
+    expect(generarJson).toHaveBeenCalledTimes(3);
+    expect(respuesta.texto).toBe(TEXTO_SIN_CONFIRMAR);
+    expect(respuesta.recomendaciones).toEqual([]);
+    expect(respuesta.meta.disponibilidadForzada).toBe(true);
+  });
+
+  it('con un prompt sin herramientas no puede obligarlo, pero tampoco entrega el dato inventado', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(inventado)]);
+    const respuesta = await responder(dependencias(proveedor), peticion('Libro A'));
+    expect(generarJson).toHaveBeenCalledTimes(1);
+    expect(respuesta.texto).toBe(TEXTO_SIN_CONFIRMAR);
+    expect(respuesta.meta.disponibilidadForzada).toBe(false);
+  });
+
+  it('una respuesta que no da datos de inventario no activa la guarda', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(respuestaFinal('a'))]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion());
+    expect(generarJson).toHaveBeenCalledTimes(1);
+    expect(respuesta.meta.disponibilidadForzada).toBe(false);
+  });
+});
+
+describe('responder — libros recomendados antes', () => {
+  const conversacion = (librosPorMensaje: string[][] | undefined) => ({
+    mensajes: [
+      { rol: 'usuario' as const, texto: 'una novela' },
+      { rol: 'asistente' as const, texto: 'Te sugiero esta historia.' },
+      { rol: 'usuario' as const, texto: '¿dónde está el libro que me recomendaste?' },
+    ],
+    filtros: {},
+    librosPorMensaje,
+  });
+  const ultimoTurno = (generarJson: ReturnType<typeof proveedorSecuencia>['generarJson']) => {
+    const mensajes = llamadaN(generarJson, 0).mensajes as { rol: string; texto: string }[];
+    return mensajes[mensajes.length - 1].texto;
+  };
+
+  it('el último turno lleva título, autor y bookId leídos de la base, no del cliente', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(respuestaFinal('a'))]);
+    await responder(dependencias(proveedor), conversacion([[], ['a'], []]));
+    const turno = ultimoTurno(generarJson);
+    expect(turno).toContain('LIBROS_RECOMENDADOS_ANTES');
+    expect(turno).toContain('[{"bookId":"a","titulo":"Libro A","autor":"Autora A"}]');
+  });
+
+  it('un bookId que no existe en la base no se menciona', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(respuestaFinal('a'))]);
+    await responder(dependencias(proveedor), conversacion([[], ['no-existe'], []]));
+    expect(ultimoTurno(generarJson)).not.toContain('LIBROS_RECOMENDADOS_ANTES');
+  });
+
+  it('sin librosPorMensaje no hay bloque', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(respuestaFinal('a'))]);
+    await responder(dependencias(proveedor), conversacion(undefined));
+    expect(ultimoTurno(generarJson)).not.toContain('LIBROS_RECOMENDADOS_ANTES');
   });
 });
 

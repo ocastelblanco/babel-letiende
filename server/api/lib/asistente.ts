@@ -32,6 +32,8 @@ export const TEXTO_SIN_RESULTADOS =
   'No encontré en la librería un libro que encaje con eso. ¿Quieres contarme un poco más de lo que buscas, o probar con otro tema?';
 export const TEXTO_DEMORA =
   'Esto está tardando más de lo normal y prefiero no hacerte esperar. ¿Me repites tu pregunta en un momento?';
+export const TEXTO_SIN_CONFIRMAR =
+  'No tengo a mano las existencias ni la ubicación exacta de ese libro en este momento. Pregúntanos en la librería, o intenta de nuevo en un momento.';
 export const TEXTO_BLOQUEADO =
   'No puedo ayudarte con esa consulta. Si quieres, cuéntame qué tipo de lectura buscas y te recomiendo algo de la librería.';
 
@@ -51,7 +53,16 @@ export interface FiltrosAsistente {
 export interface PeticionAsistente {
   mensajes: MensajeConversacion[];
   filtros: FiltrosAsistente;
+  /**
+   * `bookId` de los libros que el asistente recomendó en cada mensaje suyo (misma posición que `mensajes`;
+   * vacío en los de la persona). El historial solo trae texto, y sin esto «el libro que me recomendaste»
+   * no se puede resolver a un libro concreto para consultar su disponibilidad.
+   */
+  librosPorMensaje?: string[][];
 }
+
+/** Identificador de un libro: el de `babel-libros` es un UUID; se acepta solo lo que no puede ser otra cosa. */
+const FORMATO_BOOK_ID = /^[0-9a-f-]{8,64}$/i;
 
 /** La petición no cumple el contrato. El mensaje lo escribimos nosotros y es seguro mostrarlo. */
 export class ErrorPeticion extends Error {}
@@ -68,6 +79,7 @@ export function validarPeticion(cuerpo: unknown): PeticionAsistente {
   if (crudos.length === 0 || crudos.length > MAXIMO_TURNOS) {
     throw new ErrorPeticion(`La conversación debe tener entre 1 y ${MAXIMO_TURNOS} mensajes.`);
   }
+  const librosPorMensaje: string[][] = [];
   const mensajes: MensajeConversacion[] = crudos.map((crudo, posicion) => {
     if (!esObjeto(crudo) || (crudo['rol'] !== 'usuario' && crudo['rol'] !== 'asistente')) {
       throw new ErrorPeticion('Cada mensaje necesita un rol válido.');
@@ -87,12 +99,28 @@ export function validarPeticion(cuerpo: unknown): PeticionAsistente {
     if (texto.length > MAXIMO_CARACTERES_MENSAJE) {
       throw new ErrorPeticion(`Un mensaje supera los ${MAXIMO_CARACTERES_MENSAJE} caracteres.`);
     }
+    librosPorMensaje.push(validarLibrosDelMensaje(crudo));
     return { rol: crudo['rol'], texto };
   });
   if (mensajes[mensajes.length - 1].rol !== 'usuario') {
     throw new ErrorPeticion('El último mensaje debe ser de la persona.');
   }
-  return { mensajes, filtros: validarFiltros(cuerpo['filtros']) };
+  return { mensajes, filtros: validarFiltros(cuerpo['filtros']), librosPorMensaje };
+}
+
+/** `libros` es opcional y solo vale en los mensajes del asistente; cualquier otra cosa se ignora. */
+function validarLibrosDelMensaje(mensaje: Record<string, unknown>): string[] {
+  const libros = mensaje['libros'];
+  if (mensaje['rol'] !== 'asistente' || libros === undefined || libros === null) {
+    return [];
+  }
+  if (!Array.isArray(libros) || libros.length > MAXIMO_RECOMENDACIONES) {
+    throw new ErrorPeticion(`«libros» debe ser una lista de hasta ${MAXIMO_RECOMENDACIONES} identificadores.`);
+  }
+  if (!libros.every((id) => typeof id === 'string' && FORMATO_BOOK_ID.test(id))) {
+    throw new ErrorPeticion('«libros» solo admite identificadores de libro.');
+  }
+  return [...new Set(libros as string[])];
 }
 
 function validarFiltros(crudos: unknown): FiltrosAsistente {
@@ -298,15 +326,21 @@ export function mensajesParaModelo(
   libros: LibroParaModelo[],
   ahoraMs: number = Date.now(),
   politicas: { tema: string; texto: string }[] = [],
+  recomendadosAntes: { bookId: string; titulo: string; autor: string }[] = [],
 ): MensajeConversacion[] {
   const ultimo = mensajes.length - 1;
   const momento = momentoActualParaModelo(ahoraMs);
+  // Lo que el asistente recomendó antes, leído de la base: «ese libro» y «el que me recomendaste» se resuelven con esto.
+  const bloqueRecomendadosAntes =
+    recomendadosAntes.length === 0
+      ? ''
+      : `\n\nLIBROS_RECOMENDADOS_ANTES (si la persona habla de «ese libro» o «el que me recomendaste», son estos; consulta con estos bookId):\n${JSON.stringify(recomendadosAntes)}`;
   const fecha = `FECHA_Y_HORA_ACTUAL:\nHoy: ${momento.hoy}, ${momento.hora} (hora de Bogotá)\nMañana: ${momento.manana}`;
   return mensajes.map((mensaje, posicion) =>
     posicion === ultimo
       ? {
           rol: mensaje.rol,
-          texto: `${fecha}\n\nPOLITICAS_DE_LA_LIBRERIA:\n${JSON.stringify(politicas)}\n\nLIBROS_DISPONIBLES:\n${JSON.stringify(libros)}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
+          texto: `${fecha}\n\nPOLITICAS_DE_LA_LIBRERIA:\n${JSON.stringify(politicas)}\n\nLIBROS_DISPONIBLES:\n${JSON.stringify(libros)}${bloqueRecomendadosAntes}\n\nMENSAJE_DE_LA_PERSONA:\n${mensaje.texto}`,
         }
       : mensaje,
   );
@@ -388,6 +422,59 @@ export function motivoParaBuscar(textoJson: string): 'anuncio' | 'sin-resultados
   }
   const recomendaciones = objeto['recomendaciones'];
   return Array.isArray(recomendaciones) && recomendaciones.length > 0 ? null : 'sin-resultados';
+}
+
+const NUMERO = '(?:\\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)';
+/** «quedan 5 unidades», «tenemos 1 ejemplar», «nos queda 2». */
+const AFIRMA_EXISTENCIAS = new RegExp(`\\b${NUMERO}\\s+(?:unidades?|ejemplar(?:es)?|copias?)\\b|\\bquedan?\\s+${NUMERO}\\b`, 'i');
+/**
+ * Nombres con los que el modelo inventa dónde está un libro («lo tenemos en la estantería de terror, mueble
+ * principal», «en el primer piso»). Solo cuentan los sustantivos de lugar dentro de la librería, sin exigir un
+ * verbo: el modelo los dice con «encuentras», «tenemos», «está», «queda»… Las ubicaciones reales (Sala VIP,
+ * Biblioteca 2, Estante 3) solo las conoce `consultar_disponibilidad`.
+ */
+const AFIRMA_UBICACION = /\b(?:estante|estanter[ií]a|mueble|piso|repisa|vitrina|sala\s+(?:vip|principal)|biblioteca\s+\d)\b/i;
+/**
+ * «Para saber la ubicación exacta te sugiero consultarlo en la librería»: remitir a la persona a preguntar lo que
+ * `consultar_disponibilidad` le puede decir (prohibido por el prompt, y el modelo lo hizo 2 de 3 veces en la prueba
+ * manual del 21/11/2026). Exige a la vez un verbo de preguntar y un dato de inventario, para no confundir una
+ * respuesta de políticas («pregunta en la librería por los cambios»).
+ */
+const REMITE_A_LA_LIBRERIA =
+  /(?=[^]*\b(?:ubicaci[oó]n|lugar|d[oó]nde|existencias|cu[aá]ntos?\s+quedan|precio|disponibilidad)\b)[^]*\b(?:preg[uú]ntalo|preg[uú]ntanos|preguntarlo|preguntarnos|consultarlo|consultarnos|consulta\s+directamente)\b/i;
+
+/**
+ * La persona pregunta por existencias o por dónde está un libro dentro de la librería («¿en qué lugar está?»,
+ * «¿cuántos quedan?»). El prompt exige llamar `consultar_disponibilidad` en estos casos y el modelo, a veces,
+ * prefiere esquivar («te invito a consultarlo en la librería») o responder de memoria. «¿Dónde queda la
+ * librería?» NO cuenta: es una pregunta de políticas.
+ */
+const PIDE_DATOS_DE_INVENTARIO =
+  /\b(?:en\s+qu[eé]\s+(?:lugar|estante|piso|mueble|sala|parte|secci[oó]n)|cu[aá]ntos?\s+(?:quedan|hay|ejemplares|unidades|copias)|cu[aá]ntas?\s+(?:unidades|copias|quedan|hay)|existencias|d[oó]nde\s+(?:lo|la|los|las)\s+(?:encuentro|encuentras|puedo\s+encontrar|consigo)|d[oó]nde\s+est[aá]n?\s+(?:el|ese|este|la|esa|esta|los|las)\s+(?:libros?|novelas?|ejemplar(?:es)?)|hay\s+(?:disponibilidad|ejemplares|unidades))\b/i;
+
+export function pideDatosDeInventario(textoDeLaPersona: string): boolean {
+  return PIDE_DATOS_DE_INVENTARIO.test(textoDeLaPersona);
+}
+
+/**
+ * El texto da existencias o ubicación de un libro, o remite a la persona a preguntarlas en la librería. El modelo NO tiene esos datos en `LIBROS_DISPONIBLES`
+ * (la lista blanca no lleva existencias exactas ni ubicación): solo salen de `consultar_disponibilidad`.
+ * Dicho sin haberla llamado es inventado: en la prueba manual del 21/11/2026 el modelo dijo «quedan 5
+ * unidades, en el primer piso, estante de terror» cuando había 1, en la Sala VIP (2 de 3 intentos).
+ * Lee el JSON crudo del modelo; si no se puede leer, no es este caso.
+ */
+export function afirmaDatosDeInventario(textoJson: string): boolean {
+  let objeto: unknown;
+  try {
+    objeto = JSON.parse(textoJson);
+  } catch {
+    return false;
+  }
+  if (!esObjeto(objeto) || typeof objeto['texto'] !== 'string') {
+    return false;
+  }
+  const texto = objeto['texto'];
+  return AFIRMA_EXISTENCIAS.test(texto) || AFIRMA_UBICACION.test(texto) || REMITE_A_LA_LIBRERIA.test(texto);
 }
 
 /** La salida del modelo no sirve (no es JSON, no cumple el esquema o se cortó). */
