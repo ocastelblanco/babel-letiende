@@ -34,6 +34,16 @@ ejecutar-evals.mjs --prompt v5,v4 --repeticiones 3   responder() en el proceso �
 
 Las corridas usan la clave del perfil que pidas: `EVALS_CLAVE=production` toma la de pago del `.env` (la de `staging` es gratuita y su cuota diaria no alcanza para el índice ni para una corrida completa). Con la de pago: `--rpm 60 --max-llamadas 900`. Una corrida completa (276 ejecuciones) tarda unos 6 minutos.
 
+## Fase 5: recalificar sin llamar a la API
+
+```text
+ejecutar-evals.mjs --repuntuar resultados/<corrida>.jsonl   respuestas guardadas + casos de hoy ──► resumenes/<corrida>-repuntuada.md
+```
+
+Sirve cuando cambian los casos o los aceptables (por ejemplo, después de importar una validación): vuelve a calificar las respuestas guardadas sin gastar cuota. Un caso renombrado lleva `antes` con su id anterior (A16 era S06) para seguir calificando las corridas viejas. El resumen cuenta también las búsquedas que forzó el servidor (bitácora 07).
+
+Campos nuevos de los casos: `avisoCercanos` (solo en «sin respuesta»: expresiones que, si el texto las cumple, permiten recomendar libros cercanos) y `antes`.
+
 ## Cómo validar los candidatos (tu parte)
 
 Abre `congelado/candidatos.md`. Cada pregunta trae unos 15 a 20 libros: los que encontró el recuperador y los que encontró una búsqueda por palabras. Marca con `x` los que serían una buena respuesta y agrega con `+ ISBN` o `+ Título exacto` los que conozcas y falten. El orden está barajado a propósito, para que los primeros no pesen más. Cuando termines, avísame.

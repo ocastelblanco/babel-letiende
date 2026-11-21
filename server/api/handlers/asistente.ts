@@ -9,9 +9,11 @@ import {
   TEXTO_BLOQUEADO,
   TEXTO_DEMORA,
   TEXTO_SIN_RESULTADOS,
+  anunciaSinActuar,
   cargarPrompt,
   filtroDelIndice,
   libroParaModelo,
+  motivoParaBuscar,
   mensajesParaModelo,
   seleccionarCandidatos,
   textoDeConsulta,
@@ -117,6 +119,11 @@ export interface RespuestaAsistente {
     tiempoAgotado: boolean;
     /** La primera respuesta final no era válida (cortada o no JSON) y se pidió una vez más. */
     reintentoFinal: boolean;
+    /**
+     * El servidor obligó al modelo a llamar `buscar_libros` antes de responder: porque anunció una
+     * búsqueda sin hacerla (`anuncio`) o porque dijo «no hay» sin haber buscado (`sin-resultados`).
+     */
+    busquedaForzada: 'anuncio' | 'sin-resultados' | null;
   };
 }
 
@@ -267,6 +274,8 @@ export async function responder(
   let tokensSalida = 0;
   let modelo: string | null = null;
   let reintentoFinal = false;
+  let busquedaForzada: 'anuncio' | 'sin-resultados' | null = null;
+  let forzarBusqueda = false;
 
   const meta = (extra: Partial<RespuestaAsistente['meta']>): RespuestaAsistente['meta'] => ({
     versionPrompt: prompt.version,
@@ -282,6 +291,7 @@ export async function responder(
     fallosHerramientas,
     tiempoAgotado: false,
     reintentoFinal,
+    busquedaForzada,
     ...extra,
   });
 
@@ -291,7 +301,7 @@ export async function responder(
   }
 
   const librosIniciales = await paraModelo(dependencias, inicial.candidatos);
-  const generar = async (conHerramientas: boolean): Promise<ResultadoGeneracion> => {
+  const generar = async (conHerramientas: boolean, forzar = false): Promise<ResultadoGeneracion> => {
     const resultado = await proveedor.generarJson({
       instrucciones: prompt.instrucciones,
       mensajes: mensajesParaModelo(peticion.mensajes, librosIniciales, ahora(), politicasParaModelo(dependencias.politicas)),
@@ -299,6 +309,7 @@ export async function responder(
       maximoTokensSalida: MAXIMO_TOKENS_SALIDA,
       nivelPensamiento: 'low',
       ...(conHerramientas ? { herramientas: HERRAMIENTAS } : {}),
+      ...(conHerramientas && forzar ? { forzarHerramientas: ['buscar_libros'] } : {}),
       ...(rondasHechas.length > 0 ? { rondas: rondasHechas } : {}),
     });
     tokensGeneracionEntrada += resultado.tokensEntrada;
@@ -319,8 +330,20 @@ export async function responder(
         meta: meta({ tiempoAgotado: true }),
       };
     }
-    generacion = await generar(puedeUsarHerramientas);
+    generacion = await generar(puedeUsarHerramientas, forzarBusqueda);
+    forzarBusqueda = false;
     if (generacion.llamadas.length === 0 || !puedeUsarHerramientas) {
+      // Guarda de la Fase 5: si anuncia una búsqueda sin hacerla, o dice «no hay» sin haber buscado en
+      // este turno, se repite la generación UNA vez obligándolo a llamar `buscar_libros`.
+      const motivo: ReturnType<typeof motivoParaBuscar> =
+        puedeUsarHerramientas && busquedaForzada === null && !generacion.bloqueado && !generacion.truncado
+          ? motivoParaBuscar(generacion.texto)
+          : null;
+      if (motivo !== null && (motivo === 'anuncio' || !herramientasLlamadas.includes('buscar_libros'))) {
+        busquedaForzada = motivo;
+        forzarBusqueda = true;
+        continue;
+      }
       break;
     }
 
@@ -374,6 +397,10 @@ export async function responder(
       return respuestaBloqueada();
     }
     validada = validarFinal(generacion);
+  }
+  if (validada.recomendaciones.length === 0 && anunciaSinActuar(generacion.texto)) {
+    // Sigue prometiendo una búsqueda que ya no va a hacer: no se entrega así.
+    return { texto: TEXTO_SIN_RESULTADOS, recomendaciones: [], sinResultados: true, meta: meta({ descartados: validada.descartados }) };
   }
   return {
     texto: validada.texto,

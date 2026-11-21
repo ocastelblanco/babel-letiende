@@ -20,8 +20,12 @@
       "1840f389-dcd7-4752-82b8-616e7575bfe2",
       "2c530f21-49f0-474a-819c-edf0d521c945",
       "39061264-d8bd-48a0-8d2f-0c76c90d6836",
+      "49433ae2-84db-45aa-bea4-15449a4ad6de",
       "54fffe9a-8cb5-4d68-b4aa-61c5f6884ebf",
+      "7151a3aa-117c-4e01-951b-d10e122db467",
       "92d7ee26-ef8f-4ae7-8df0-295f53205a79",
+      "b4b1191a-cf4e-47f9-ab7d-afe02552b587",
+      "ddc8210e-6ce2-4d02-84e9-a4fc62fcbf81",
       "e760c9a9-5c8c-4d8c-99f6-2fb4ab4704ce",
       "f29f37da-2be9-4ad2-992d-94f6e9c7c35b"
     ],
@@ -79,9 +83,11 @@
     "aceptables": [
       "22b7f8ef-a783-414f-9ee8-8583934016c8",
       "bee78d2c-f3a3-4cde-92b9-41c5ba92f333",
-      "ec2beaee-9064-4c68-a78f-27d0f9d37e2c"
+      "ec2beaee-9064-4c68-a78f-27d0f9d37e2c",
+      "f4e45d6d-c85f-4391-bb86-5a11f6d91413"
     ],
-    "esperaSinResultados": false
+    "esperaSinResultados": false,
+    "nota": "Caldo de ojo cuenta como libro en inglés aunque el inventario lo marque en español: explica en inglés, con humor, expresiones coloquiales colombianas (decisión de Oliver, 20/11/2026)."
   },
   {
     "id": "R04",
@@ -123,7 +129,9 @@
       "3f26d56d-88bb-4cc6-9c60-fa2d3ed6dafb",
       "41cb3af8-a1ff-4a6f-886d-2ff03a0910ce",
       "4672ae41-6443-4b03-9e39-cd5185286975",
+      "4fcc2697-bad1-41cb-bb6a-3c0f0b349712",
       "64b2462c-6617-46b6-890c-f924996eb4b6",
+      "83ed6999-0d9d-4f83-9534-8856b021f444",
       "d1beb045-7e06-41a0-abc2-591c9790f0df",
       "fd184e8d-0d1d-4c98-a2f1-4f1198c96217",
       "ffa28e2d-e27b-4309-8460-7666618c4f98"
@@ -147,10 +155,14 @@
     ],
     "aceptables": [
       "29a25172-a2ea-4871-bacd-ba820e872752",
+      "3a0bcf18-aee4-432e-9b84-17612e985f4b",
       "4672ae41-6443-4b03-9e39-cd5185286975",
       "569c5020-f7af-4947-bc27-221b18cc409c",
+      "5d60e302-8842-421c-a664-115c3176ff0f",
       "61702e5b-efeb-4b34-81ef-f5c196a1bf8e",
+      "65c3e1a2-db9a-45b1-8db0-63ee25139c95",
       "708aa158-db81-45f7-afef-580c673571ce",
+      "71d8c175-a6c0-4dd1-ae48-976d72356428",
       "98f6baa8-5cae-4cc2-aa35-703a80f93dfa",
       "9a4ebce9-d4af-4c89-8204-f6ef232cf8ee",
       "b0788b18-c214-4ee8-ba18-f9568db06ff9",
@@ -175,6 +187,10 @@
     },
     "busqueda": [],
     "aceptables": [
+      "39061264-d8bd-48a0-8d2f-0c76c90d6836",
+      "3f812e45-4b2a-4e45-89fe-3865b84e5569",
+      "57154679-613f-4aef-b9f2-837174dc737e",
+      "598a9b8a-4e70-4d6b-a053-fff1d995d629",
       "66952aeb-9b85-4079-96fb-87e58f375959"
     ],
     "esperaSinResultados": false

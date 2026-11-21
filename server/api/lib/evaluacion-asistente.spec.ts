@@ -95,7 +95,7 @@ describe('puntuarRespuesta', () => {
   });
 
   it('comprueba el idioma con el dato del libro; un libro sin idioma conocido no cumple', () => {
-    const caso: CasoEvaluacion = { ...base, restricciones: { idioma: 'en' } };
+    const caso: CasoEvaluacion = { ...base, aceptables: undefined, restricciones: { idioma: 'en' } };
     expect(falla(caso, respuesta(['ingles']))).not.toContain('restricciones');
     expect(falla(caso, respuesta(['a']))).toContain('restricciones');
     expect(falla(caso, respuesta(['agotado']))).toContain('restricciones');
@@ -106,6 +106,38 @@ describe('puntuarRespuesta', () => {
     expect(puntuarRespuesta(caso, respuesta([], { sinResultados: true }), inventario).pasa).toBe(true);
     expect(falla(caso, respuesta(['a']))).toContain('rechazo');
     expect(falla(caso, respuesta([], { sinResultados: false }))).toContain('rechazo');
+  });
+
+  it('con avisoCercanos, recomendar libros cercanos vale si el texto avisa que no hay uno exacto', () => {
+    const caso: CasoEvaluacion = {
+      id: 'S04', categoria: 'sin-respuesta', mensajes: base.mensajes, esperaSinResultados: true,
+      avisoCercanos: ['no (tenemos|tengo|hay|encontr)'],
+    };
+    expect(puntuarRespuesta(caso, respuesta([], { sinResultados: true }), inventario).pasa).toBe(true);
+    expect(puntuarRespuesta(caso, respuesta(['a'], { texto: 'No tenemos libros específicos de cálculo, pero te recomiendo este.' }), inventario).pasa).toBe(true);
+    expect(falla(caso, respuesta(['a'], { texto: 'Te recomiendo este libro de cálculo.' }))).toContain('rechazo');
+    expect(falla(caso, respuesta([], { texto: 'No tenemos nada así.', sinResultados: false }))).toContain('rechazo');
+  });
+
+  it('avisoCercanos solo tiene sentido en un caso sin resultados', () => {
+    expect(validarCaso({ ...base, avisoCercanos: ['no hay'] })[0]).toContain('avisoCercanos');
+    expect(validarCaso({ ...base, categoria: 'sin-respuesta', aceptables: undefined, esperaSinResultados: true, avisoCercanos: [] })[0]).toContain('avisoCercanos');
+    expect(validarCaso({ ...base, categoria: 'sin-respuesta', aceptables: undefined, esperaSinResultados: true, avisoCercanos: ['('] })[0]).toContain('expresión inválida');
+  });
+
+  it('un libro bilingüe cumple el idioma pedido solo si su motivo dice que es bilingüe', () => {
+    const caso: CasoEvaluacion = { ...base, aceptables: undefined, restricciones: { idioma: 'en' } };
+    const con = (motivo: string) => ({ texto: 'Mira.', sinResultados: false, recomendaciones: [{ bookId: 'a', motivo }] });
+    expect(falla(caso, con('Un libro bilingüe en español e inglés.'))).not.toContain('restricciones');
+    expect(falla(caso, con('Un libro con explicaciones.'))).toContain('restricciones');
+    expect(falla(caso, { texto: 'Es bilingüe.', sinResultados: false, recomendaciones: [{ bookId: 'a', motivo: 'Un libro ilustrado.' }, { bookId: 'b', motivo: 'Edición BILINGUE.' }] })).toContain('restricciones');
+  });
+
+  it('un libro validado como aceptable cumple el idioma del caso aunque el inventario diga otro; el precio no se perdona', () => {
+    const caso: CasoEvaluacion = { ...base, aceptables: ['a', 'b'], restricciones: { idioma: 'en', precioMaximo: 50_000 } };
+    expect(falla(caso, respuesta(['a']))).not.toContain('restricciones');
+    expect(falla(caso, respuesta(['b']))).toContain('restricciones'); // $90.000 supera $50.000
+    expect(falla({ ...caso, aceptables: ['ingles'] }, respuesta(['a']))).toContain('restricciones');
   });
 
   it('si había respuesta posible, rechazar es un fallo', () => {

@@ -80,6 +80,16 @@ describe('documentoParaIndice', () => {
     );
   });
 
+  it('guarda el precio para filtrar, sin que entre en la huella; un precio inválido queda en null', () => {
+    const c = { sinopsis: 'S', categorias: [], idioma: null, clasificacionEdad: null };
+    const caro = documentoParaIndice({ bookId: 'a', titulo: 'T', autor: 'A', pvp: 90000 }, c);
+    const barato = documentoParaIndice({ bookId: 'a', titulo: 'T', autor: 'A', pvp: 14000 }, c);
+    expect(caro.pvp).toBe(90000);
+    expect(barato.hash).toBe(caro.hash);
+    expect(documentoParaIndice({ bookId: 'a', titulo: 'T', autor: 'A' }, c).pvp).toBeNull();
+    expect(documentoParaIndice({ bookId: 'a', titulo: 'T', autor: 'A', pvp: -5 }, c).pvp).toBeNull();
+  });
+
   it('recorta el texto a un tope', () => {
     const doc = documentoParaIndice(
       { bookId: 'a', titulo: 'T', autor: 'A' },
@@ -182,6 +192,7 @@ describe('planificarReconstruccion', () => {
     sinSinopsis: false,
     idioma: 'es',
     clasificacionEdad: null,
+    pvp: 30000,
     ...extra,
   });
 
@@ -220,6 +231,13 @@ describe('planificarReconstruccion', () => {
     expect(plan.porIncrustar).toEqual([]);
     expect(plan.conservados[0].entrada.idioma).toBe('en');
     expect(plan.conservados[0].vector).toBe(previo.vectores[0]);
+  });
+
+  it('refresca el precio sin pedir otro vector (los índices viejos no lo traían)', () => {
+    const previo = indice([{ id: 'a', vector: [1, 0, 0, 0], extra: { hash: 'h' } }]);
+    const plan = planificarReconstruccion(previo, [doc('a', 'h', { pvp: 14000 })], 'modelo-a', DIM);
+    expect(plan.porIncrustar).toEqual([]);
+    expect(plan.conservados[0].entrada.pvp).toBe(14000);
   });
 
   it('si cambia el modelo o las dimensiones, ningún vector viejo sirve', () => {

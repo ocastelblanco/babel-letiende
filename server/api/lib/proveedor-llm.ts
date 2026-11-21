@@ -53,7 +53,7 @@ export interface PeticionGeneracion {
   herramientas?: DeclaracionHerramienta[];
   /** Vueltas de herramientas ya ocurridas desde el último mensaje de la persona, en orden. */
   rondas?: RondaHerramientas[];
-  /** Obliga al modelo a llamar a una de estas herramientas en vez de responder con texto. */
+  /** Obliga al modelo a llamar a una de estas herramientas en vez de responder con texto (esa vuelta va sin `esquemaSalida`). */
   forzarHerramientas?: string[];
   /** Subconjunto de JSON Schema/OpenAPI que el proveedor aplica a la salida. */
   esquemaSalida: Record<string, unknown>;

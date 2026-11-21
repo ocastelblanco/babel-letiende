@@ -41,13 +41,13 @@ Cada fase indica la capacidad que demuestra, el criterio de terminado (DoD) y su
 
 ### 3.1 Calendario revisado (19/11/2026)
 
-Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; el usuario no trabaja el fin de semana del 21 y 22/11. **Se recalcula al cerrar cada fase** (aunque sea parcial) y el recorrido real, con fechas y minutos de agente, queda en [`bitacora/00-planeacion.md`](bitacora/00-planeacion.md) («Recorrido del calendario»). Última revisión: 20/11/2026, al cerrar `T-0042`: v5 no cumple los criterios de 4b, así que la Fase 5 entra el lunes 23; producción sigue el 27/11, con el jueves 26 como holgura, pero ya no puede adelantarse.
+Fases 0 a 3 tomaron tres días, con varios PRs por día cuando el trabajo era solo de backend. Lo que marca el ritmo ahora no es escribir código sino lo que depende de una persona: validar libros, verificar en `staging` y activar la facturación. Las fechas suponen días hábiles; el usuario no trabaja el fin de semana del 21 y 22/11. **Se recalcula al cerrar cada fase** (aunque sea parcial) y el recorrido real, con fechas y minutos de agente, queda en [`bitacora/00-planeacion.md`](bitacora/00-planeacion.md) («Recorrido del calendario»). Última revisión: 20/11/2026, 18:51, al cerrar `T-0050`: la Fase 5 se hizo completa el viernes por la tarde (v5 cumple con 100 % de restricciones en la corrida principal), así que el lunes 23 queda entero para la Fase 6. Producción sigue el 27/11, con el jueves 26 de holgura.
 
 | Fecha | Trabajo | Depende del usuario |
 |---|---|---|
 | Jue 19/11 | Plan de la Fase 4; carga de sinopsis en producción; 4a (`T-0041`, PR #165) ✓ | Clave local de Gemini en `.env` ✓; límites de cuota ✓; cuenta de pago para `production` ✓ |
-| Vie 20/11 | 4b (`T-0042`): validación, ejecutor y línea base v5 contra v4 ✓ (v5 no cumple); la Fase 5 empieza en local | Validar candidatos y complemento ✓; fusionar 4b |
-| Lun 23/11 | Fase 5 (`T-0050`): dos cambios de ingeniería, casos redefinidos, v6 y nueva corrida; Fase 6, parte 1 (registro, control de gasto y de tasa) | Revisar v6 en `staging` y fusionar |
+| Vie 20/11 | 4b (`T-0042`): validación, ejecutor y línea base v5 contra v4 ✓ (v5 no cumple); Casa del Libro (#167) ✓; Fase 5 (`T-0050`): guardas, precio en el índice, casos redefinidos, v6 medida y no adoptada ✓, PR abierto | Validar candidatos y complemento ✓; fusionar 4b ✓ |
+| Lun 23/11 | Fase 6, parte 1 (registro, control de gasto y de tasa) | Revisar la Fase 5 en `staging` y fusionar #168 |
 | Mar 24/11 | Fase 6, parte 2 (límites de entrada, validador de fidelidad, revisión OWASP) | Verificar en `staging` |
 | Mié 25/11 | Fase 7: chat en el catálogo, en `staging` | Revisar el chat |
 | Jue 26/11 | Holgura; producción si 4b pasó a la primera | |
@@ -180,11 +180,12 @@ Partida en tres PRs (19/11/2026). **4a y 4b van antes del paso a producción; 4c
 
 Entra porque v5 no cumple los criterios de 4b (20/11/2026). Alcance decidido con el usuario ese día, a partir de la línea base:
 
-- [ ] **Guarda contra «anuncia y no actúa»** (ingeniería): si la respuesta no recomienda nada, no declara `sinResultados` y no llamó a ninguna herramienta, el servidor no la entrega tal cual. R01 falló así en 3 de 3 con v5.
-- [ ] **Precio antes del top-40** (ingeniería): con `precioMaximo`, los libros baratos no llegan al modelo porque el precio se filtra después de la similitud (R07). Filtrar por precio antes, o traer más candidatos cuando hay límite.
-- [ ] **Casos redefinidos:** en «sin respuesta» se acepta recomendar libros cercanos si el asistente dice que no hay uno exacto; S06 se corrige (el inventario sí tiene teoría penal); en R03 un libro bilingüe vale si el asistente dice que es bilingüe.
-- [ ] **v6**, si después de lo anterior todavía hace falta, con motivo, hipótesis y efecto medido. Desde v5, cambios guiados solo por fallos de la suite.
-- [ ] Nueva corrida contra la línea base y los criterios de 4b; ficha por prompt y tabla de resultados por versión en la bitácora.
+- [x] **Guarda contra «anuncia y no actúa»** (ingeniería): si la respuesta no recomienda nada, no declara `sinResultados` y no llamó a ninguna herramienta, el servidor no la entrega tal cual. R01 falló así en 3 de 3 con v5. **Hecho, y ampliado:** el servidor obliga una vez a llamar `buscar_libros` si el modelo anuncia u ofrece una búsqueda sin hacerla, o si dice «no hay» sin haber buscado en ese turno (la v6 mostró que hacía falta). La vuelta forzada va sin salida JSON: la API la rechaza con 400.
+- [x] **Precio antes del top-40** (ingeniería): con `precioMaximo`, los libros baratos no llegan al modelo porque el precio se filtra después de la similitud (R07). **Hecho:** el precio vive en cada entrada del índice (fuera de la huella, sin embeddings nuevos). Recall@8 0,59 → 0,64; Hit@8 0,95 → 1,00; R07 de 0 a 1.
+- [x] **Casos redefinidos:** en «sin respuesta» se acepta recomendar libros cercanos si el asistente dice que no hay uno exacto; S06 se corrige (el inventario sí tiene teoría penal); en R03 un libro bilingüe vale si el asistente dice que es bilingüe. **Hecho:** `avisoCercanos` en S01 a S05; S06 pasa a A16; la regla de bilingües mira el motivo de cada libro.
+- [x] **v6**, si después de lo anterior todavía hace falta, con motivo, hipótesis y efecto medido. Desde v5, cambios guiados solo por fallos de la suite. **Medida y no adoptada:** empata con v5 en el criterio (20/21) y pasa menos casos de restricciones (11 contra 15). Producción sigue con v5.
+- [x] Nueva corrida contra la línea base y los criterios de 4b; ficha por prompt y tabla de resultados por versión en la bitácora ([`bitacora/07-iteracion.md`](bitacora/07-iteracion.md)). v5 cumple: 20/21 = 95 % en la corrida principal, y entre 86 % y 95 % en las de comprobación, según R03.
+- [x] **Cierre (adelantado al viernes 20, 18:51):** el usuario validó el complemento (16 aceptables nuevos) y decidió R03 (*Caldo de ojo* cuenta como libro en inglés). Recalificado con `--repuntuar`, sin API: **v5 cumple con 21/21 = 100 %** en la corrida principal (95 % y 100 % en las de comprobación).
 
 ### Fase 6 — Operación segura (backend) · `T-0060` · capacidad: uso responsable, privacidad y seguridad
 

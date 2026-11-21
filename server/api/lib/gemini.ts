@@ -205,11 +205,18 @@ export class ProveedorGemini implements ProveedorLlm {
               }
             : {}),
         },
-        response_format: {
-          type: 'text',
-          mime_type: 'application/json',
-          schema: peticion.esquemaSalida,
-        },
+        // La API rechaza forzar una herramienta (modo `any`) junto con salida JSON (400 `invalid_request`,
+        // medido el 20/11/2026). Con el modo `any` la respuesta siempre es una llamada, así que en esa
+        // vuelta no se pide el formato; la respuesta final, en la vuelta siguiente, sí lo lleva.
+        ...(peticion.forzarHerramientas && peticion.forzarHerramientas.length > 0
+          ? {}
+          : {
+              response_format: {
+                type: 'text',
+                mime_type: 'application/json',
+                schema: peticion.esquemaSalida,
+              },
+            }),
       },
       { 'Api-Revision': REVISION_API },
     );

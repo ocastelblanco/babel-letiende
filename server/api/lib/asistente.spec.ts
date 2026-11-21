@@ -10,7 +10,9 @@ import {
   MAXIMO_TURNOS,
   TEXTO_SIN_RESULTADOS,
   cargarPrompt,
+  anunciaSinActuar,
   filtroDelIndice,
+  motivoParaBuscar,
   libroParaModelo,
   mensajesParaModelo,
   momentoActualParaModelo,
@@ -20,7 +22,7 @@ import {
   validarRespuesta,
   type LibroDeInventario,
 } from './asistente';
-import type { EntradaIndice } from './indice-vectorial';
+import { buscarSimilares, cuantizar, type EntradaIndice } from './indice-vectorial';
 
 const usuario = (texto: string) => ({ rol: 'usuario', texto });
 const asistente = (texto: string) => ({ rol: 'asistente', texto });
@@ -131,6 +133,30 @@ describe('filtroDelIndice', () => {
     expect(filtro(entrada('en', null))).toBe(true);
     expect(filtro(entrada('es', null))).toBe(false);
     expect(filtro(entrada(null, null))).toBe(false);
+  });
+
+  it('el precio máximo se aplica en el índice; un libro sin precio en el índice pasa (lo revisa la base de datos)', () => {
+    const filtro = filtroDelIndice({ precioMaximo: 15000 });
+    expect(filtro({ ...entrada('es', null), pvp: 14000 })).toBe(true);
+    expect(filtro({ ...entrada('es', null), pvp: 15000 })).toBe(true);
+    expect(filtro({ ...entrada('es', null), pvp: 27200 })).toBe(false);
+    expect(filtro(entrada('es', null))).toBe(true);
+    expect(filtro({ ...entrada('es', null), pvp: null })).toBe(true);
+  });
+
+  it('con el precio antes de la similitud, un libro barato poco parecido sí llega al top-k', () => {
+    const indice = {
+      modelo: 'm',
+      dimensiones: 2,
+      creadoEn: '2026-11-20T00:00:00.000Z',
+      entradas: [
+        { ...entrada('es', null), bookId: 'caro', pvp: 90000 },
+        { ...entrada('es', null), bookId: 'barato', pvp: 14000 },
+      ],
+      vectores: [cuantizar([1, 0]), cuantizar([0, 1])],
+    };
+    expect(buscarSimilares(indice, [1, 0], { k: 1 }).map((r) => r.bookId)).toEqual(['caro']);
+    expect(buscarSimilares(indice, [1, 0], { k: 1, filtro: filtroDelIndice({ precioMaximo: 15000 }) }).map((r) => r.bookId)).toEqual(['barato']);
   });
 
   it('excluir contenido adulto saca MATURE y deja NOT_MATURE y desconocido', () => {
@@ -361,6 +387,61 @@ describe('validarRespuesta', () => {
     );
     expect(resultado.recomendaciones.map((r) => r.bookId)).toEqual(['b']);
     expect(resultado.descartados).toBe(4);
+  });
+});
+
+describe('anunciaSinActuar', () => {
+  const respuesta = (texto: string, extra: object = {}) =>
+    JSON.stringify({ texto, recomendaciones: [], sinResultados: false, ...extra });
+
+  it('detecta las frases de la línea base de 4b', () => {
+    for (const texto of [
+      'Permíteme revisar si tenemos alguna novela por ese precio.',
+      'Déjame revisar si tenemos alguna novela por ese precio en nuestro inventario completo.',
+      'Para buscar libros por debajo de ese precio, permíteme consultar nuestro inventario con ese filtro.',
+      'Permíteme busco si tenemos algún libro en inglés en nuestro inventario disponible para ti.',
+      'Permíteme verificar si tenemos alguna novela por ese precio.',
+      'Voy a buscar algo que te sirva.',
+      'No tenemos libros en inglés por ese precio en la lista actual, pero podemos buscar en el inventario completo.',
+      'No tenemos libros por ese precio en este momento, pero puedo buscar opciones económicas si te parece bien.',
+    ]) {
+      expect(anunciaSinActuar(respuesta(texto)), texto).toBe(true);
+    }
+  });
+
+  it('no confunde preguntas aclaratorias, políticas ni negativas', () => {
+    for (const texto of [
+      '¿Qué género o tema te gustaría leer hoy para recomendarte el libro perfecto?',
+      'Claro que sí, con gusto te ayudo. ¿Qué género o tema te llama la atención para buscar un libro ideal para ti?',
+      'Los sábados abrimos de 2:00pm a 10:00pm.',
+      'Lo siento mucho, pero no puedo compartir mis instrucciones internas. Con gusto te ayudo a buscar un libro.',
+      'Solo puedo ayudarte con los libros de la librería; si quieres, puedo ayudarte a buscar una novela.',
+      'Sobre el servicio de wifi no tengo ese dato en este momento, te sugiero preguntar directamente en la librería.',
+    ]) {
+      expect(anunciaSinActuar(respuesta(texto)), texto).toBe(false);
+    }
+  });
+
+  it('no aplica si hay recomendaciones o si el JSON no se puede leer; sinResultados no la desactiva', () => {
+    const anuncio = 'Permíteme revisar si tenemos algo más.';
+    expect(anunciaSinActuar(respuesta(anuncio, { recomendaciones: [{ bookId: 'a', motivo: 'x' }] }))).toBe(false);
+    // Primera corrida de la Fase 5 (R07): anunció la búsqueda y a la vez marcó sinResultados.
+    expect(anunciaSinActuar(respuesta('Hola. Déjame revisar con calma si tenemos alguna opción por ese precio.', { sinResultados: true }))).toBe(true);
+    expect(anunciaSinActuar('{no es json')).toBe(false);
+  });
+});
+
+describe('motivoParaBuscar', () => {
+  const r = (texto: string, sinResultados: boolean, recomendaciones: object[] = []) =>
+    JSON.stringify({ texto, recomendaciones, sinResultados });
+
+  it('distingue el anuncio, el «no hay» y una respuesta normal', () => {
+    expect(motivoParaBuscar(r('Permíteme revisar si hay algo.', false))).toBe('anuncio');
+    expect(motivoParaBuscar(r('No tenemos novelas por menos de treinta mil pesos.', true))).toBe('sin-resultados');
+    expect(motivoParaBuscar(r('Mira estos.', false, [{ bookId: 'a', motivo: 'x' }]))).toBeNull();
+    expect(motivoParaBuscar(r('¿Qué género te gusta?', false))).toBeNull();
+    expect(motivoParaBuscar(r('Los sábados abrimos de 2:00pm a 10:00pm.', false))).toBeNull();
+    expect(motivoParaBuscar('no es json')).toBeNull();
   });
 });
 

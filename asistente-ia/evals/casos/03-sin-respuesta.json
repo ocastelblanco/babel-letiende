@@ -9,7 +9,12 @@
       }
     ],
     "esperaSinResultados": true,
-    "busqueda": []
+    "busqueda": [],
+    "avisoCercanos": [
+      "no (tenemos|tengo|hay|contamos con|encontr|manejamos)",
+      "sin (libros|titulos|un libro)",
+      "no (es|son) (exactamente|especificamente)"
+    ]
   },
   {
     "id": "S02",
@@ -21,7 +26,12 @@
       }
     ],
     "esperaSinResultados": true,
-    "busqueda": []
+    "busqueda": [],
+    "avisoCercanos": [
+      "no (tenemos|tengo|hay|contamos con|encontr|manejamos)",
+      "sin (libros|titulos|un libro)",
+      "no (es|son) (exactamente|especificamente)"
+    ]
   },
   {
     "id": "S03",
@@ -33,7 +43,12 @@
       }
     ],
     "esperaSinResultados": true,
-    "busqueda": []
+    "busqueda": [],
+    "avisoCercanos": [
+      "no (tenemos|tengo|hay|contamos con|encontr|manejamos)",
+      "sin (libros|titulos|un libro)",
+      "no (es|son) (exactamente|especificamente)"
+    ]
   },
   {
     "id": "S04",
@@ -45,7 +60,12 @@
       }
     ],
     "esperaSinResultados": true,
-    "busqueda": []
+    "busqueda": [],
+    "avisoCercanos": [
+      "no (tenemos|tengo|hay|contamos con|encontr|manejamos)",
+      "sin (libros|titulos|un libro)",
+      "no (es|son) (exactamente|especificamente)"
+    ]
   },
   {
     "id": "S05",
@@ -57,18 +77,11 @@
       }
     ],
     "esperaSinResultados": true,
-    "busqueda": []
-  },
-  {
-    "id": "S06",
-    "categoria": "sin-respuesta",
-    "mensajes": [
-      {
-        "rol": "usuario",
-        "texto": "Busco un tratado de derecho penal"
-      }
-    ],
-    "esperaSinResultados": true,
-    "busqueda": []
+    "busqueda": [],
+    "avisoCercanos": [
+      "no (tenemos|tengo|hay|contamos con|encontr|manejamos)",
+      "sin (libros|titulos|un libro)",
+      "no (es|son) (exactamente|especificamente)"
+    ]
   }
 ]

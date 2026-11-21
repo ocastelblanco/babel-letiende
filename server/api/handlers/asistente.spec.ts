@@ -502,6 +502,79 @@ describe('responder — herramientas', () => {
   });
 });
 
+describe('responder — guarda «anuncia y no actúa»', () => {
+  const conHerramientas = (p: ProveedorLlm) => dependencias(p, { prompt: PROMPT_CON_HERRAMIENTAS });
+  const anuncio = { texto: 'Permíteme revisar si tenemos alguna novela por ese precio.', recomendaciones: [], sinResultados: false };
+  type ConForzar = { forzarHerramientas?: string[] };
+
+  it('si el modelo promete buscar y no lo hace, se le obliga a llamar buscar_libros una vez', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([
+      final(anuncio),
+      pide({ id: 'c1', nombre: 'buscar_libros', argumentos: { consulta: 'novela', precio_maximo: 35000 } }),
+      final(respuestaFinal('a')),
+    ]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('una novela por menos de $35.000'));
+    expect(generarJson).toHaveBeenCalledTimes(3);
+    expect((llamadaN(generarJson, 0) as ConForzar).forzarHerramientas).toBeUndefined();
+    expect((llamadaN(generarJson, 1) as ConForzar).forzarHerramientas).toEqual(['buscar_libros']);
+    expect((llamadaN(generarJson, 2) as ConForzar).forzarHerramientas).toBeUndefined();
+    expect(respuesta.recomendaciones.map((r) => r.bookId)).toEqual(['a']);
+    expect(respuesta.meta).toMatchObject({ busquedaForzada: 'anuncio', rondas: 1, herramientas: ['buscar_libros'] });
+  });
+
+  it('solo se obliga una vez: si vuelve a anunciar sin buscar, no se entrega ese texto', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(anuncio), final(anuncio)]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion());
+    expect(generarJson).toHaveBeenCalledTimes(2);
+    expect(respuesta.texto).toBe(TEXTO_SIN_RESULTADOS);
+    expect(respuesta.sinResultados).toBe(true);
+    expect(respuesta.meta.busquedaForzada).toBe('anuncio');
+  });
+
+  it('si dice «no hay» sin haber buscado, también se le obliga a buscar una vez', async () => {
+    const noHay = { texto: 'No tenemos novelas por menos de treinta mil pesos.', recomendaciones: [], sinResultados: true };
+    const { proveedor, generarJson } = proveedorSecuencia([
+      final(noHay),
+      pide({ id: 'c1', nombre: 'buscar_libros', argumentos: { consulta: 'novela', precio_maximo: 30000 } }),
+      final(respuestaFinal('a')),
+    ]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('una novela por menos de $30.000'));
+    expect(generarJson).toHaveBeenCalledTimes(3);
+    expect((llamadaN(generarJson, 1) as ConForzar).forzarHerramientas).toEqual(['buscar_libros']);
+    expect(respuesta.recomendaciones.map((r) => r.bookId)).toEqual(['a']);
+    expect(respuesta.meta.busquedaForzada).toBe('sin-resultados');
+  });
+
+  it('si ya buscó y no encontró nada, su «no hay» se respeta sin otra búsqueda', async () => {
+    const noHay = { texto: 'No encontré libros así.', recomendaciones: [], sinResultados: true };
+    const { proveedor, generarJson } = proveedorSecuencia([
+      pide({ id: 'c1', nombre: 'buscar_libros', argumentos: { consulta: 'cálculo' } }),
+      final(noHay),
+    ]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('un libro de cálculo'));
+    expect(generarJson).toHaveBeenCalledTimes(2);
+    expect(respuesta).toMatchObject({ texto: noHay.texto, sinResultados: true });
+    expect(respuesta.meta.busquedaForzada).toBeNull();
+  });
+
+  it('una pregunta aclaratoria no activa la guarda', async () => {
+    const pregunta = { texto: '¿Qué género te gustaría buscar?', recomendaciones: [], sinResultados: false };
+    const { proveedor, generarJson } = proveedorSecuencia([final(pregunta)]);
+    const respuesta = await responder(conHerramientas(proveedor), peticion('recomiéndame algo'));
+    expect(generarJson).toHaveBeenCalledTimes(1);
+    expect(respuesta.texto).toBe(pregunta.texto);
+    expect(respuesta.meta.busquedaForzada).toBeNull();
+  });
+
+  it('con un prompt sin herramientas no puede obligar a buscar, pero tampoco entrega el anuncio', async () => {
+    const { proveedor, generarJson } = proveedorSecuencia([final(anuncio)]);
+    const respuesta = await responder(dependencias(proveedor), peticion());
+    expect(generarJson).toHaveBeenCalledTimes(1);
+    expect(respuesta.texto).toBe(TEXTO_SIN_RESULTADOS);
+    expect(respuesta.meta.busquedaForzada).toBeNull();
+  });
+});
+
 describe('responder — reintento de la respuesta final', () => {
   it('si la respuesta final no es JSON, se pide una vez más y se usa la segunda', async () => {
     const { proveedor, generarJson } = proveedorSecuencia([generacion('esto no es JSON'), final(respuestaFinal())]);
