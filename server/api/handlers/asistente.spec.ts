@@ -11,9 +11,11 @@ import {
 } from '../lib/proveedor-llm';
 import { TokenInvalidoError } from '../lib/verificar-token';
 
-const { verificarTokenDesdeHeaderMock, obtenerPorClaveMock, proveedorMock, almacenMock } = vi.hoisted(() => ({
+const { verificarTokenDesdeHeaderMock, obtenerPorClaveMock, sumarAtributoMock, crearSiNoExisteMock, proveedorMock, almacenMock } = vi.hoisted(() => ({
   verificarTokenDesdeHeaderMock: vi.fn(),
   obtenerPorClaveMock: vi.fn(),
+  sumarAtributoMock: vi.fn(),
+  crearSiNoExisteMock: vi.fn(),
   proveedorMock: { actual: null as unknown },
   almacenMock: { actual: null as unknown },
 }));
@@ -22,7 +24,11 @@ vi.mock('../lib/verificar-token', async () => {
   const real = await vi.importActual<typeof import('../lib/verificar-token')>('../lib/verificar-token');
   return { ...real, verificarTokenDesdeHeader: verificarTokenDesdeHeaderMock };
 });
-vi.mock('../services/dynamodb', () => ({ obtenerPorClave: obtenerPorClaveMock }));
+vi.mock('../services/dynamodb', () => ({
+  obtenerPorClave: obtenerPorClaveMock,
+  sumarAtributo: sumarAtributoMock,
+  crearSiNoExiste: crearSiNoExisteMock,
+}));
 vi.mock('../lib/gemini', () => ({ crearProveedorLlm: () => proveedorMock.actual }));
 vi.mock('../lib/almacen-indice', () => ({ crearAlmacenS3: () => almacenMock.actual }));
 
@@ -772,6 +778,9 @@ describe('crearCargadorIndice', () => {
   });
 });
 
+/** Tabla `babel-asistente-control` en memoria para las pruebas del handler. */
+const control = { items: new Map<string, Record<string, unknown>>() };
+
 describe('handler HTTP', () => {
   function evento(cuerpo: unknown, extra: Partial<APIGatewayProxyEventV2> = {}): APIGatewayProxyEventV2 {
     return {
@@ -790,8 +799,27 @@ describe('handler HTTP', () => {
     process.env['TABLA_LIBROS'] = 'libros';
     process.env['TABLA_CONOCIMIENTO'] = 'conocimiento';
     process.env['BUCKET_INDICE'] = 'bucket';
+    process.env['TABLA_CONTROL'] = 'control';
+    delete process.env['ASISTENTE_TOPE_DIARIO_USD'];
+    delete process.env['ASISTENTE_MENSAJES_POR_VISITANTE'];
+    control.items.clear();
+    sumarAtributoMock.mockImplementation(async (_tabla: string, clave: { clave: string }, atributo: string, cantidad: number, opciones?: { tope?: number }) => {
+      const item = control.items.get(clave.clave) ?? { clave: clave.clave };
+      const actual = (item[atributo] as number | undefined) ?? 0;
+      if (opciones?.tope !== undefined && item[atributo] !== undefined && actual >= opciones.tope) return { exito: false };
+      control.items.set(clave.clave, { ...item, [atributo]: actual + cantidad });
+      return { exito: true, nuevoValor: actual + cantidad };
+    });
+    crearSiNoExisteMock.mockImplementation(async (_tabla: string, item: { clave: string }) => {
+      if (control.items.has(item.clave)) return false;
+      control.items.set(item.clave, item);
+      return true;
+    });
     verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'u' });
     obtenerPorClaveMock.mockImplementation(async (tabla: string, clave: { email?: string; bookId?: string }) => {
+      if (tabla === 'control') {
+        return control.items.get((clave as { clave?: string }).clave as string);
+      }
       if (tabla === 'usuarios') {
         return { email: clave.email, rol: 'vendedor' };
       }
@@ -860,14 +888,148 @@ describe('handler HTTP', () => {
   it('un fallo inesperado responde 500 genérico', async () => {
     almacenMock.actual = { leer: async () => { throw new Error('S3 se cayó con detalles internos'); }, escribir: vi.fn() };
     // El cargador del módulo ya pudo haber guardado el índice de una prueba anterior: se fuerza otra ruta de error.
-    obtenerPorClaveMock.mockImplementation(async (tabla: string) => {
+    obtenerPorClaveMock.mockImplementation(async (tabla: string, clave: { clave?: string }) => {
       if (tabla === 'usuarios') {
         return { email: 'x', rol: 'vendedor' };
+      }
+      if (tabla === 'control') {
+        return control.items.get(clave.clave as string);
       }
       throw new Error('DynamoDB se cayó con detalles internos');
     });
     const resultado = await llamar(evento(buenaPeticion));
     expect(resultado.statusCode).toBe(500);
     expect(resultado.body).not.toContain('detalles internos');
+  });
+});
+
+describe('handler HTTP — control de gasto y de tasa (T-0060)', () => {
+  const evento = (extra: object = {}) =>
+    ({
+      headers: { authorization: 'Bearer token' },
+      body: JSON.stringify({ mensajes: [{ rol: 'usuario', texto: 'quiero una novela' }] }),
+      requestContext: { http: { sourceIp: '203.0.113.7' } },
+      ...extra,
+    }) as unknown as APIGatewayProxyEventV2;
+  const llamar = (e: APIGatewayProxyEventV2) => handler(e, {} as never, () => undefined) as Promise<{ statusCode: number; body: string }>;
+  const claveDe = (prefijo: string) => [...control.items.keys()].find((k) => k.startsWith(prefijo));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['ASISTENTE_ACTIVO'] = 'true';
+    process.env['TABLA_USUARIOS'] = 'usuarios';
+    process.env['TABLA_LIBROS'] = 'libros';
+    process.env['TABLA_CONOCIMIENTO'] = 'conocimiento';
+    process.env['BUCKET_INDICE'] = 'bucket';
+    process.env['TABLA_CONTROL'] = 'control';
+    delete process.env['ASISTENTE_TOPE_DIARIO_USD'];
+    delete process.env['ASISTENTE_MENSAJES_POR_VISITANTE'];
+    control.items.clear();
+    sumarAtributoMock.mockImplementation(async (_t: string, clave: { clave: string }, atributo: string, cantidad: number, opciones?: { tope?: number }) => {
+      const item = control.items.get(clave.clave) ?? { clave: clave.clave };
+      const actual = (item[atributo] as number | undefined) ?? 0;
+      if (opciones?.tope !== undefined && item[atributo] !== undefined && actual >= opciones.tope) return { exito: false };
+      control.items.set(clave.clave, { ...item, [atributo]: actual + cantidad });
+      return { exito: true, nuevoValor: actual + cantidad };
+    });
+    crearSiNoExisteMock.mockImplementation(async (_t: string, item: { clave: string }) => {
+      if (control.items.has(item.clave)) return false;
+      control.items.set(item.clave, item);
+      return true;
+    });
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'u' });
+    obtenerPorClaveMock.mockImplementation(async (tabla: string, clave: { email?: string; bookId?: string; clave?: string }) => {
+      if (tabla === 'control') return control.items.get(clave.clave as string);
+      if (tabla === 'usuarios') return { email: clave.email, rol: 'vendedor' };
+      if (tabla === 'libros') return inventarioBase[clave.bookId as string];
+      return { sinopsis: 'Una sinopsis', categorias: [], idioma: 'es' };
+    });
+    almacenMock.actual = { leer: async () => ({ contenido: serializarIndice(indicePrueba()), version: 'v1' }), escribir: vi.fn() };
+    proveedorMock.actual = proveedorFalso(
+      generacion({ texto: 'Te sugiero este.', recomendaciones: [{ bookId: 'a', motivo: 'Encaja.' }], sinResultados: false }),
+    ).proveedor;
+  });
+
+  it('una respuesta correcta suma su costo estimado al gasto del día y cuenta el mensaje del visitante', async () => {
+    expect((await llamar(evento())).statusCode).toBe(200);
+    const gasto = control.items.get(claveDe('gasto#') as string);
+    // proveedorFalso: 500 de entrada de generación, 80 de salida y 7 de embeddings → 150 + 200 + 1,4 → 352 µUSD
+    expect(gasto?.['microUsd']).toBe(352);
+    expect(control.items.get(claveDe('visitante#') as string)?.['mensajes']).toBe(1);
+  });
+
+  it('el costo estimado no sale al cliente', async () => {
+    const resultado = await llamar(evento());
+    expect(JSON.parse(resultado.body).meta).not.toHaveProperty('costoMicroUsd');
+  });
+
+  it('la IP nunca queda guardada: ni en las claves ni en los valores', async () => {
+    await llamar(evento());
+    expect(JSON.stringify([...control.items.entries()])).not.toContain('203.0.113.7');
+  });
+
+  it('el visitante que pasa su tope recibe 429 sin que se consulte a Gemini', async () => {
+    process.env['ASISTENTE_MENSAJES_POR_VISITANTE'] = '2';
+    expect((await llamar(evento())).statusCode).toBe(200);
+    expect((await llamar(evento())).statusCode).toBe(200);
+    const proveedor = proveedorFalso(generacion({}));
+    proveedorMock.actual = proveedor.proveedor;
+    const tercera = await llamar(evento());
+    expect(tercera.statusCode).toBe(429);
+    expect(JSON.parse(tercera.body).error).toContain('límite de mensajes');
+    expect(proveedor.generarJson).not.toHaveBeenCalled();
+  });
+
+  it('otra IP no comparte el tope', async () => {
+    process.env['ASISTENTE_MENSAJES_POR_VISITANTE'] = '1';
+    expect((await llamar(evento())).statusCode).toBe(200);
+    expect((await llamar(evento())).statusCode).toBe(429);
+    expect((await llamar(evento({ requestContext: { http: { sourceIp: '198.51.100.9' } } }))).statusCode).toBe(200);
+  });
+
+  it('con el tope de gasto del día alcanzado responde 503 y no consulta a Gemini', async () => {
+    process.env['ASISTENTE_TOPE_DIARIO_USD'] = '0.0003';
+    expect((await llamar(evento())).statusCode).toBe(200); // gasta 352 µUSD, más que el tope de 300
+    const proveedor = proveedorFalso(generacion({}));
+    proveedorMock.actual = proveedor.proveedor;
+    const segunda = await llamar(evento());
+    expect(segunda.statusCode).toBe(503);
+    expect(JSON.parse(segunda.body).error).toContain('descansa por hoy');
+    expect(proveedor.generarJson).not.toHaveBeenCalled();
+  });
+
+  it('el interruptor de la tabla apaga el asistente sin tocar el entorno', async () => {
+    control.items.set('interruptor', { clave: 'interruptor', activo: false });
+    const resultado = await llamar(evento());
+    expect(resultado.statusCode).toBe(503);
+  });
+
+  it('si la tabla de control falla, no se gasta: 503 genérico, sin detalle', async () => {
+    obtenerPorClaveMock.mockImplementation(async (tabla: string, clave: { email?: string }) => {
+      if (tabla === 'control') throw new Error('DynamoDB: AccessDenied en babel-asistente-control');
+      return { email: clave.email, rol: 'vendedor' };
+    });
+    const resultado = await llamar(evento());
+    expect(resultado.statusCode).toBe(503);
+    expect(resultado.body).not.toContain('AccessDenied');
+  });
+
+  it('sin TABLA_CONTROL configurada, tampoco se gasta', async () => {
+    delete process.env['TABLA_CONTROL'];
+    expect((await llamar(evento())).statusCode).toBe(503);
+  });
+
+  it('una petición inválida (400) no cuenta contra el tope del visitante', async () => {
+    const mala = await llamar(evento({ body: JSON.stringify({ mensajes: [] }) }));
+    expect(mala.statusCode).toBe(400);
+    expect(claveDe('visitante#')).toBeUndefined();
+  });
+
+  it('si no se puede registrar el gasto, la respuesta igual se entrega', async () => {
+    sumarAtributoMock.mockImplementation(async (_t: string, clave: { clave: string }) => {
+      if (clave.clave.startsWith('gasto#')) throw new Error('caída');
+      return { exito: true, nuevoValor: 1 };
+    });
+    expect((await llamar(evento())).statusCode).toBe(200);
   });
 });

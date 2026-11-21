@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tarea 11 (Casa del Libro como fuente de portadas) fusionada (#167). Tarea activa: **Tarea 12** (`T-0050`, Fase 5: corrección guiada por la suite; cerrada, PR #168 abierto). Siguiente: Fase 6 (`T-0060`) el lunes 23. Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
+**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tarea 11 (Casa del Libro como fuente de portadas) fusionada (#167). Tarea 12 (`T-0050`, Fase 5) fusionada (#168). Tarea activa: **Tarea 13** (`T-0060`, Fase 6 parte 1: control de gasto y de tasa; implementada). Siguientes: Fase 6 partes 2 y 3. Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -711,6 +711,17 @@ Decidido por Oliver el 20/11/2026, después de evaluar el sitio (Planeta de Libr
 - [x] v6 medida y no adoptada; corridas contra la línea base: v5 cumple (95 % en la principal). Bitácora 07.
 - [x] Oliver validó el complemento (16 aceptables nuevos) y decidió R03 (*Caldo de ojo* cuenta como inglés). Recalificado sin API: v5 cumple con 21/21 = 100 %.
 - [ ] Tras el despliegue a `staging`: la próxima reconstrucción del índice (cada 6 h) agrega el precio a todas las entradas sin pedir embeddings; una pregunta como «una novela por menos de $30.000» debe recomendar libros de ese precio.
+
+## Tarea 13 — Fase 6, parte 1: control de gasto y de tasa (`T-0060`) — IMPLEMENTADA, PR pendiente (2026-11-21)
+
+Preparada antes de lo previsto (sábado 21/11, a pedido del usuario). La Fase 6 se parte en tres PRs: **(1) este: control**, (2) registros con enmascarado de datos personales, (3) validador de fidelidad, límite en API Gateway, casos de seguridad y revisión OWASP.
+
+- [x] Tabla `babel-asistente-control` (PK `clave`, TTL `expiraEn`): interruptor, gasto del día, mensajes por visitante y sal diaria. Rol IAM: solo `GetItem`/`PutItem`/`UpdateItem` sobre esa tabla.
+- [x] `lib/control-asistente.ts`: tarifa verificada de Gemini, costo estimado por respuesta, tope diario en USD (1 en `staging`, 3 en producción) y 30 mensajes por visitante y día. El visitante es un hash de la IP con una sal aleatoria del día: la IP no se guarda y no se cruza entre días.
+- [x] Handler: 503 con el interruptor apagado o el tope del día alcanzado, 429 con el tope del visitante; si la tabla falla, 503 (sin poder verificar el tope no se gasta). El costo estimado queda en el registro de la Lambda y no sale al cliente.
+- [x] 908 pruebas de backend en verde (40 nuevas); `serverless package` y carga del handler desde `asistente.zip`.
+- [ ] Tras el despliegue a `staging`: dos preguntas seguidas deben crear `gasto#<día>`, `visitante#<día>#<hash>` y `sal#<día>` en `babel-asistente-control-staging`; con `ASISTENTE_MENSAJES_POR_VISITANTE` bajo, la siguiente da 429.
+- [ ] **Del usuario:** confirmar los topes (1 y 3 USD al día; 30 mensajes por visitante). Cambiarlos es editar `serverless.yml`.
 
 ## Hotfix — Ficha pública sin datos internos (2026-11-17) — detalle
 

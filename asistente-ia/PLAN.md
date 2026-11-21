@@ -190,8 +190,8 @@ Entra porque v5 no cumple los criterios de 4b (20/11/2026). Alcance decidido con
 ### Fase 6 — Operación segura (backend) · `T-0060` · capacidad: uso responsable, privacidad y seguridad
 
 - [ ] Tabla `babel-asistente-registros` (TTL): consulta con correos, teléfonos y números de documento enmascarados, `bookId` propuestos, latencia, tokens, costo estimado, modelo, versión del prompt, valoración y banderas (rechazo, inyección sospechada). Sin IP: solo un hash con sal diaria rotativa.
-- [ ] Tabla `babel-asistente-control`: interruptor administrable, contador atómico de gasto diario (tope en USD) y de mensajes por visitante (con TTL).
-- [ ] Límites de entrada (longitud, número de turnos) y limitación de tasa en API Gateway para la ruta.
+- [x] Tabla `babel-asistente-control`: interruptor administrable, contador atómico de gasto diario (tope en USD) y de mensajes por visitante (con TTL). Hecho el 21/11/2026 (bitácora 08); la pantalla del interruptor llega con la Fase 8.
+- [ ] Límites de entrada (longitud, número de turnos) y limitación de tasa en API Gateway para la ruta. Los límites de entrada ya estaban desde `T-0023`; el tope de mensajes por visitante y día está hecho (bitácora 08); falta la limitación de tasa en API Gateway.
 - [ ] **Validador de fidelidad (decidido el 18/11/2026).** Mismo principio que el validador de `bookId`, aplicado a datos: toda hora, porcentaje, teléfono, dirección y precio que aparezca en `texto` debe estar en las políticas o en los datos de ese turno (libros ofrecidos y resultados de herramientas). Si no, la respuesta se descarta, se pide una vez más y se cuenta en el registro. Sirve con las políticas en el contexto o detrás de una herramienta: tenerlas a la vista no impide que el modelo las cambie. Casos en la suite: respuestas con un dato alterado.
 - [ ] Casos de seguridad agregados a la suite; ficha de riesgos actualizada con los controles reales; verificación con la skill `owasp-security-verification`.
 

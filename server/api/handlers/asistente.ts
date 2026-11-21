@@ -29,6 +29,13 @@ import {
   type PeticionAsistente,
   type PromptAsistente,
 } from '../lib/asistente';
+import {
+  costoEnMicroUsd,
+  crearAlmacenControl,
+  evaluarEntrada,
+  limitesDelEntorno,
+  registrarGasto,
+} from '../lib/control-asistente';
 import { crearProveedorLlm } from '../lib/gemini';
 import {
   HERRAMIENTAS,
@@ -132,6 +139,10 @@ export interface RespuestaAsistente {
      * o ubicación sin haberla consultado (datos que el modelo no tiene en el contexto).
      */
     disponibilidadForzada: boolean;
+    /** Tokens de entrada de los embeddings (la consulta), que se cobran aparte de los de generación. */
+    tokensEmbeddings: number;
+    /** Costo estimado de esta respuesta en micro-USD (1 USD = 1.000.000) a la tarifa de `control-asistente.ts`. */
+    costoMicroUsd: number;
   };
 }
 
@@ -325,6 +336,12 @@ export async function responder(
     reintentoFinal,
     busquedaForzada,
     disponibilidadForzada,
+    tokensEmbeddings: sesion.tokensEntradaEmbeddings,
+    costoMicroUsd: costoEnMicroUsd({
+      tokensEntradaGeneracion: tokensGeneracionEntrada,
+      tokensSalida,
+      tokensEmbeddings: sesion.tokensEntradaEmbeddings,
+    }),
     ...extra,
   });
 
@@ -576,6 +593,12 @@ function dependenciasReales(): DependenciasAsistente {
   };
 }
 
+const MENSAJES_DE_CONTROL = {
+  apagado: 'El asistente no está disponible por ahora.',
+  'tope-diario': 'El asistente descansa por hoy. Vuelve mañana y con gusto te ayudo a encontrar tu próxima lectura.',
+  'tope-visitante': 'Llegaste al límite de mensajes de hoy. Vuelve mañana y con gusto seguimos.',
+} as const;
+
 export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   try {
     // Interruptor: apagado, ni siquiera se consulta a Firebase ni a Gemini.
@@ -601,10 +624,39 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
     }
     const peticion = validarPeticion(cuerpo);
 
+    // Control de operación (Fase 6): interruptor administrable, tope de gasto del día y de mensajes por visitante.
+    // Sin poder verificarlo (tabla caída o sin configurar), no se gasta: 503.
+    const ahoraMs = Date.now();
+    let almacenControl: ReturnType<typeof crearAlmacenControl>;
+    let veredicto: Awaited<ReturnType<typeof evaluarEntrada>>;
+    try {
+      almacenControl = crearAlmacenControl(variable('TABLA_CONTROL'));
+      veredicto = await evaluarEntrada(almacenControl, {
+        ip: event.requestContext?.http?.sourceIp ?? 'desconocida',
+        ahoraMs,
+        limites: limitesDelEntorno(),
+      });
+    } catch (error) {
+      console.error('asistente: no se pudo verificar el control de gasto', error instanceof Error ? error.name : 'desconocido');
+      return respuestaJson(503, { error: 'El asistente no está disponible por ahora.' });
+    }
+    if (!veredicto.permitido) {
+      console.log('asistente: petición no atendida', veredicto.motivo);
+      return respuestaJson(veredicto.motivo === 'tope-visitante' ? 429 : 503, { error: MENSAJES_DE_CONTROL[veredicto.motivo] });
+    }
+
     const respuesta = await responder(dependenciasReales(), peticion);
+    try {
+      await registrarGasto(almacenControl, veredicto.dia, respuesta.meta.costoMicroUsd, ahoraMs);
+    } catch (error) {
+      // La respuesta ya está lista: se entrega, y el fallo queda en el registro (el gasto del día queda subcontado).
+      console.error('asistente: no se pudo registrar el gasto', error instanceof Error ? error.name : 'desconocido');
+    }
     // Solo cifras: ni el texto de la persona ni el de la respuesta quedan en los registros (privacidad).
     console.log('asistente', JSON.stringify(respuesta.meta));
-    return respuestaJson(200, respuesta);
+    // El costo estimado es dato de operación (queda en el registro y en el gasto del día): no sale al cliente.
+    const { costoMicroUsd: _costo, ...metaPublica } = respuesta.meta;
+    return respuestaJson(200, { ...respuesta, meta: metaPublica });
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });

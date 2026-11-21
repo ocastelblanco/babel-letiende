@@ -18,6 +18,8 @@ const {
   escanearProyeccion,
   escanearTodo,
   decrementarPorCantidadSiSuficiente,
+  sumarAtributo,
+  crearSiNoExiste,
   removerAtributo,
   fusionarLibroDuplicado,
   trasladarLibroAUbicacion,
@@ -411,5 +413,64 @@ describe('traslado de libros (trasladarLibroAUbicacion / fusionarLibroTrasladado
     await expect(
       fusionarLibroTrasladado('tabla', { bookId: 'o', cantidadTotal: 1, cantidadDisponible: 1 }, 'd', 'ahora'),
     ).rejects.toBeInstanceOf(ConflictoDeConcurrenciaError);
+  });
+});
+
+describe('contadores de control del asistente (T-0060)', () => {
+  const entradaDe = () => (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+  beforeEach(() => {
+    sendMock.mockReset();
+  });
+
+  describe('sumarAtributo', () => {
+    it('suma con ADD (atómico) y devuelve el valor que da DynamoDB', async () => {
+      sendMock.mockResolvedValueOnce({ Attributes: { mensajes: 4 } });
+      const resultado = await sumarAtributo('control', { clave: 'visitante#x' }, 'mensajes', 1);
+      expect(resultado).toEqual({ exito: true, nuevoValor: 4 });
+      expect(entradaDe()).toMatchObject({ UpdateExpression: 'ADD #atributo :cantidad', ReturnValues: 'UPDATED_NEW' });
+      expect(entradaDe()['ConditionExpression']).toBeUndefined();
+    });
+
+    it('con tope, solo suma mientras el valor sea menor (o no exista)', async () => {
+      sendMock.mockResolvedValueOnce({ Attributes: { mensajes: 1 } });
+      await sumarAtributo('control', { clave: 'visitante#x' }, 'mensajes', 1, { tope: 30 });
+      expect(entradaDe()).toMatchObject({
+        ConditionExpression: 'attribute_not_exists(#atributo) OR #atributo < :tope',
+        ExpressionAttributeValues: { ':cantidad': 1, ':tope': 30 },
+      });
+    });
+
+    it('con expiraEn fija el TTL solo la primera vez (if_not_exists)', async () => {
+      sendMock.mockResolvedValueOnce({ Attributes: { mensajes: 1 } });
+      await sumarAtributo('control', { clave: 'visitante#x' }, 'mensajes', 1, { expiraEn: 1_800_000_000 });
+      expect(entradaDe()).toMatchObject({
+        UpdateExpression: 'ADD #atributo :cantidad SET #expiraEn = if_not_exists(#expiraEn, :expiraEn)',
+        ExpressionAttributeNames: { '#atributo': 'mensajes', '#expiraEn': 'expiraEn' },
+        ExpressionAttributeValues: { ':expiraEn': 1_800_000_000 },
+      });
+    });
+
+    it('devuelve exito false, sin lanzar, si el tope ya se alcanzó', async () => {
+      sendMock.mockRejectedValueOnce(new ConditionalCheckFailedException({ message: 'x', $metadata: {} }));
+      expect(await sumarAtributo('control', { clave: 'k' }, 'mensajes', 1, { tope: 30 })).toEqual({ exito: false });
+    });
+
+    it('cualquier otro error se propaga', async () => {
+      sendMock.mockRejectedValueOnce(new Error('caída'));
+      await expect(sumarAtributo('control', { clave: 'k' }, 'mensajes', 1)).rejects.toThrow('caída');
+    });
+  });
+
+  describe('crearSiNoExiste', () => {
+    it('escribe con attribute_not_exists sobre la clave y devuelve true', async () => {
+      sendMock.mockResolvedValueOnce({});
+      expect(await crearSiNoExiste('control', { clave: 'sal#2026-11-21', sal: 'x' }, 'clave')).toBe(true);
+      expect(entradaDe()).toMatchObject({ ConditionExpression: 'attribute_not_exists(#clave)', ExpressionAttributeNames: { '#clave': 'clave' } });
+    });
+
+    it('devuelve false si ya existía', async () => {
+      sendMock.mockRejectedValueOnce(new ConditionalCheckFailedException({ message: 'x', $metadata: {} }));
+      expect(await crearSiNoExiste('control', { clave: 'k' }, 'clave')).toBe(false);
+    });
   });
 });
