@@ -38,6 +38,7 @@ custom:
     validacionesLibros: babel-validaciones-libros-${sls:stage}
     conocimiento: babel-libros-conocimiento-${sls:stage}
     cargaConocimiento: babel-carga-conocimiento-${sls:stage}
+    asistenteControl: babel-asistente-control-${sls:stage}
   # Nombre real de la función `validarLibrosWorker`, calculado por
   # convención (no por !GetAtt) para poder referenciarlo tanto en la
   # variable de entorno `NOMBRE_FUNCION_WORKER` (iniciarValidacionLibros y
@@ -55,6 +56,13 @@ custom:
   asistenteActivo:
     staging: 'true'
     production: 'false'
+  # Topes del asistente (T-0060): gasto diario en USD y mensajes por visitante y día. Se pasan como texto.
+  # Gasto estimado con la tarifa de `server/api/lib/control-asistente.ts`; el valor por defecto de la Lambda
+  # es el más estricto (1 USD, 30 mensajes) si esto falta o es inválido.
+  asistenteTopeDiarioUsd:
+    staging: '1'
+    production: '3'
+  asistenteMensajesPorVisitante: '30'
   # Igual que arriba, para la carga retroactiva del asistente (T-0013, ADR-012).
   nombreFuncionCargaConocimientoWorker: ${self:service}-${sls:stage}-cargaConocimientoWorker
 
@@ -2459,7 +2467,8 @@ functions:
     role: !GetAtt AsistenteLambdaRole.Arn
     description: >-
       POST /api/asistente — asistente de recomendación (T-0023). Por ahora solo personal
-      (vendedor o administrador) y con interruptor ASISTENTE_ACTIVO: apagado en producción.
+      (vendedor o administrador), con interruptor ASISTENTE_ACTIVO (apagado en producción) y topes de gasto
+      y de mensajes por visitante (T-0060).
     # Por debajo del límite de 30 s de API Gateway; el cliente de Gemini usa 10 s por intento y un reintento.
     timeout: 29
     memorySize: 512
@@ -2473,6 +2482,9 @@ functions:
       TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
       BUCKET_INDICE: ${self:custom.bucketIndice}
       ASISTENTE_ACTIVO: ${self:custom.asistenteActivo.${sls:stage}, 'false'}
+      TABLA_CONTROL: ${self:custom.nombresTablas.asistenteControl}
+      ASISTENTE_TOPE_DIARIO_USD: ${self:custom.asistenteTopeDiarioUsd.${sls:stage}, '1'}
+      ASISTENTE_MENSAJES_POR_VISITANTE: ${self:custom.asistenteMensajesPorVisitante}
       VERSION_PROMPT_ASISTENTE: v5
       FIREBASE_SERVICE_ACCOUNT_BABEL: ${env:FIREBASE_SERVICE_ACCOUNT_BABEL, ''}
       GEMINI_API_KEY: ${env:GEMINI_API_KEY, ''}
@@ -2482,6 +2494,7 @@ functions:
         - 'dist-server/api/handlers/asistente.js'
         - 'dist-server/api/lib/almacen-indice.js'
         - 'dist-server/api/lib/asistente.js'
+        - 'dist-server/api/lib/control-asistente.js'
         - 'dist-server/api/lib/gemini.js'
         - 'dist-server/api/lib/herramientas-asistente.js'
         - 'dist-server/api/lib/indice-vectorial.js'
@@ -3735,7 +3748,7 @@ resources:
                     - !GetAtt BucketIndiceAsistente.Arn
 
     # Lambda del asistente (T-0023): lee libros y conocimiento (GetItem) y el índice de S3; resuelve el rol
-    # del usuario. No escribe en ninguna tabla ni en el bucket (A05).
+    # del usuario. Solo escribe en su tabla de control (T-0060); no escribe en el inventario ni en el bucket (A05).
     AsistenteLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -3765,6 +3778,14 @@ resources:
                     - !GetAtt TablaUbicaciones.Arn
                     - !GetAtt TablaMuebles.Arn
                     - !GetAtt TablaEspacios.Arn
+                # Control de gasto y de tasa (T-0060): solo su propia tabla, y solo estas tres acciones.
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - !GetAtt TablaAsistenteControl.Arn
           # ListBucket hace falta para que un índice inexistente responda 404 y no 403 (antes de la primera reconstrucción).
           - PolicyName: babel-asistente-role-s3-${sls:stage}
             PolicyDocument:
@@ -4187,6 +4208,23 @@ resources:
         KeySchema:
           - AttributeName: bookId
             KeyType: HASH
+
+    # Control de operación del asistente (T-0060): interruptor administrable, gasto diario y mensajes por
+    # visitante (contadores atómicos) y sal diaria para anonimizar la IP. Todo ítem con fecha caduca por TTL.
+    TablaAsistenteControl:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.asistenteControl}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: clave
+            AttributeType: S
+        KeySchema:
+          - AttributeName: clave
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: expiraEn
+          Enabled: true
 
     # --- Dominio personalizado babel.letiende.co (solo stage production, PRD.md §6) ---
     # Condicionado a EsProduccion porque staging sigue usando la URL cruda de API Gateway

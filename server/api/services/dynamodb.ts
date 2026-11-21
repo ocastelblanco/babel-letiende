@@ -268,6 +268,80 @@ export async function decrementarPorCantidadSiSuficiente(
   }
 }
 
+/** Resultado de `sumarAtributo`: `exito: false` solo si el atributo ya había llegado al tope. */
+export type ResultadoSuma = { exito: true; nuevoValor: number } | { exito: false };
+
+/**
+ * Suma `cantidad` a un atributo numérico (`ADD`, atómico; si el ítem o el atributo no existen, los crea).
+ * Con `tope`, solo suma mientras el valor actual sea MENOR que el tope (contador con límite: dos peticiones
+ * simultáneas no pueden pasarse). Con `expiraEn` (segundos Unix) fija el TTL del ítem la primera vez, sin
+ * moverlo en las siguientes. Devuelve `{ exito: false }`, sin lanzar, si el tope ya se alcanzó.
+ */
+export async function sumarAtributo(
+  nombreTabla: string,
+  clave: ClaveDynamoDB,
+  nombreAtributo: string,
+  cantidad: number,
+  opciones: { tope?: number; expiraEn?: number } = {},
+): Promise<ResultadoSuma> {
+  const valores: Record<string, number> = { ':cantidad': cantidad };
+  let actualizacion = 'ADD #atributo :cantidad';
+  const nombres: Record<string, string> = { '#atributo': nombreAtributo };
+  if (opciones.expiraEn !== undefined) {
+    actualizacion += ' SET #expiraEn = if_not_exists(#expiraEn, :expiraEn)';
+    nombres['#expiraEn'] = 'expiraEn';
+    valores[':expiraEn'] = opciones.expiraEn;
+  }
+  if (opciones.tope !== undefined) {
+    valores[':tope'] = opciones.tope;
+  }
+  try {
+    const resultado = await documento.send(
+      new UpdateCommand({
+        TableName: nombreTabla,
+        Key: clave,
+        UpdateExpression: actualizacion,
+        ...(opciones.tope !== undefined
+          ? { ConditionExpression: 'attribute_not_exists(#atributo) OR #atributo < :tope' }
+          : {}),
+        ExpressionAttributeNames: nombres,
+        ExpressionAttributeValues: valores,
+        ReturnValues: 'UPDATED_NEW',
+      }),
+    );
+    return { exito: true, nuevoValor: (resultado.Attributes as Record<string, number>)[nombreAtributo] as number };
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return { exito: false };
+    }
+    throw error;
+  }
+}
+
+/** Escribe el ítem solo si su clave no existe todavía; `false` si ya existía (otra petición lo creó antes). */
+export async function crearSiNoExiste<T extends object>(
+  nombreTabla: string,
+  item: T,
+  atributoClave: string,
+): Promise<boolean> {
+  try {
+    await documento.send(
+      new PutCommand({
+        TableName: nombreTabla,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(#clave)',
+        ExpressionAttributeNames: { '#clave': atributoClave },
+      }),
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 /**
  * Quita por completo un atributo de un ítem (`REMOVE`) — usado para sacar
  * `disponibleParaCatalogo` del ítem cuando `cantidadDisponible` llega a 0

@@ -14,6 +14,7 @@ Registro de lo que se hizo, cómo y por qué, escrito para **consultarlo despué
 | 05 | [Llamado de herramientas: contrato verificado, validación de argumentos y bucle acotado](05-herramientas.md) | 3 | Completa (`T-0030` fusionada, prompt v5) |
 | 06 | [Suite de evaluación y línea base](06-evaluacion.md) | 4 | 4a y 4b completas (`T-0041` #165, `T-0042` #166); 4c (`T-0043`) después de producción |
 | 07 | [Iteración con evidencia: guardas del servidor, casos redefinidos y v6](07-iteracion.md) | 5 | Completa (`T-0050`, PR #168) |
+| 08 | [Operación segura: control de gasto y de tasa](08-operacion-segura.md) | 6 | En curso (`T-0060`, parte 1 implementada el 21/11/2026) |
 | 08 | Operación segura: registro, topes y privacidad | 6 | Pendiente |
 | 09 | Chat en el catálogo público y salida a producción | 7 | Pendiente |
 | 10 | Tablero y análisis de 20 respuestas reales | 8 | Pendiente |
