@@ -47,3 +47,13 @@ Campos nuevos de los casos: `avisoCercanos` (solo en «sin respuesta»: expresio
 ## Cómo validar los candidatos (tu parte)
 
 Abre `congelado/candidatos.md`. Cada pregunta trae unos 15 a 20 libros: los que encontró el recuperador y los que encontró una búsqueda por palabras. Marca con `x` los que serían una buena respuesta y agrega con `+ ISBN` o `+ Título exacto` los que conozcas y falten. El orden está barajado a propósito, para que los primeros no pesen más. Cuando termines, avísame.
+
+## Fase 6: preguntas libres con `preguntar.mjs`
+
+```text
+preguntar.mjs "una novela por menos de $30.000"     pregunta suelta
+preguntar.mjs --idioma en --precio-maximo 50000 "…"   con filtros
+preguntar.mjs                                        conversación de varios turnos
+```
+
+Corre `responder()` (el código de la Lambda) sobre la copia congelada de producción y el índice local, sin tocar AWS ni escribir nada en disco: tus preguntas no se guardan (los embeddings de las consultas de las evaluaciones se leen, nunca se escriben). Imprime el texto, las recomendaciones con precio e idioma y una línea con `meta` (herramientas usadas, búsqueda forzada, latencia, descartados). Sirve para probar a mano con el catálogo completo, porque `staging` tiene muy pocos libros. Opciones: `--prompt v6` (otra versión), `--sin-adultos`, `--json` (respuesta cruda). En la conversación: `/nueva`, `/filtros idioma=en precio=30000 adultos=no` y `/salir`. Usa la clave de `staging` (gratuita) salvo que pongas `EVALS_CLAVE=production`.
