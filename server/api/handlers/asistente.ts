@@ -36,6 +36,7 @@ import {
   limitesDelEntorno,
   registrarGasto,
 } from '../lib/control-asistente';
+import { construirRegistro } from '../lib/registro-asistente';
 import { crearProveedorLlm } from '../lib/gemini';
 import {
   HERRAMIENTAS,
@@ -59,7 +60,7 @@ import {
   type RondaHerramientas,
 } from '../lib/proveedor-llm';
 import { TokenInvalidoError, verificarTokenDesdeHeader } from '../lib/verificar-token';
-import { obtenerPorClave } from '../services/dynamodb';
+import { guardar, obtenerPorClave } from '../services/dynamodb';
 
 /**
  * `POST /api/asistente` — asistente de recomendación (`asistente-ia/PLAN.md` Fase 2, T-0023).
@@ -652,11 +653,21 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
       // La respuesta ya está lista: se entrega, y el fallo queda en el registro (el gasto del día queda subcontado).
       console.error('asistente: no se pudo registrar el gasto', error instanceof Error ? error.name : 'desconocido');
     }
+    // Registro del turno (consulta enmascarada, sin texto de respuesta ni IP). A diferencia del control, no es
+    // condición para responder: si falla, se entrega la respuesta sin `registroId` y el fallo queda en el log.
+    let registroId: string | null = null;
+    try {
+      const registro = construirRegistro(peticion, respuesta, { visitante: veredicto.visitante, ahoraMs });
+      await guardar(variable('TABLA_REGISTROS'), registro);
+      registroId = registro.registroId;
+    } catch (error) {
+      console.error('asistente: no se pudo guardar el registro', error instanceof Error ? error.name : 'desconocido');
+    }
     // Solo cifras: ni el texto de la persona ni el de la respuesta quedan en los registros (privacidad).
     console.log('asistente', JSON.stringify(respuesta.meta));
     // El costo estimado es dato de operación (queda en el registro y en el gasto del día): no sale al cliente.
     const { costoMicroUsd: _costo, ...metaPublica } = respuesta.meta;
-    return respuestaJson(200, { ...respuesta, meta: metaPublica });
+    return respuestaJson(200, { ...respuesta, registroId, meta: metaPublica });
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });
