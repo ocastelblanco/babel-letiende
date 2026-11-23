@@ -1,6 +1,6 @@
 # 08 · Operación segura (Fase 6, `T-0060`)
 
-> **Estado:** en curso. Parte 1 (control de gasto y de tasa) hecha, fusionada y desplegada el sábado 21/11/2026, antes de lo previsto. Parte 2 (registros con enmascarado) hecha el lunes 23/11/2026. Queda la parte 3: validador de fidelidad, límite en API Gateway y revisión OWASP.
+> **Estado:** en curso. Parte 1 (control de gasto y de tasa) hecha, fusionada y desplegada el sábado 21/11/2026, antes de lo previsto. Parte 2 (registros con enmascarado) hecha y verificada en `staging` el lunes 23/11/2026. Queda la parte 3: reintentos ante Gemini saturado, validador de fidelidad, límite en API Gateway y revisión OWASP.
 
 ## 1. Por qué existe
 
@@ -54,6 +54,10 @@ Cada respuesta del asistente deja un ítem en **`babel-asistente-registros`** (D
 **`registroId` en la respuesta HTTP:** identificador opaco (UUID) para que el cliente pueda valorar esa respuesta en la Fase 7. El endpoint de valoración deberá comprobar que quien valora es el mismo visitante del registro (el hash está guardado).
 
 **Sin índices:** el panel de la Fase 8 leerá por escaneo del día; si el volumen lo pide se agrega un índice por `dia`.
+
+**Verificado en `staging` (23/11/2026).** Una pregunta con un correo y un celular dejó su ítem: consulta `Escríbeme a [correo] o al [teléfono]: quiero una novela`, 2 datos enmascarados, `expiraEn` a 90 días, sin texto de respuesta, IP ni correo; costo 1.811 µUSD, 6,8 s. La respuesta trajo el `registroId`, el mismo del ítem. La regla de la cédula quedó solo en pruebas automáticas.
+
+**Hallazgo: Gemini saturado (23/11/2026).** Las siguientes preguntas en `staging` dieron 503 (siete seguidas entre las 18:04 y las 18:11, hora de Bogotá). Se descartó que fuera propio: la Lambda usa la misma clave que el equipo local (misma huella), una llamada mínima a `gemini-3.5-flash-lite` dio 200 tres de tres, y la petición completa del asistente dio 503 una de tres con latencias de 10 s (a las 18:08 tardaba 1,6 s). Es saturación intermitente del modelo con las peticiones grandes. El log solo guarda el estado (503) y no el cuerpo del error, a propósito. **Decisión del usuario:** reintentar más veces con espera creciente y mostrar mensajes explícitos con citas literarias; entra en la parte 3.
 
 ## 7. Fuentes
 

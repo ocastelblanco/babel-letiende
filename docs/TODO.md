@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (20/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 3 y 4a fusionadas (PRs #151 a #165; prompt vigente v5); 4b implementada (v5 no cumple los criterios: entra la Fase 5). Tarea 11 (Casa del Libro como fuente de portadas) fusionada (#167). Tarea 12 (`T-0050`, Fase 5) fusionada (#168). Tarea activa: **Tarea 13** (`T-0060`, Fase 6 parte 1: control de gasto y de tasa; implementada). Siguientes: Fase 6 partes 2 y 3. Calendario revisado: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
+**Motor JIT activo (23/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 5 fusionadas (prompt vigente v5), más `preguntar.mjs` (#169), la guarda de existencias y ubicación (#170) y la Fase 6 parte 1, control de gasto y de tasa (#171, verificada en `staging` y desplegada en producción el 21/11). Tarea activa: **Tarea 14** (`T-0060`, Fase 6 parte 2: registros con enmascarado; implementada, PR #172). Siguiente: **Tarea 15** (Fase 6 parte 3: reintentos ante Gemini saturado con mensajes explícitos, validador de fidelidad, límite en API Gateway, revisión OWASP). Calendario: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -588,6 +588,22 @@ Rama `feature/aviso-duplicado-sin-isbn-frontend`. Detalle en el plan, §6. Solo 
 
 Detalle en `asistente-ia/PLAN.md` §3 y ADR-018. Tabla `babel-libros-conocimiento` (`PAY_PER_REQUEST`, sin GSIs) `ACTIVE`; las 5 funciones tocadas con su variable y permisos mínimos (verificados con el simulador de IAM); sin errores en los logs. Pendiente solo la prueba autenticada de `GET /api/metadatos/:isbn`, que se hace desde Catalogar con la T-0012.
 
+## Tarea 14 — Fase 6, parte 2: registros de turnos con enmascarado (`T-0060`) — IMPLEMENTADA, PR #172 abierto (2026-11-23)
+
+- [x] Tabla `babel-asistente-registros` (PK `registroId`, TTL `expiraEn` a 90 días, bajo demanda). Rol IAM: solo `PutItem` sobre esa tabla.
+- [x] `lib/registro-asistente.ts`: `enmascararDatosPersonales` (correos, teléfonos, documentos; conserva precios con `$`, años, cantidades y ISBN-13), `sospechaInyeccion` (bandera, nunca bloquea) y `construirRegistro` (sin texto de respuesta, IP ni correo de la cuenta).
+- [x] Handler: guarda el registro tras responder, dentro de `try/catch` (un fallo no impide responder) y devuelve `registroId` (o `null`) para que la Fase 7 valore la respuesta.
+- [x] 937 pruebas en verde (29 nuevas); `serverless package` y carga del handler desde `asistente.zip`.
+- [x] Verificado en `staging` (23/11): una pregunta con correo y celular dejó su ítem con `[correo]` y `[teléfono]`, `expiraEn` a 90 días y sin texto de respuesta. La regla de la cédula quedó solo en pruebas automáticas, porque Gemini devolvió 503 de forma intermitente esa tarde (la misma clave respondía 200 a una llamada mínima: saturación del modelo, no un fallo propio).
+- [ ] **Del usuario:** fusionar #172; opcionalmente repetir «Mi cédula es 1020304050…» cuando Gemini responda y avisar para revisar el ítem.
+
+## Tarea 15 — Fase 6, parte 3: fidelidad, resiliencia y revisión de seguridad (`T-0060`) — SIGUIENTE
+
+- [ ] **Reintentos ante Gemini saturado (decidido el 23/11/2026).** Hoy se reintenta una sola vez y la persona ve «intenta de nuevo». Más reintentos con espera creciente dentro del límite de 30 s de API Gateway (vigilando el reloj), y mensajes que distingan «estoy saturado» de un error, con citas literarias como tono (el usuario lo aprobó).
+- [ ] Validador de fidelidad de datos en `texto` (horas, porcentajes, teléfonos, direcciones, precios).
+- [ ] Limitación de tasa en API Gateway para la ruta del asistente.
+- [ ] Casos de seguridad en la suite, ficha de riesgos actualizada y revisión con `owasp-security-verification` (incluye qué parte de `meta` sale al público).
+
 ## Hotfix — Ficha pública sin datos internos — COMPLETO (PR #153 fusionado; verificado en `staging` y en producción el 2026-11-17)
 
 `GET /api/libros/:bookId` devuelve solo la lista blanca `aLibroPublico`; `GET /api/libros/:bookId/completo` (personal) la reemplaza para Catalogar. Detalle al final de este documento y gotcha en `CLAUDE.md` §7.
@@ -712,7 +728,7 @@ Decidido por Oliver el 20/11/2026, después de evaluar el sitio (Planeta de Libr
 - [x] Oliver validó el complemento (16 aceptables nuevos) y decidió R03 (*Caldo de ojo* cuenta como inglés). Recalificado sin API: v5 cumple con 21/21 = 100 %.
 - [ ] Tras el despliegue a `staging`: la próxima reconstrucción del índice (cada 6 h) agrega el precio a todas las entradas sin pedir embeddings; una pregunta como «una novela por menos de $30.000» debe recomendar libros de ese precio.
 
-## Tarea 13 — Fase 6, parte 1: control de gasto y de tasa (`T-0060`) — IMPLEMENTADA, PR pendiente (2026-11-21)
+## Tarea 13 — Fase 6, parte 1: control de gasto y de tasa (`T-0060`) — COMPLETA (PR #171 fusionado; verificado en `staging` y desplegado en producción el 2026-11-21)
 
 Preparada antes de lo previsto (sábado 21/11, a pedido del usuario). La Fase 6 se parte en tres PRs: **(1) este: control**, (2) registros con enmascarado de datos personales, (3) validador de fidelidad, límite en API Gateway, casos de seguridad y revisión OWASP.
 
@@ -720,8 +736,8 @@ Preparada antes de lo previsto (sábado 21/11, a pedido del usuario). La Fase 6 
 - [x] `lib/control-asistente.ts`: tarifa verificada de Gemini, costo estimado por respuesta, tope diario en USD (1 en `staging`, 3 en producción) y 30 mensajes por visitante y día. El visitante es un hash de la IP con una sal aleatoria del día: la IP no se guarda y no se cruza entre días.
 - [x] Handler: 503 con el interruptor apagado o el tope del día alcanzado, 429 con el tope del visitante; si la tabla falla, 503 (sin poder verificar el tope no se gasta). El costo estimado queda en el registro de la Lambda y no sale al cliente.
 - [x] 908 pruebas de backend en verde (40 nuevas); `serverless package` y carga del handler desde `asistente.zip`.
-- [ ] Tras el despliegue a `staging`: dos preguntas seguidas deben crear `gasto#<día>`, `visitante#<día>#<hash>` y `sal#<día>` en `babel-asistente-control-staging`; con `ASISTENTE_MENSAJES_POR_VISITANTE` bajo, la siguiente da 429.
-- [ ] **Del usuario:** confirmar los topes (1 y 3 USD al día; 30 mensajes por visitante). Cambiarlos es editar `serverless.yml`.
+- [x] Verificado en `staging` con dos preguntas reales: se crearon `gasto#` (9.485 µUSD), `visitante#` (`mensajes` = 2) y `sal#`, con TTL a 3 días. El 429 y el 503 por tope o interruptor quedan cubiertos solo por pruebas automáticas.
+- [x] **Del usuario:** topes confirmados el 21/11/2026 (1 y 3 USD al día; 30 mensajes por visitante). El esfuerzo de la API de Gemini no va en `tracking-detail.csv` ni en `metrics/`: tendrá un tracker aparte del asistente (por discutir).
 
 ## Hotfix — Ficha pública sin datos internos (2026-11-17) — detalle
 
