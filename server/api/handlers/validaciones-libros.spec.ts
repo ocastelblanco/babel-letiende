@@ -432,6 +432,17 @@ describe('handlerIniciar (POST /api/validaciones-libros)', () => {
       });
     });
 
+    it('el body { modo: "portadas" } guarda la corrida en modo portadas; sin modo (o con un valor raro) es completo', async () => {
+      await handlerIniciar(eventoPost('Bearer token', { modo: 'portadas' }), {} as never, {} as never);
+      expect((guardarMock.mock.calls[0]?.[1] as Record<string, unknown>)['modo']).toBe('portadas');
+      guardarMock.mockClear();
+      await handlerIniciar(eventoPost('Bearer token', {}), {} as never, {} as never);
+      expect((guardarMock.mock.calls[0]?.[1] as Record<string, unknown>)['modo']).toBe('completo');
+      guardarMock.mockClear();
+      await handlerIniciar(eventoPost('Bearer token', { modo: 'rapido' }), {} as never, {} as never);
+      expect((guardarMock.mock.calls[0]?.[1] as Record<string, unknown>)['modo']).toBe('completo');
+    });
+
     it('con muebleIds: [], mismo comportamiento que sin filtro', async () => {
       await handlerIniciar(eventoPost('Bearer token', { muebleIds: [] }), {} as never, {} as never);
 
@@ -594,7 +605,7 @@ describe('handlerWorker (Lambda interna, sin ruta HTTP)', () => {
       sitio({ dominio: 'sitio-a.com', info: true, prioridad: 1 }),
       sitio({ dominio: 'sitio-b.com', info: true, prioridad: 2 }),
     ]);
-    portadaUrlRespondeMock.mockResolvedValue(false);
+    portadaUrlRespondeMock.mockImplementation(async (url: string) => url !== 'https://sitio-a.com/portada-borrada.jpg');
     scrapearSitioMock.mockImplementation(async (sitioLlamado: SitioScraping) =>
       sitioLlamado.dominio === 'sitio-b.com' ? { portadaUrl: 'https://sitio-b.com/portada-real.jpg' } : {},
     );
@@ -637,7 +648,103 @@ describe('handlerWorker (Lambda interna, sin ruta HTTP)', () => {
 
     await handlerWorker({ validacionId: 'v-1' }, {} as never, {} as never);
 
-    expect(portadaUrlRespondeMock).not.toHaveBeenCalled();
+    // La portada actual no se consulta por HTTP (ya se sabe inválida); solo se verifica la candidata de reemplazo.
+    expect(portadaUrlRespondeMock).not.toHaveBeenCalledWith('https://sitio-a.com/no-disponible.jpg');
+  });
+
+  it('no reemplaza una portada rota por otra que tampoco responde: queda pendiente', async () => {
+    mockConValidacionYLibro(
+      validacionBase,
+      libro({ bookId: 'book-1', titulo: 'Libro', isbn: '9780000000001', portadaUrl: 'https://sitio-a.com/vieja.jpg', pvp: 50000 }),
+    );
+    escanearTodoMock.mockResolvedValue([sitio({ dominio: 'sitio-a.com', info: true, prioridad: 1 })]);
+    portadaUrlRespondeMock.mockResolvedValue(false);
+    scrapearSitioMock.mockResolvedValue({ portadaUrl: 'https://sitio-a.com/nueva-tambien-rota.jpg' });
+
+    await handlerWorker({ validacionId: 'v-1' }, {} as never, {} as never);
+
+    expect(guardarMock).toHaveBeenCalledTimes(1); // el libro no cambió
+    const progreso = guardarMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(progreso).toMatchObject({
+      portadasCorregidas: 0,
+      portadasPendientes: [{ bookId: 'book-1', portadaUrl: 'https://sitio-a.com/vieja.jpg' }],
+    });
+  });
+
+  it('con varios sitios, toma la primera candidata por prioridad que SÍ responde', async () => {
+    mockConValidacionYLibro(
+      validacionBase,
+      libro({ isbn: '9780000000001', portadaUrl: 'https://sitio-a.com/vieja.jpg', pvp: 50000 }),
+    );
+    escanearTodoMock.mockResolvedValue([
+      sitio({ dominio: 'sitio-a.com', info: true, prioridad: 1 }),
+      sitio({ dominio: 'sitio-b.com', info: true, prioridad: 2 }),
+    ]);
+    portadaUrlRespondeMock.mockImplementation(async (url: string) => url === 'https://sitio-b.com/buena.jpg');
+    scrapearSitioMock.mockImplementation(async (sitioLlamado: SitioScraping) => ({
+      portadaUrl: sitioLlamado.dominio === 'sitio-a.com' ? 'https://sitio-a.com/rota.jpg' : 'https://sitio-b.com/buena.jpg',
+    }));
+
+    await handlerWorker({ validacionId: 'v-1' }, {} as never, {} as never);
+
+    expect(guardarMock.mock.calls[0]?.[1]).toMatchObject({ portadaUrl: 'https://sitio-b.com/buena.jpg' });
+  });
+
+  describe('modo portadas (sin PVP)', () => {
+    const validacionPortadas = { ...validacionBase, modo: 'portadas' as const };
+
+    it('no scrapea el PVP ni lo cambia, y corrige la portada rota', async () => {
+      mockConValidacionYLibro(
+        validacionPortadas,
+        libro({ isbn: '9780000000001', portadaUrl: 'https://sitio-a.com/vieja.jpg', pvp: 50000 }),
+      );
+      escanearTodoMock.mockResolvedValue([sitio({ dominio: 'sitio-a.com', info: true, pvp: true, prioridad: 1 })]);
+      portadaUrlRespondeMock.mockImplementation(async (url: string) => url === 'https://sitio-a.com/nueva.jpg');
+      scrapearSitioMock.mockResolvedValue({ pvp: 99999, portadaUrl: 'https://sitio-a.com/nueva.jpg' });
+
+      await handlerWorker({ validacionId: 'v-1' }, {} as never, {} as never);
+
+      // El único scraping es el de la portada de reemplazo (uno por sitio de info), nunca el de PVP.
+      expect(scrapearSitioMock).toHaveBeenCalledTimes(1);
+      const libroGuardado = guardarMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(libroGuardado).toMatchObject({ portadaUrl: 'https://sitio-a.com/nueva.jpg', pvp: 50000 });
+      expect(guardarMock.mock.calls[1]?.[1]).toMatchObject({ pvpActualizados: 0, portadasCorregidas: 1 });
+    });
+
+    it('una portada vigente no dispara ningún scraping', async () => {
+      mockConValidacionYLibro(validacionPortadas, libro({ isbn: '9780000000001', portadaUrl: 'https://sitio-a.com/ok.jpg' }));
+      escanearTodoMock.mockResolvedValue([sitio({ dominio: 'sitio-a.com', info: true, pvp: true })]);
+      portadaUrlRespondeMock.mockResolvedValue(true);
+
+      await handlerWorker({ validacionId: 'v-1' }, {} as never, {} as never);
+
+      expect(scrapearSitioMock).not.toHaveBeenCalled();
+    });
+
+    it('procesa lotes de 50 libros (la corrida completa usa 20)', async () => {
+      const ids = Array.from({ length: 120 }, (_v, i) => `book-${i}`);
+      const cola = { ...validacionPortadas, colaBookIds: ids, totalLibros: 120, limitesMueble: [{ nombre: 'M', hasta: 120 }] };
+      mockConValidacionYLibro(cola, libro({ isbn: '9780000000001', portadaUrl: 'https://sitio-a.com/ok.jpg' }));
+      escanearTodoMock.mockResolvedValue([sitio({ dominio: 'sitio-a.com', info: true })]);
+      portadaUrlRespondeMock.mockResolvedValue(true);
+
+      await handlerWorker({ validacionId: 'v-1' }, {} as never, {} as never);
+
+      const progreso = guardarMock.mock.calls.at(-1)?.[1] as Record<string, unknown>;
+      expect(progreso).toMatchObject({ indiceActual: 50, librosRevisados: 50, estado: 'en_progreso' });
+      expect(lambdaSendMock).toHaveBeenCalledTimes(1); // se auto-invoca para el siguiente lote
+    });
+
+    it('la corrida completa (sin `modo`) sigue procesando lotes de 20', async () => {
+      const ids = Array.from({ length: 60 }, (_v, i) => `book-${i}`);
+      const cola = { ...validacionBase, colaBookIds: ids, totalLibros: 60, limitesMueble: [{ nombre: 'M', hasta: 60 }] };
+      mockConValidacionYLibro(cola, libro({ isbn: null, portadaUrl: null }));
+      escanearTodoMock.mockResolvedValue([]);
+
+      await handlerWorker({ validacionId: 'v-1' }, {} as never, {} as never);
+
+      expect(guardarMock.mock.calls.at(-1)?.[1]).toMatchObject({ indiceActual: 20, librosRevisados: 20 });
+    });
   });
 
   it('marca la portada como pendiente (sin borrarla) si ningún sitio devuelve un reemplazo válido', async () => {

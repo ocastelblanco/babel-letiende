@@ -210,6 +210,9 @@ Cada función de `serverless.yml` empaqueta solo los archivos listados (`'!**'` 
 ### Fechas: UTC en datos, hora de Bogotá en reportes
 Las fechas se guardan siempre en ISO UTC. Al presentarlas en reportes se convierten a hora de Bogotá (UTC-5 fijo, sin horario de verano) con `formatearFechaBogota`; los filtros por día se calculan con `-05:00` y se convierten a ISO UTC (el backend compara `vendidoEn` como texto). Nunca escribir un ISO UTC crudo en un reporte.
 
+### Portadas de VTEX (Lerner, Nacional, de la U): una URL puede morir sin avisar
+En noviembre de 2026 Lerner re-subió masivamente sus imágenes: las URLs guardadas con los ids viejos (`/arquivos/ids/2479231/…?v=…`) devuelven `404` con cuerpo `{"statusCode":404,…}` (`application/json`), mientras que la API de producto ya entrega la URL nueva. Ocurre por lotes, sin aviso, y no hay forma de saberlo sin pedir cada imagen. Por eso existe «Validar solo portadas» en `/admin/validar-libros` (rápido, sin PVP) y por eso `portadaUrlResponde` exige un `content-type` de imagen y las portadas de reemplazo también se verifican por HTTP. Si pasa de nuevo con otro sitio: correr ese botón.
+
 ### Cold starts de Lambda en SSR
 El primer request tras inactividad a una función Lambda que sirve SSR de Angular puede tardar significativamente más (cold start incluye bootstrap de Node + Angular Universal). Evaluar `provisioned concurrency` solo si el costo lo justifica (rompe el objetivo de $0); por defecto, aceptar la latencia en frío y optimizar el bundle del servidor.
 

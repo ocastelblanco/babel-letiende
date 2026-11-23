@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { ResumenValidacionLibros } from '../models/validacion-libros.model';
+import { ModoValidacionLibros, ResumenValidacionLibros } from '../models/validacion-libros.model';
 
 /**
  * Resultado de `iniciarValidacion()` (`POST /api/validaciones-libros`,
@@ -59,8 +59,10 @@ export class ValidacionesLibrosService {
    * si se omite o llega vacío, el body es `{}` y el backend valida TODO el
    * inventario (comportamiento actual, sin cambios). Si trae 1+ ids, solo se
    * validan los libros cuya ubicación resuelve a alguno de esos muebles.
+   *
+   * `modo: 'portadas'` valida solo las portadas (sin PVP): mucho más rápido. Por defecto es la corrida completa.
    */
-  async iniciarValidacion(muebleIds?: string[]): Promise<ResultadoIniciarValidacion> {
+  async iniciarValidacion(muebleIds?: string[], modo: ModoValidacionLibros = 'completo'): Promise<ResultadoIniciarValidacion> {
     const idToken = await this.authService.obtenerIdToken();
     if (!idToken) {
       return { iniciada: false, validacionIdEnCurso: null, error: 'No se pudo iniciar la validación. Intenta de nuevo.' };
@@ -70,7 +72,10 @@ export class ValidacionesLibrosService {
       const respuesta = await firstValueFrom(
         this.http.post<{ validacionId: string }>(
           '/api/validaciones-libros',
-          muebleIds && muebleIds.length > 0 ? { muebleIds } : {},
+          {
+            ...(muebleIds && muebleIds.length > 0 ? { muebleIds } : {}),
+            ...(modo === 'portadas' ? { modo } : {}),
+          },
           { headers: { Authorization: `Bearer ${idToken}` } },
         ),
       );

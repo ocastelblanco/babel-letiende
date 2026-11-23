@@ -104,7 +104,7 @@ function configurarPrueba(
 }
 
 function botonIniciar(fixture: ComponentFixture<ValidarLibrosComponent>): HTMLButtonElement {
-  return fixture.nativeElement.querySelector('button[type="button"]') as HTMLButtonElement;
+  return fixture.nativeElement.querySelector('#validar-completo') as HTMLButtonElement;
 }
 
 function selectEspacio(fixture: ComponentFixture<ValidarLibrosComponent>): HTMLSelectElement {
@@ -169,6 +169,57 @@ describe('ValidarLibrosComponent', () => {
     expect(consultarValidacionMock).not.toHaveBeenCalled();
   });
 
+  it('"Validar solo portadas" inicia una corrida en modo portadas, con la misma selección de muebles', async () => {
+    const { fixture, iniciarValidacionMock, consultarValidacionMock } = configurarPrueba();
+    iniciarValidacionMock.mockResolvedValue({ iniciada: true, validacionId: 'v-portadas' });
+    consultarValidacionMock.mockResolvedValue({ ...resumenEnProgreso, modo: 'portadas' });
+
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    const botonPortadas = fixture.nativeElement.querySelector('#validar-portadas') as HTMLButtonElement;
+    expect(botonPortadas.textContent?.trim()).toBe('Validar solo portadas');
+    botonPortadas.click();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+
+    expect(iniciarValidacionMock).toHaveBeenCalledWith([], 'portadas');
+    expect(botonPortadas.disabled).toBe(true);
+  });
+
+  it('en una corrida de solo portadas no se muestran los PVP (no se tocan)', async () => {
+    const { fixture, iniciarValidacionMock, consultarValidacionMock } = configurarPrueba();
+    iniciarValidacionMock.mockResolvedValue({ iniciada: true, validacionId: 'v-portadas' });
+    consultarValidacionMock.mockResolvedValue({ ...resumenEnProgreso, modo: 'portadas' });
+
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    (fixture.nativeElement.querySelector('#validar-portadas') as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Portadas corregidas');
+    expect(fixture.nativeElement.textContent).not.toContain('PVP actualizados');
+
+    consultarValidacionMock.mockResolvedValue({ ...resumenCompletado, modo: 'portadas' });
+    await vi.advanceTimersByTimeAsync(3000);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Validación completada');
+    expect(fixture.nativeElement.textContent).not.toContain('PVP actualizados');
+  });
+
+  it('en una corrida completa (o anterior al campo `modo`) sí se muestran los PVP', async () => {
+    const { fixture, iniciarValidacionMock, consultarValidacionMock } = configurarPrueba();
+    iniciarValidacionMock.mockResolvedValue({ iniciada: true, validacionId: 'v-nueva' });
+    consultarValidacionMock.mockResolvedValue(resumenEnProgreso);
+
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    botonIniciar(fixture).click();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('PVP actualizados');
+  });
+
   it('al hacer clic en "Iniciar validación" sin seleccionar mueble, llama iniciarValidacion con array vacío (todo el inventario)', async () => {
     const { fixture, iniciarValidacionMock, consultarValidacionMock } = configurarPrueba();
     iniciarValidacionMock.mockResolvedValue({ iniciada: true, validacionId: 'v-nueva' });
@@ -184,7 +235,7 @@ describe('ValidarLibrosComponent', () => {
     fixture.detectChanges();
 
     expect(iniciarValidacionMock).toHaveBeenCalledTimes(1);
-    expect(iniciarValidacionMock).toHaveBeenCalledWith([]);
+    expect(iniciarValidacionMock).toHaveBeenCalledWith([], 'completo');
     expect(consultarValidacionMock).toHaveBeenCalledWith('v-nueva');
     expect(botonIniciar(fixture).disabled).toBe(true);
   });
@@ -228,7 +279,7 @@ describe('ValidarLibrosComponent', () => {
     botonIniciar(fixture).click();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(iniciarValidacionMock).toHaveBeenCalledWith(['mueble-1', 'mueble-2']);
+    expect(iniciarValidacionMock).toHaveBeenCalledWith(['mueble-1', 'mueble-2'], 'completo');
   });
 
   it('"Seleccionar todo el Espacio" marca y luego desmarca todos los muebles de ese espacio', async () => {
@@ -277,7 +328,7 @@ describe('ValidarLibrosComponent', () => {
 
     botonIniciar(fixture).click();
     await vi.advanceTimersByTimeAsync(0);
-    expect(iniciarValidacionMock).toHaveBeenCalledWith([]);
+    expect(iniciarValidacionMock).toHaveBeenCalledWith([], 'completo');
   });
 
   it('retoma automáticamente la corrida en curso cuando iniciarValidacion responde 409', async () => {

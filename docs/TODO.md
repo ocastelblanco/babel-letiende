@@ -497,6 +497,16 @@ Con el backfill confirmado en ambos entornos, sigue la **Tarea 5 (PR B)**: cambi
 
 Se promueve la Tarea 2 (paginación de `/api/libros`/`/api/libros/inventario`) al segundo slot activo una vez resuelta la pregunta abierta de diseño del plan — mientras tanto, solo la Tarea 1 ocupa un slot.
 
+## Hotfix — Portadas de Lerner rotas (2026-11-23) — IMPLEMENTADO, PR pendiente
+
+Pedido del usuario, fuera del roadmap y sin ocupar slots del motor JIT. Lerner re-subió masivamente sus imágenes: las URLs guardadas con ids viejos devuelven `404` en JSON. Medido el 23/11 sobre 40 portadas de Lerner guardadas en producción: 3 (7,5 %) devolvían 404 (por ejemplo los ids `2479231`, `2438546` y `2442397`), y la API de Lerner ya entrega para esos mismos libros una URL nueva que sí responde 200.
+
+- [x] **Causa de que «Validar libros» no bastara.** (1) Aceptaba cualquier 2xx como portada viva, aunque no fuera una imagen. (2) La portada de reemplazo no se verificaba: se tomaba la primera no inválida por palabra clave y el libro quedaba «corregido» con otra URL posiblemente muerta. (3) Para revisar portadas había que correr también el PVP de todos los libros en 1 a 6 sitios.
+- [x] `portadaUrlResponde` exige `content-type` de imagen; la candidata de reemplazo se verifica por HTTP, en orden de prioridad.
+- [x] Corrida de solo portadas: campo `modo` (`'completo'` por defecto, `'portadas'`) en `POST /api/validaciones-libros`; el worker no scrapea PVP y usa lotes de 50. Botón «Validar solo portadas» en `/admin/validar-libros`, que oculta los PVP en esa corrida.
+- [x] 917 pruebas de backend y 542 de frontend en verde (nuevas: tipo de contenido, candidata rota, orden de prioridad, modo portadas, tamaño del lote, el body y los botones).
+- [ ] **Del usuario**, tras el despliegue: en `/admin/validar-libros` pulsar «Validar solo portadas» (primero en `staging`, luego en producción) y revisar el resumen: portadas corregidas y pendientes.
+
 ## Hotfix — Fechas de los reportes en hora de Bogotá (UTC-5) — COMPLETA (2026-09-30)
 
 - [x] `server/api/lib/fechas.ts` (`formatearFechaBogota`) + pruebas; aplicado a `Fecha de venta` (`ventas.ts`) y `Fecha de catalogación` (`libros.ts`).

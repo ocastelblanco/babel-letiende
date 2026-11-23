@@ -12,6 +12,9 @@
  * respuesta, así que este tipo completo solo aplica al ítem crudo de
  * DynamoDB; el frontend consume `ResumenValidacionLibros` (abajo).
  */
+/** `'portadas'`: corrida exclusiva de portadas (sin PVP, mucho más rápida). `'completo'`: PVP + portada. */
+export type ModoValidacionLibros = 'completo' | 'portadas';
+
 export interface ValidacionLibros {
   /** PK, uuid generado por `POST /api/validaciones-libros`. */
   validacionId: string;
@@ -43,6 +46,8 @@ export interface ValidacionLibros {
 
   /** Nombre del mueble cuyos libros se están procesando ahora mismo, `null` si la corrida ya terminó. */
   muebleActualNombre: string | null;
+  /** Ausente en corridas anteriores a este campo: equivale a `'completo'`. */
+  modo?: ModoValidacionLibros;
 }
 
 export interface LimiteMuebleValidacion {

@@ -67,6 +67,31 @@ describe('ValidacionesLibrosService', () => {
       });
     });
 
+    it('con modo "portadas" el body lleva { modo }, junto con los muebles si los hay; por defecto no lleva modo', async () => {
+      const servicio = configurarPrueba('token-valido');
+
+      let promesa = servicio.iniciarValidacion([], 'portadas');
+      await Promise.resolve();
+      let peticion = httpMock.expectOne('/api/validaciones-libros');
+      expect(peticion.request.body).toEqual({ modo: 'portadas' });
+      peticion.flush({ validacionId: 'v-1' }, { status: 202, statusText: 'Accepted' });
+      await promesa;
+
+      promesa = servicio.iniciarValidacion(['m-1'], 'portadas');
+      await Promise.resolve();
+      peticion = httpMock.expectOne('/api/validaciones-libros');
+      expect(peticion.request.body).toEqual({ muebleIds: ['m-1'], modo: 'portadas' });
+      peticion.flush({ validacionId: 'v-2' }, { status: 202, statusText: 'Accepted' });
+      await promesa;
+
+      promesa = servicio.iniciarValidacion();
+      await Promise.resolve();
+      peticion = httpMock.expectOne('/api/validaciones-libros');
+      expect(peticion.request.body).toEqual({});
+      peticion.flush({ validacionId: 'v-3' }, { status: 202, statusText: 'Accepted' });
+      await promesa;
+    });
+
     it('devuelve iniciada: true con el validacionId cuando POST responde 202', async () => {
       const servicio = configurarPrueba('token-valido');
 
