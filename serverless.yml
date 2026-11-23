@@ -39,6 +39,7 @@ custom:
     conocimiento: babel-libros-conocimiento-${sls:stage}
     cargaConocimiento: babel-carga-conocimiento-${sls:stage}
     asistenteControl: babel-asistente-control-${sls:stage}
+    asistenteRegistros: babel-asistente-registros-${sls:stage}
   # Nombre real de la función `validarLibrosWorker`, calculado por
   # convención (no por !GetAtt) para poder referenciarlo tanto en la
   # variable de entorno `NOMBRE_FUNCION_WORKER` (iniciarValidacionLibros y
@@ -2483,6 +2484,7 @@ functions:
       BUCKET_INDICE: ${self:custom.bucketIndice}
       ASISTENTE_ACTIVO: ${self:custom.asistenteActivo.${sls:stage}, 'false'}
       TABLA_CONTROL: ${self:custom.nombresTablas.asistenteControl}
+      TABLA_REGISTROS: ${self:custom.nombresTablas.asistenteRegistros}
       ASISTENTE_TOPE_DIARIO_USD: ${self:custom.asistenteTopeDiarioUsd.${sls:stage}, '1'}
       ASISTENTE_MENSAJES_POR_VISITANTE: ${self:custom.asistenteMensajesPorVisitante}
       VERSION_PROMPT_ASISTENTE: v5
@@ -2498,6 +2500,7 @@ functions:
         - 'dist-server/api/lib/gemini.js'
         - 'dist-server/api/lib/herramientas-asistente.js'
         - 'dist-server/api/lib/indice-vectorial.js'
+        - 'dist-server/api/lib/registro-asistente.js'
         - 'dist-server/api/lib/proveedor-llm.js'
         - 'dist-server/api/lib/verificar-token.js'
         - 'dist-server/api/services/dynamodb.js'
@@ -3786,6 +3789,12 @@ resources:
                     - dynamodb:UpdateItem
                   Resource:
                     - !GetAtt TablaAsistenteControl.Arn
+                # Registro de cada turno (T-0060): solo su propia tabla y solo escribir. Leerlo o valorarlo llega con la Fase 7/8.
+                - Effect: Allow
+                  Action:
+                    - dynamodb:PutItem
+                  Resource:
+                    - !GetAtt TablaAsistenteRegistros.Arn
           # ListBucket hace falta para que un índice inexistente responda 404 y no 403 (antes de la primera reconstrucción).
           - PolicyName: babel-asistente-role-s3-${sls:stage}
             PolicyDocument:
@@ -4221,6 +4230,22 @@ resources:
             AttributeType: S
         KeySchema:
           - AttributeName: clave
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: expiraEn
+          Enabled: true
+
+    # Registro de turnos del asistente (T-0060). Caduca a los 90 días (`DIAS_DE_RETENCION` en registro-asistente.ts).
+    TablaAsistenteRegistros:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.nombresTablas.asistenteRegistros}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: registroId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: registroId
             KeyType: HASH
         TimeToLiveSpecification:
           AttributeName: expiraEn
