@@ -644,7 +644,37 @@ const MENSAJES_DE_CONTROL = {
   'tope-visitante': 'Llegaste al límite de mensajes de hoy. Vuelve mañana y con gusto seguimos.',
 } as const;
 
+/**
+ * `GET /api/asistente` — ¿está BabelBot disponible para el público? Lo consulta el catálogo para decidir si muestra
+ * el botón del chat. El build del frontend es el mismo en `staging` y en producción, así que no puede saberlo por
+ * sí mismo. Solo dice «sí» si el asistente está activo, el acceso es público y el interruptor administrable no lo
+ * apagó; ante cualquier duda o fallo de la tabla de control, «no». No expone nada más (ni topes ni gasto).
+ */
+export async function estaDisponibleParaElPublico(
+  almacenControl: Pick<ReturnType<typeof crearAlmacenControl>, 'leer'>,
+  entorno: Record<string, string | undefined> = process.env,
+): Promise<boolean> {
+  if (entorno['ASISTENTE_ACTIVO'] !== 'true' || entorno['ASISTENTE_ACCESO'] !== 'publico') {
+    return false;
+  }
+  try {
+    const interruptor = await almacenControl.leer('interruptor');
+    return interruptor?.['activo'] !== false;
+  } catch {
+    return false;
+  }
+}
+
+async function manejarEstado(): Promise<APIGatewayProxyResultV2> {
+  const tabla = process.env['TABLA_CONTROL'];
+  const disponible = tabla ? await estaDisponibleParaElPublico(crearAlmacenControl(tabla)) : false;
+  return respuestaJson(200, { disponible });
+}
+
 export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
+  if (event.requestContext?.http?.method === 'GET') {
+    return manejarEstado();
+  }
   try {
     // Interruptor: apagado, ni siquiera se consulta a Firebase ni a Gemini.
     if (process.env['ASISTENTE_ACTIVO'] !== 'true') {

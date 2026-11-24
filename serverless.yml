@@ -2550,6 +2550,10 @@ functions:
       - httpApi:
           path: /api/asistente
           method: post
+      # ¿Está BabelBot disponible para el público? Lo consulta el catálogo para mostrar el botón del chat.
+      - httpApi:
+          path: /api/asistente
+          method: get
 
   asistenteValoracion:
     handler: dist-server/api/handlers/asistente-valoracion.handler
@@ -4419,11 +4423,15 @@ resources:
       DependsOn:
         - HttpApiRoutePostApiAsistente
         - HttpApiRoutePostApiAsistenteValoracion
+        - HttpApiRouteGetApiAsistente
       Properties:
         RouteSettings:
           'POST /api/asistente':
             ThrottlingRateLimit: 2
             ThrottlingBurstLimit: 10
+          'GET /api/asistente':
+            ThrottlingRateLimit: 10
+            ThrottlingBurstLimit: 30
           'POST /api/asistente/valoracion':
             ThrottlingRateLimit: 5
             ThrottlingBurstLimit: 20

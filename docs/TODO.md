@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (24/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 5 fusionadas (prompt vigente v5), más `preguntar.mjs` (#169), la guarda de existencias y ubicación (#170) y la Fase 6 parte 1, control de gasto y de tasa (#171, verificada en `staging` y desplegada en producción el 21/11). Tarea 14 (Fase 6 parte 2, PR #172) fusionada y verificada en `staging`. Tarea 15 (Fase 6 parte 3, PR #175) fusionada y desplegada. Tarea activa: **Tarea 16** (`T-0070`, Fase 7 partida en 7a backend —acceso `personal`/`publico` y valoración, implementada el 24/11— y 7b el chat en el catálogo, con el aviso de la Ley 1581). Calendario: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
+**Motor JIT activo (24/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 5 fusionadas (prompt vigente v5), más `preguntar.mjs` (#169), la guarda de existencias y ubicación (#170) y la Fase 6 parte 1, control de gasto y de tasa (#171, verificada en `staging` y desplegada en producción el 21/11). Tarea 14 (Fase 6 parte 2, PR #172) fusionada y verificada en `staging`. Tarea 15 (Fase 6 parte 3, PR #175) fusionada y desplegada. Tarea activa: **Tarea 16** (`T-0070`, Fase 7: 7a backend fusionada en #176; 7b, el chat en el catálogo con el aviso de la Ley 1581, implementada el 24/11 y pendiente de PR). Siguiente: activar BabelBot en producción (clave de producción ya lista; `ASISTENTE_ACCESO` primero `personal`, luego `publico` tras revisar el aviso). Calendario: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -617,12 +617,12 @@ Rama `feature/asistente-resiliencia-seguridad`. Detalle en `asistente-ia/bitacor
 - [x] Casos de seguridad ID05–ID08 en la suite (36/36 y suite completa CUMPLE), ficha de riesgos 1.0 y revisión con `owasp-security-verification`. `meta` deja de salir al cliente. Abierto: aviso de la Ley 1581 (Fase 7).
 - [x] Ledger de esfuerzo de BabelBot completado del 20/11 (noche) al 24/11, medido con el adaptador.
 
-## Tarea 16 — Fase 7: chat de BabelBot en el catálogo público (`T-0070`) — EN CURSO (7a implementada, PR pendiente)
+## Tarea 16 — Fase 7: chat de BabelBot en el catálogo público (`T-0070`) — 7a fusionada (PR #176); 7b implementada, PR pendiente
 
 Rama `feature/babelbot-chat-catalogo`. Partida en 7a y 7b (`asistente-ia/PLAN.md`).
 
 - [x] **7a** — `ASISTENTE_ACCESO` (`personal`/`publico`) y `POST /api/asistente/valoracion` con Lambda y rol propios (bitácora 08 §8).
-- [ ] **7b** — `ChatAsistenteComponent` (solo cliente), aviso «Hablas con una IA» y qué se registra (Ley 1581), tarjetas con datos de Babel, valoración, manejo amable del 429 de API Gateway y del 503 de saturación. Ver `asistente-ia/PLAN.md` Fase 7.
+- [x] **7b** — `ChatBabelbotComponent` (solo cliente), aviso «Hablas con una IA» y qué se registra (Ley 1581), tarjetas con datos de Babel, valoración, manejo amable del 429 de API Gateway y del 503 de saturación. Ver `asistente-ia/PLAN.md` Fase 7.
 
 ## Hotfix — Ficha pública sin datos internos — COMPLETO (PR #153 fusionado; verificado en `staging` y en producción el 2026-11-17)
 

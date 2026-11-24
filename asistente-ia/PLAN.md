@@ -202,10 +202,10 @@ Partida en dos PRs (decidido el 24/11/2026): **7a** backend (`ASISTENTE_ACCESO` 
 
 - [x] **7a — Acceso y valoración (backend, 24/11/2026; bitácora 08 §8).** `ASISTENTE_ACCESO` = `personal` (sesión de vendedor o administrador, como hasta ahora) o `publico` (sin sesión); cualquier otro valor cae en `personal`. `staging` queda en `publico`, `production` en `personal`. `POST /api/asistente/valoracion` con su propia Lambda y rol de mínimo privilegio; ata la valoración al visitante con el hash de IP del registro.
 
-- [ ] **7b —** `ChatAsistenteComponent` standalone, solo en el cliente (sin SSR), con identidad visual de Babel (`docs/DESIGN.md`).
-- [ ] Aviso visible: "Hablas con una IA" + qué se registra y para qué (Ley 1581 de 2012).
-- [ ] Tarjetas pintadas con datos de Babel (nunca con texto del modelo), enlace a la ficha `/libro/:bookId`, pulgar arriba o abajo.
-- [ ] Interpolación estándar de Angular; nada de `innerHTML` con texto del modelo.
+- [x] **7b — Chat en el catálogo (24/11/2026; bitácora 08 §10).** `ChatBabelbotComponent` standalone, solo en el cliente (sin SSR), con identidad visual de Babel (`docs/DESIGN.md`); aparece solo si `GET /api/asistente` dice que BabelBot está disponible para el público.
+- [x] Aviso visible: "Hablas con una IA" + qué se registra y para qué (Ley 1581 de 2012). **Borrador pendiente de revisión de quien responde por los datos de Le Tiende** antes de abrir el chat al público en producción.
+- [x] Tarjetas pintadas con datos de Babel (nunca con texto del modelo), enlace a la ficha `/libro/:bookId`, pulgar arriba o abajo.
+- [x] Interpolación estándar de Angular; nada de `innerHTML` con texto del modelo (con prueba).
 - [ ] Criterios de 4b cumplidos (tras la Fase 5) → producción con el interruptor encendido (la compuerta automática llega en 4c).
 
 ### Fase 8 — Tablero y análisis · `T-0080` · capacidad: métricas de desempeño y consumo

@@ -107,7 +107,27 @@ Sin sesión, las únicas barreras son el interruptor, el tope de gasto del día 
 
 **Verificación:** 966 pruebas de backend en verde (nuevas: acceso público y falla cerrada, valoración con IP ajena, sal caducada y cuerpo inválido, y la escritura condicional). `serverless package --stage staging` empaqueta la función nueva y su handler carga desde el zip.
 
-## 9. Fuentes
+## 9. Fase 7b — el chat en el catálogo (24/11/2026)
+
+**Disponibilidad** (`GET /api/asistente`). El build del frontend es el mismo en `staging` y en producción, así que el botón del chat no puede saber por sí solo si BabelBot está encendido para el público. Pregunta al servidor, que responde `{ disponible }` y solo dice `true` si el asistente está activo, el acceso es `publico` y el interruptor administrable de la tabla de control no lo apagó. Ante cualquier duda, incluida una tabla de control caída, responde `false` y el chat no aparece. No expone topes ni gasto. Ruta con su límite de tasa (10 por segundo, ráfaga 30).
+
+**Componente** (`chat-babelbot/`). Un botón «BabelBot» abajo a la izquierda abre un panel (pantalla completa en el celular, tarjeta en escritorio). Solo se pinta en el navegador. Tiene:
+- el **aviso** de que se habla con una IA y de qué se guarda, siempre visible arriba del panel;
+- la conversación con tarjetas de libro (portada, título, autor, precio con formato, motivo y enlace a la ficha);
+- pulgar arriba y abajo en las respuestas que quedaron registradas;
+- «Nueva conversación».
+
+El texto del modelo se pinta por interpolación, nunca como HTML (hay una prueba con una etiqueta `<img onerror>`).
+
+**Historial.** El backend acepta 9 mensajes; el cliente envía los últimos 9, que siempre empiezan con la persona, y cada respuesta lleva los `bookId` que recomendó para resolver «ese libro». Si una pregunta falla, sale del historial (la conversación debe alternar persona y asistente) y vuelve a la caja de texto para reenviarla.
+
+**Errores que se distinguen** (`asistente.service.ts`): Gemini saturado (el mensaje con la cita literaria que manda el servidor), tope de mensajes del día (el 429 del backend trae `error`), demasiadas peticiones seguidas (el 429 de API Gateway trae `message` en inglés, que nunca se muestra), asistente apagado y fallo de red.
+
+**El aviso es un borrador.** Describe lo que el backend hace hoy: consulta enmascarada y sin IP ni respuesta durante 90 días, y Gemini de pago con `store: false`. Debe revisarlo quien responda por los datos de Le Tiende (no es una opinión legal) antes de poner `ASISTENTE_ACCESO` en `publico` en producción.
+
+**Verificación:** 968 pruebas de backend y 564 de frontend en verde (11 nuevas del servicio y 11 del componente). Plantilla de Serverless: la ruta `GET` entra en el `DependsOn` de `HttpApiStage`.
+
+## 10. Fuentes
 
 - Precios de Gemini: página oficial citada arriba, leída el 21/11/2026.
 - `UpdateItem` con `ADD`, `if_not_exists` y `ConditionExpression`: documentación de DynamoDB; mismo patrón que `decrementarPorCantidadSiSuficiente` del repositorio.

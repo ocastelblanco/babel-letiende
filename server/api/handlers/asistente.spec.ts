@@ -37,6 +37,7 @@ vi.mock('../lib/almacen-indice', () => ({ crearAlmacenS3: () => almacenMock.actu
 import {
   IndiceNoDisponibleError,
   crearCargadorIndice,
+  estaDisponibleParaElPublico,
   handler,
   responder,
   type DependenciasAsistente,
@@ -810,6 +811,25 @@ describe('crearCargadorIndice', () => {
     expect(await cargar()).toBeNull();
     await cargar();
     expect(leer).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('estaDisponibleParaElPublico', () => {
+  const activoPublico = { ASISTENTE_ACTIVO: 'true', ASISTENTE_ACCESO: 'publico' };
+  const almacen = (item: Record<string, unknown> | null) => ({ leer: async () => item });
+
+  it('solo es true si está activo, el acceso es público y el interruptor no lo apagó', async () => {
+    expect(await estaDisponibleParaElPublico(almacen(null), activoPublico)).toBe(true);
+    expect(await estaDisponibleParaElPublico(almacen({ activo: true }), activoPublico)).toBe(true);
+    expect(await estaDisponibleParaElPublico(almacen({ activo: false }), activoPublico)).toBe(false);
+    expect(await estaDisponibleParaElPublico(almacen(null), { ...activoPublico, ASISTENTE_ACTIVO: 'false' })).toBe(false);
+    expect(await estaDisponibleParaElPublico(almacen(null), { ...activoPublico, ASISTENTE_ACCESO: 'personal' })).toBe(false);
+    expect(await estaDisponibleParaElPublico(almacen(null), { ASISTENTE_ACTIVO: 'true' })).toBe(false);
+  });
+
+  it('si la tabla de control falla responde false (nunca muestra un chat que no se puede verificar)', async () => {
+    const rota = { leer: async () => { throw new Error('tabla caída'); } };
+    expect(await estaDisponibleParaElPublico(rota, activoPublico)).toBe(false);
   });
 });
 
