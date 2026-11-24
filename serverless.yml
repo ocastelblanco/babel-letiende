@@ -4413,6 +4413,12 @@ resources:
     # a la Lambda y a Gemini. 2 peticiones por segundo sostenidas y ráfagas de 10 sobran para una librería; lo que
     # pasa del límite recibe 429 de API Gateway sin invocar nada.
     HttpApiStage:
+      # Sin esto, al agregar una ruta con límite propio, CloudFormation configura el stage antes de crear la ruta y
+      # el despliegue falla con «Unable to find Route by key» (24/11/2026, valoración); además el rollback queda en
+      # UPDATE_ROLLBACK_FAILED. Cada ruta nueva con `RouteSettings` debe agregarse aquí.
+      DependsOn:
+        - HttpApiRoutePostApiAsistente
+        - HttpApiRoutePostApiAsistenteValoracion
       Properties:
         RouteSettings:
           'POST /api/asistente':

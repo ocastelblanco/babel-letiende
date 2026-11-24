@@ -215,6 +215,9 @@ En noviembre de 2026 Lerner re-subió masivamente sus imágenes: las URLs guarda
 
 **Trampa del `Accept`:** el CDN de VTEX responde `404` si la petición pide `image/avif` o `image/webp` (lo que hace todo navegador) y `200` con el `Accept` genérico de `fetch`/`curl`. La primera versión del botón dio por buenas portadas que el navegador no podía ver. Por eso `portadaUrlResponde` verifica con el `Accept` de un navegador (`ACCEPT_NAVEGADOR`). Para diagnosticar a mano, probar siempre con `-H "Accept: image/avif,image/webp,*/*"`.
 
+### Una ruta nueva con límite de tasa necesita `DependsOn` en `HttpApiStage`
+`HttpApiStage.RouteSettings` (límites de tasa por ruta, en `extensions` de `serverless.yml`) se aplica al stage, y CloudFormation puede configurarlo **antes** de crear la ruta: el despliegue falla con `Unable to find Route by key POST …` y, peor, el rollback intenta deshacer la configuración de una ruta que ya no existe y deja la pila en `UPDATE_ROLLBACK_FAILED` (`staging`, 24/11/2026, PR #176): ningún despliegue pasa hasta recuperarla con `ContinueUpdateRollback` saltando `HttpApiStage`. Regla: al agregar una ruta con `RouteSettings`, sumar su recurso (`HttpApiRoute<Metodo><Ruta>`) al `DependsOn` de `HttpApiStage`.
+
 ### Cold starts de Lambda en SSR
 El primer request tras inactividad a una función Lambda que sirve SSR de Angular puede tardar significativamente más (cold start incluye bootstrap de Node + Angular Universal). Evaluar `provisioned concurrency` solo si el costo lo justifica (rompe el objetivo de $0); por defecto, aceptar la latencia en frío y optimizar el bundle del servidor.
 
