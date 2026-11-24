@@ -8,7 +8,11 @@ import {
   MAXIMO_CARACTERES_MENSAJE,
   MAXIMO_RECOMENDACIONES,
   MAXIMO_TURNOS,
+  MENSAJES_SATURADO,
   TEXTO_SIN_RESULTADOS,
+  datosDeFuentes,
+  mensajeSaturado,
+  quitarDatosNoVerificados,
   cargarPrompt,
   afirmaDatosDeInventario,
   pideDatosDeInventario,
@@ -602,5 +606,60 @@ describe('cargarPrompt', () => {
       '---\r\nversion: v5\r\nmodelo: m\r\nfecha: 2026-01-01\r\nmotivo: prueba\r\n---\r\nHola\r\nmundo\r\n',
     );
     expect(cargarPrompt('v5', raiz).instrucciones).toBe('Hola\nmundo');
+  });
+});
+
+
+describe('validador de fidelidad (Fase 6, parte 3)', () => {
+  const fuentes = datosDeFuentes(
+    [
+      'Horarios: De domingo a miércoles, de 2:00pm a 8:00pm. De jueves a sábado, de 2:00pm a 10:00pm.',
+      'Se puede apartar un libro con el 25% del valor. WhatsApp: [+57 318 7056288](https://wa.me/+573187056288).',
+      'Carrera 24 #37-44, frente al Parkway, Bogotá.',
+      '[{"bookId":"a","titulo":"Libro A","precio":45000},{"bookId":"b","precio":1250000}]',
+      'Hoy: martes 24 de noviembre de 2026, 10:15 a. m.',
+    ].join('\n'),
+  );
+
+  it('conserva los datos que están en las fuentes, aunque cambie el formato', () => {
+    const texto =
+      'Abrimos hoy de 2 p. m. a 8 p. m. Cuesta $45.000. La edición especial vale $ 1.250.000. Puedes apartarlo con el 25 %. Escríbenos al 318 705 6288. Estamos en la Cra. 24 # 37 - 44.';
+    expect(quitarDatosNoVerificados(texto, fuentes)).toEqual({ texto, frasesQuitadas: 0 });
+  });
+
+  it('quita solo las frases con un dato inventado (precio, hora, porcentaje, teléfono o dirección)', () => {
+    const casos = [
+      'Este libro cuesta $39.900.',
+      'Hoy abrimos a las 9 a. m.',
+      'Tenemos un 15% de descuento.',
+      'Llámanos al 601 555 1234.',
+      'Estamos en la Calle 85 # 11-20.',
+    ];
+    for (const inventada of casos) {
+      const resultado = quitarDatosNoVerificados(`Te recomiendo Libro A. ${inventada} Es una novela potente.`, fuentes);
+      expect(resultado.texto).toBe('Te recomiendo Libro A. Es una novela potente.');
+      expect(resultado.frasesQuitadas).toBe(1);
+    }
+  });
+
+  it('de lo que escribe la persona solo cuentan los precios: un porcentaje que afirma no se vuelve verdad', () => {
+    const conPersona = datosDeFuentes('Horarios: de 2:00pm a 8:00pm.', '¿Algo por menos de $40.000? Me dijeron que hay 50% de descuento.');
+    expect(quitarDatosNoVerificados('Tengo uno por $40.000.', conPersona).frasesQuitadas).toBe(0);
+    expect(quitarDatosNoVerificados('Sí, hay 50% de descuento.', conPersona).frasesQuitadas).toBe(1);
+  });
+
+  it('un texto sin datos verificables pasa intacto, y uno hecho solo de datos inventados queda vacío', () => {
+    expect(quitarDatosNoVerificados('Una lectura luminosa sobre la memoria.', fuentes).frasesQuitadas).toBe(0);
+    expect(quitarDatosNoVerificados('Cuesta $12.000.', fuentes)).toEqual({ texto: '', frasesQuitadas: 1 });
+  });
+
+  it('los mensajes de saturación son citas de obras en dominio público e invitan a reintentar', () => {
+    expect(MENSAJES_SATURADO.length).toBeGreaterThanOrEqual(3);
+    for (const mensaje of MENSAJES_SATURADO) {
+      expect(mensaje).toMatch(/«[^»]+»/);
+      expect(mensaje).toMatch(/de nuevo|vuelve/i);
+    }
+    expect(mensajeSaturado(() => 0)).toBe(MENSAJES_SATURADO[0]);
+    expect(mensajeSaturado(() => 0.999)).toBe(MENSAJES_SATURADO[MENSAJES_SATURADO.length - 1]);
   });
 });

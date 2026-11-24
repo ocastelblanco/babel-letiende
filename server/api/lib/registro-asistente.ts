@@ -125,6 +125,7 @@ export interface RegistroAsistente {
     disponibilidadForzada: boolean;
     descartados: number;
     fallosHerramientas: number;
+    datosNoVerificados: number;
   };
   /** Ausente hasta que la persona valora la respuesta (Fase 7). */
   valoracion?: 'positiva' | 'negativa';
@@ -167,6 +168,7 @@ export function construirRegistro(
       disponibilidadForzada: meta.disponibilidadForzada,
       descartados: meta.descartados,
       fallosHerramientas: meta.fallosHerramientas,
+      datosNoVerificados: meta.datosNoVerificados,
     },
     expiraEn: Math.floor(ahoraMs / 1000) + DIAS_DE_RETENCION * 86_400,
   };

@@ -4,7 +4,7 @@ Motor JIT: este documento mantiene **siempre exactamente 2 tareas atómicas** ac
 
 **Hotfix ad-hoc (01/10/2026) — precio a cobrar en el diálogo de venta — COMPLETO:** pedido puntual del usuario, fuera del roadmap y sin ocupar slots del motor JIT. `LibroDetalleComponent` muestra ahora "Precio a cobrar" en vivo (misma fórmula que `ventas.ts`, reacciona a cantidad y % de descuento). PR #139, probado por el usuario en `staging`. Detalle en `MEMORY.md` §2.
 
-**Motor JIT activo (23/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 5 fusionadas (prompt vigente v5), más `preguntar.mjs` (#169), la guarda de existencias y ubicación (#170) y la Fase 6 parte 1, control de gasto y de tasa (#171, verificada en `staging` y desplegada en producción el 21/11). Tarea activa: **Tarea 14** (`T-0060`, Fase 6 parte 2: registros con enmascarado; implementada, PR #172). Siguiente: **Tarea 15** (Fase 6 parte 3: reintentos ante Gemini saturado con mensajes explícitos, validador de fidelidad, límite en API Gateway, revisión OWASP). Calendario: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
+**Motor JIT activo (23/11/2026):** lote "Asistente de recomendación con IA" — Fases 0 a 5 fusionadas (prompt vigente v5), más `preguntar.mjs` (#169), la guarda de existencias y ubicación (#170) y la Fase 6 parte 1, control de gasto y de tasa (#171, verificada en `staging` y desplegada en producción el 21/11). Tarea 14 (Fase 6 parte 2, PR #172) fusionada y verificada en `staging`. Tarea activa: **Tarea 15** (`T-0060`, Fase 6 parte 3: reintentos con reloj, citas literarias, validador de fidelidad, límite en API Gateway, revisión OWASP; implementada el 24/11, PR pendiente de abrir). Siguiente: **Tarea 16** (Fase 7: chat en el catálogo público con el aviso de la Ley 1581). Calendario: producción el viernes 27/11/2026, ejercicio completo el 4/12/2026. Plan completo, fases y DoD en **`asistente-ia/PLAN.md`** (§3.1 calendario); ver el final de este documento.
 
 **Lote anterior "Duplicados sin ISBN" (15/10/2026):** las 3 tareas fusionadas (PRs #146, #147 y #148). Queda solo la verificación final del usuario en `staging` de la Tarea 3.
 
@@ -607,12 +607,19 @@ Detalle en `asistente-ia/PLAN.md` §3 y ADR-018. Tabla `babel-libros-conocimient
 - [x] Verificado en `staging` (23/11): una pregunta con correo y celular dejó su ítem con `[correo]` y `[teléfono]`, `expiraEn` a 90 días y sin texto de respuesta. La regla de la cédula quedó solo en pruebas automáticas, porque Gemini devolvió 503 de forma intermitente esa tarde (la misma clave respondía 200 a una llamada mínima: saturación del modelo, no un fallo propio).
 - [ ] **Del usuario:** fusionar #172; opcionalmente repetir «Mi cédula es 1020304050…» cuando Gemini responda y avisar para revisar el ítem.
 
-## Tarea 15 — Fase 6, parte 3: fidelidad, resiliencia y revisión de seguridad (`T-0060`) — SIGUIENTE
+## Tarea 15 — Fase 6, parte 3: fidelidad, resiliencia y revisión de seguridad (`T-0060`) — IMPLEMENTADA (24/11/2026, PR pendiente)
 
-- [ ] **Reintentos ante Gemini saturado (decidido el 23/11/2026).** Hoy se reintenta una sola vez y la persona ve «intenta de nuevo». Más reintentos con espera creciente dentro del límite de 30 s de API Gateway (vigilando el reloj), y mensajes que distingan «estoy saturado» de un error, con citas literarias como tono (el usuario lo aprobó).
-- [ ] Validador de fidelidad de datos en `texto` (horas, porcentajes, teléfonos, direcciones, precios).
-- [ ] Limitación de tasa en API Gateway para la ruta del asistente.
-- [ ] Casos de seguridad en la suite, ficha de riesgos actualizada y revisión con `owasp-security-verification` (incluye qué parte de `meta` sale al público).
+Rama `feature/asistente-resiliencia-seguridad`. Detalle en `asistente-ia/bitacora/08-operacion-segura.md` §7.
+
+- [x] **Reintentos ante Gemini saturado.** Hasta 4 reintentos con espera creciente dentro de un presupuesto de 25 s por petición; el cliente de Gemini no empieza un intento que no alcance a terminar. 503 con cita literaria (`motivo: saturado`) o 502 (`motivo: error-modelo`).
+- [x] Validador de fidelidad: quita la frase con un precio, porcentaje, hora, teléfono o dirección que no esté en las fuentes del turno; se cuenta en `datosNoVerificados`.
+- [x] Limitación de tasa en API Gateway para la ruta del asistente (2/s, ráfaga 10).
+- [x] Casos de seguridad ID05–ID08 en la suite (36/36 y suite completa CUMPLE), ficha de riesgos 1.0 y revisión con `owasp-security-verification`. `meta` deja de salir al cliente. Abierto: aviso de la Ley 1581 (Fase 7).
+- [x] Ledger de esfuerzo de BabelBot completado del 20/11 (noche) al 24/11, medido con el adaptador.
+
+## Tarea 16 — Fase 7: chat de BabelBot en el catálogo público (`T-0070`) — SIGUIENTE
+
+- [ ] `ChatAsistenteComponent` (solo cliente), aviso «Hablas con una IA» y qué se registra (Ley 1581), tarjetas con datos de Babel, valoración, manejo amable del 429 de API Gateway y del 503 de saturación. Ver `asistente-ia/PLAN.md` Fase 7.
 
 ## Hotfix — Ficha pública sin datos internos — COMPLETO (PR #153 fusionado; verificado en `staging` y en producción el 2026-11-17)
 

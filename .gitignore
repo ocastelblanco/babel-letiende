@@ -62,3 +62,6 @@ docs/ingeniero-de-prompts-y-agentes.md
 # Asistente: copia congelada del inventario de producción y resultados crudos de la evaluación (fuera de git a propósito)
 /asistente-ia/evals/congelado/
 /asistente-ia/evals/resultados/
+
+# Reportes de la verificación OWASP: describen debilidades y el repositorio es público.
+.owasp/
