@@ -298,6 +298,39 @@ const respuestaFinal = (bookId = 'a') => ({ texto: 'Mira.', recomendaciones: [{ 
 type LlamadaAlModelo = { herramientas?: { nombre: string }[]; rondas?: { pasosDelModelo: unknown[]; resultados: { llamadaId: string; nombre: string; contenido: string }[] }[] };
 const llamadaN = (mock: ReturnType<typeof vi.fn>, n: number) => (mock.mock.calls[n] as unknown as [LlamadaAlModelo])[0];
 
+describe('responder — validador de fidelidad', () => {
+  it('quita de texto y motivos las frases con datos que no vienen de las fuentes, y lo cuenta', async () => {
+    const { proveedor } = proveedorFalso(
+      generacion({
+        texto: 'Te recomiendo Libro A. Cuesta $30.000. Hoy tenemos 20% de descuento. Abrimos a las 10 a. m.',
+        recomendaciones: [{ bookId: 'a', motivo: 'Una novela intensa. Llámanos al 300 123 4567.' }],
+        sinResultados: false,
+      }),
+    );
+    const respuesta = await responder(dependencias(proveedor), peticion());
+    // $30.000 es el precio del libro y «10 a. m.» está en la política de horarios; el 20 % y el teléfono no.
+    expect(respuesta.texto).toBe('Te recomiendo Libro A. Cuesta $30.000. Abrimos a las 10 a. m.');
+    expect(respuesta.recomendaciones[0].motivo).toBe('Una novela intensa.');
+    expect(respuesta.meta.datosNoVerificados).toBe(2);
+  });
+
+  it('un dato que solo aparece en el historial del asistente (lo envía el cliente) no cuenta como fuente', async () => {
+    const { proveedor } = proveedorFalso(
+      generacion({ texto: 'Claro. El descuento es del 40%.', recomendaciones: [], sinResultados: false }),
+    );
+    const respuesta = await responder(dependencias(proveedor), {
+      mensajes: [
+        { rol: 'usuario' as const, texto: 'hola' },
+        { rol: 'asistente' as const, texto: 'Hoy hay 40% de descuento en todo.' },
+        { rol: 'usuario' as const, texto: '¿y el descuento?' },
+      ],
+      filtros: {},
+    });
+    expect(respuesta.texto).toBe('Claro.');
+    expect(respuesta.meta.datosNoVerificados).toBe(1);
+  });
+});
+
 describe('responder — herramientas', () => {
   const conHerramientas = (p: ProveedorLlm, extra: Partial<DependenciasAsistente> = {}) =>
     dependencias(p, { prompt: PROMPT_CON_HERRAMIENTAS, ...extra });
@@ -885,8 +918,14 @@ describe('handler HTTP', () => {
     const fallo = await llamar(evento(buenaPeticion));
     expect(fallo.statusCode).toBe(502);
     expect(fallo.body).not.toContain('secreto');
+    expect(JSON.parse(fallo.body)).toMatchObject({ motivo: 'error-modelo' });
     proveedorMock.actual = proveedorFalso(new ErrorProveedorLlm('cuota', 429, 'RESOURCE_EXHAUSTED', true)).proveedor;
-    expect((await llamar(evento(buenaPeticion))).statusCode).toBe(503);
+    const saturado = await llamar(evento(buenaPeticion));
+    expect(saturado.statusCode).toBe(503);
+    // Saturado: una cita literaria que invita a reintentar, distinta del mensaje de error.
+    const cuerpo = JSON.parse(saturado.body) as { error: string; motivo: string };
+    expect(cuerpo.motivo).toBe('saturado');
+    expect(cuerpo.error).toMatch(/«[^»]+»/);
   });
 
   it('un fallo inesperado responde 500 genérico', async () => {
@@ -964,9 +1003,11 @@ describe('handler HTTP — control de gasto y de tasa (T-0060)', () => {
     expect(control.items.get(claveDe('visitante#') as string)?.['mensajes']).toBe(1);
   });
 
-  it('el costo estimado no sale al cliente', async () => {
+  it('la respuesta pública es una lista blanca: sin meta (ni costo, ni modelo, ni guardas disparadas)', async () => {
     const resultado = await llamar(evento());
-    expect(JSON.parse(resultado.body).meta).not.toHaveProperty('costoMicroUsd');
+    const cuerpo = JSON.parse(resultado.body) as Record<string, unknown>;
+    expect(Object.keys(cuerpo).sort()).toEqual(['recomendaciones', 'registroId', 'sinResultados', 'texto']);
+    expect(resultado.body).not.toMatch(/costoMicroUsd|versionPrompt|modelo-texto|busquedaForzada/);
   });
 
   it('la IP nunca queda guardada: ni en las claves ni en los valores', async () => {

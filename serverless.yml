@@ -2470,7 +2470,8 @@ functions:
       POST /api/asistente — asistente de recomendación (T-0023). Por ahora solo personal
       (vendedor o administrador), con interruptor ASISTENTE_ACTIVO (apagado en producción) y topes de gasto
       y de mensajes por visitante (T-0060).
-    # Por debajo del límite de 30 s de API Gateway; el cliente de Gemini usa 10 s por intento y un reintento.
+    # Por debajo del límite de 30 s de API Gateway; el cliente de Gemini reintenta con espera creciente dentro de un
+    # presupuesto de 25 s por petición (ningún intento empieza si no alcanza a terminar).
     timeout: 29
     memorySize: 512
     environment:
@@ -4323,3 +4324,13 @@ resources:
     CargaConocimientoWorkerLambdaFunction:
       Properties:
         RecursiveLoop: Allow
+    # Límite de tasa de la ruta del asistente (Fase 6, parte 3, T-0060). Es global para la ruta, no por persona
+    # (eso lo hace el tope de mensajes por visitante en la tabla de control): corta una ráfaga antes de que llegue
+    # a la Lambda y a Gemini. 2 peticiones por segundo sostenidas y ráfagas de 10 sobran para una librería; lo que
+    # pasa del límite recibe 429 de API Gateway sin invocar nada.
+    HttpApiStage:
+      Properties:
+        RouteSettings:
+          'POST /api/asistente':
+            ThrottlingRateLimit: 2
+            ThrottlingBurstLimit: 10

@@ -393,6 +393,50 @@ describe('ProveedorGemini — errores', () => {
     expect(esperar.mock.calls.map((c) => c[0])).toEqual([500]);
   });
 
+  it('con fecha límite: reintenta mientras quepa un intento útil y para cuando ya no (sin pasar los 30 s)', async () => {
+    let reloj = 0;
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      reloj += 3_000; // cada intento fallido tarda 3 s
+      return respuesta({ error: { status: 'UNAVAILABLE' } }, 503);
+    });
+    const esperar = vi.fn().mockImplementation(async (ms: number) => {
+      reloj += ms;
+    });
+    const error = (await crear(fetchMock, {
+      reintentosMaximos: 10,
+      fechaLimiteMs: 20_000,
+      ahora: () => reloj,
+      esperar,
+    })
+      .incrustarConsulta('x')
+      .catch((e: unknown) => e)) as ErrorProveedorLlm;
+    expect(error.reintentable).toBe(true);
+    // 0 → 3 s; pausa 0,5 → 6,5 s; pausa 1 → 10,5 s; pausa 2 → 15,5 s; la pausa de 4 dejaría 0,5 s: no se intenta.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(esperar.mock.calls.map((c) => c[0])).toEqual([500, 1000, 2000]);
+    expect(reloj).toBeLessThan(20_000);
+  });
+
+  it('con fecha límite: el tiempo de cada intento se recorta al que queda', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      respuesta({ embeddings: [{ values: vector(768) }], usageMetadata: { promptTokenCount: 1 } }),
+    );
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    await crear(fetchMock, { timeoutMs: 12_000, fechaLimiteMs: 7_000, ahora: () => 0 }).incrustarConsulta('x');
+    expect(timeout).toHaveBeenCalledWith(7_000);
+    timeout.mockRestore();
+  });
+
+  it('con fecha límite ya vencida no llama a Gemini y lanza un error reintentable', async () => {
+    const fetchMock = vi.fn();
+    const error = (await crear(fetchMock, { fechaLimiteMs: 1_000, ahora: () => 0 })
+      .incrustarConsulta('x')
+      .catch((e: unknown) => e)) as ErrorProveedorLlm;
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(error).toBeInstanceOf(ErrorProveedorLlm);
+    expect(error.reintentable).toBe(true);
+  });
+
   it('el tiempo límite por intento es configurable', async () => {
     const fetchMock = vi.fn().mockImplementation(async () =>
       respuesta({ embeddings: [{ values: vector(768) }], usageMetadata: { promptTokenCount: 1 } }),

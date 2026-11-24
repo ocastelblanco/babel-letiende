@@ -478,6 +478,140 @@ export function afirmaDatosDeInventario(textoJson: string): boolean {
 }
 
 /** La salida del modelo no sirve (no es JSON, no cumple el esquema o se cortó). */
+// ---------------------------------------------------------------------------
+// Fidelidad de datos (Fase 6, parte 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Datos que el modelo no puede inventar porque la persona actuaría con ellos: precios, porcentajes, horas,
+ * teléfonos y direcciones. Cada uno se reduce a una clave comparable (solo dígitos, o hora normalizada) para
+ * cotejarla contra lo que el servidor le dio al modelo en este turno.
+ */
+const PATRONES_DE_DATOS: { tipo: string; patron: RegExp; clave: (coincidencia: string) => string }[] = [
+  {
+    tipo: 'direccion',
+    patron: /\b(?:carrera|cra\.?|kr\.?|calle|cl\.?|avenida|av\.?|transversal|tv\.?|diagonal|dg\.?)\s*\d+\s*[a-z]?\s*(?:#|n[°ºo.]?|no\.?)\s*\d+\s*[a-z]?\s*-\s*\d+/gi,
+    clave: (c) => c.replace(/\D/g, ''),
+  },
+  {
+    tipo: 'telefono',
+    patron: /(?<![\d$.,])(?<!\$\s)\+?\d[\d\s().-]{6,}\d(?!\d|[.,]\d)/g,
+    // Sin el indicativo: «324 7695957» y «+57 324 7695957» son el mismo número.
+    clave: (c) => c.replace(/\D/g, '').slice(-10),
+  },
+  {
+    tipo: 'precio',
+    patron: /\$\s?\d{1,3}(?:[.,]\d{3})+|\$\s?\d+/g,
+    clave: (c) => c.replace(/\D/g, ''),
+  },
+  {
+    tipo: 'porcentaje',
+    patron: /\b\d{1,3}(?:[.,]\d+)?\s?%/g,
+    clave: (c) => c.replace(/[^\d.,]/g, '').replace(',', '.'),
+  },
+  {
+    tipo: 'hora',
+    patron: /\b\d{1,2}(?::\d{2})?\s?(?:a\.?\s?m\.?|p\.?\s?m\.?|am|pm|h\b|horas\b)/gi,
+    clave: (c) => {
+      const [, h, m] = /(\d{1,2})(?::(\d{2}))?/.exec(c) ?? [];
+      return `${Number(h)}:${m ?? '00'}`;
+    },
+  },
+];
+
+/**
+ * Claves de los datos verificables que aparecen en `fuentes` (lo que el servidor le dio al modelo), por tipo. De
+ * `textoDeLaPersona` solo cuentan los precios («algo por menos de $40.000» se puede repetir): un porcentaje, una
+ * hora o un teléfono que la persona afirma («¿es cierto que hay 50 % de descuento?») no se vuelve verdad por
+ * repetirlo.
+ */
+export function datosDeFuentes(fuentes: string, textoDeLaPersona = ''): Map<string, Set<string>> {
+  const conocidos = new Map<string, Set<string>>();
+  for (const { tipo, patron, clave } of PATRONES_DE_DATOS) {
+    const claves = new Set<string>();
+    for (const coincidencia of fuentes.match(patron) ?? []) {
+      claves.add(clave(coincidencia));
+    }
+    conocidos.set(tipo, claves);
+  }
+  // El precio de un libro viaja al modelo como `"precio":45000`, sin `$`, y el modelo lo escribe «$45.000»: los
+  // números crudos de 4 o más cifras de las fuentes cuentan como precio conocido. (Solo como precio: un «15» de la
+  // hora no puede validar un «15 %» inventado.)
+  for (const numero of fuentes.match(/\d{4,}/g) ?? []) {
+    conocidos.get('precio')?.add(numero);
+  }
+  const precio = PATRONES_DE_DATOS.find((dato) => dato.tipo === 'precio');
+  for (const coincidencia of (precio && textoDeLaPersona.match(precio.patron)) || []) {
+    conocidos.get('precio')?.add(precio?.clave(coincidencia) ?? '');
+  }
+  return conocidos;
+}
+
+/** ¿La frase afirma algún dato que no está en las fuentes? */
+function fraseConDatoInventado(frase: string, conocidos: Map<string, Set<string>>): boolean {
+  let resto = frase;
+  for (const { tipo, patron, clave } of PATRONES_DE_DATOS) {
+    for (const coincidencia of resto.match(patron) ?? []) {
+      const conocido =
+        conocidos.get(tipo)?.has(clave(coincidencia)) ||
+        // «1.250.000 pesos» parece un teléfono por la cantidad de dígitos: si es un precio conocido, vale.
+        (tipo === 'telefono' && conocidos.get('precio')?.has(coincidencia.replace(/\D/g, '')));
+      if (!conocido) {
+        return true;
+      }
+    }
+    // Una dirección o un teléfono ya revisados no se vuelven a leer como precio u hora.
+    resto = resto.replace(patron, ' ');
+  }
+  return false;
+}
+
+const FIN_DE_FRASE = /(?<=[.!?…])\s+(?=[¿¡«"A-ZÁÉÍÓÚÑ])/u;
+
+export interface TextoVerificado {
+  texto: string;
+  /** Frases quitadas por afirmar un dato que el servidor no le dio al modelo. */
+  frasesQuitadas: number;
+}
+
+/**
+ * Validador de fidelidad: quita las frases que afirman un precio, porcentaje, hora, teléfono o dirección que no
+ * aparece en lo que el servidor le dio al modelo en este turno (libros, políticas, resultados de herramientas,
+ * fecha y los propios mensajes de la persona). No reescribe: solo quita, porque un dato a medias es peor que
+ * ninguno. Si no queda nada, devuelve el texto vacío y el llamador decide.
+ */
+export function quitarDatosNoVerificados(texto: string, conocidos: Map<string, Set<string>>): TextoVerificado {
+  const frases = texto.split(FIN_DE_FRASE);
+  const conservadas = frases.filter((frase) => !fraseConDatoInventado(frase, conocidos));
+  return { texto: conservadas.join(' ').trim(), frasesQuitadas: frases.length - conservadas.length };
+}
+
+export const TEXTO_DATO_NO_CONFIRMADO =
+  'Prefiero no darte un dato que no tengo confirmado. Pregúntanos directamente en la librería y con gusto te ayudamos.';
+
+// ---------------------------------------------------------------------------
+// Mensajes cuando Gemini no responde (Fase 6, parte 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Gemini saturado (429/5xx tras agotar los reintentos): no es culpa de la persona ni un error de Babel, y vale la
+ * pena volver a intentarlo. El tono lo aprobó Oliver (23/11/2026): citas literarias breves de obras en dominio
+ * público.
+ */
+export const MENSAJES_SATURADO = [
+  'Hay mucha gente consultando la biblioteca al mismo tiempo y no alcancé a responderte. «Paciencia y barajar», decía don Quijote: inténtalo de nuevo en un minuto.',
+  'Los estantes están muy concurridos en este momento. Como escribió Antonio Machado, «se hace camino al andar»: vuelve a preguntarme en un minuto.',
+  'Se me juntaron demasiadas consultas a la vez. Larra escribió «Vuelva usted mañana»; yo te pido menos: inténtalo de nuevo en un minuto.',
+] as const;
+
+/** Cualquier otro fallo del modelo (respuesta inválida, error no reintentable). */
+export const MENSAJE_ERROR_MODELO =
+  'Se me enredaron las páginas preparando la recomendación. Inténtalo de nuevo, por favor; si vuelve a pasar, pregúntanos en la librería.';
+
+export function mensajeSaturado(azar: () => number = Math.random): string {
+  return MENSAJES_SATURADO[Math.floor(azar() * MENSAJES_SATURADO.length) % MENSAJES_SATURADO.length];
+}
+
 export class ErrorRespuestaInvalida extends Error {
   constructor(mensaje: string) {
     super(mensaje);

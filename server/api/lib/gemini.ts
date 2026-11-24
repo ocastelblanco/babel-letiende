@@ -40,6 +40,8 @@ const TAMANO_LOTE_EMBEDDINGS = 50;
 const TIMEOUT_MS = 20_000;
 const REINTENTOS_MAXIMOS = 2;
 const PAUSA_BASE_MS = 500;
+/** Por debajo de esto, un intento más no alcanza a recibir una respuesta (medido: 5 a 13 s por generación). */
+export const MINIMO_MS_POR_INTENTO = 4_000;
 
 export interface OpcionesGemini {
   claveApi: string;
@@ -50,9 +52,16 @@ export interface OpcionesGemini {
   timeoutMs?: number;
   /** Reintentos tras el primer intento (429, 5xx y red). */
   reintentosMaximos?: number;
+  /**
+   * Instante (ms) a partir del cual no se debe seguir esperando a Gemini. Un endpoint interactivo lo fija para no
+   * pasar el límite de 30 s de API Gateway: cada intento recorta su tiempo al que queda y no se reintenta si lo que
+   * queda tras la pausa no alcanza para un intento útil.
+   */
+  fechaLimiteMs?: number;
   /** Para pruebas. */
   fetchImpl?: typeof fetch;
   esperar?: (ms: number) => Promise<void>;
+  ahora?: () => number;
 }
 
 interface UsoEmbeddings {
@@ -81,6 +90,8 @@ export class ProveedorGemini implements ProveedorLlm {
   private readonly esperar: (ms: number) => Promise<void>;
   private readonly timeoutMs: number;
   private readonly reintentosMaximos: number;
+  private readonly fechaLimiteMs: number | null;
+  private readonly ahora: () => number;
 
   constructor(opciones: OpcionesGemini) {
     if (!opciones.claveApi) {
@@ -94,6 +105,17 @@ export class ProveedorGemini implements ProveedorLlm {
     this.esperar = opciones.esperar ?? esperarReal;
     this.timeoutMs = opciones.timeoutMs ?? TIMEOUT_MS;
     this.reintentosMaximos = opciones.reintentosMaximos ?? REINTENTOS_MAXIMOS;
+    this.fechaLimiteMs = opciones.fechaLimiteMs ?? null;
+    this.ahora = opciones.ahora ?? Date.now;
+  }
+
+  /** Tiempo para el próximo intento, o `null` si ya no cabe uno útil antes de la fecha límite. */
+  private tiempoParaIntento(pausaMs: number): number | null {
+    if (this.fechaLimiteMs === null) {
+      return this.timeoutMs;
+    }
+    const restante = this.fechaLimiteMs - this.ahora() - pausaMs;
+    return restante < MINIMO_MS_POR_INTENTO ? null : Math.min(this.timeoutMs, restante);
   }
 
   async incrustarDocumentos(documentos: DocumentoParaIncrustar[]): Promise<ResultadoIncrustacion> {
@@ -274,8 +296,15 @@ export class ProveedorGemini implements ProveedorLlm {
   ): Promise<T> {
     let ultimo: ErrorProveedorLlm | null = null;
     for (let intento = 0; intento <= this.reintentosMaximos; intento += 1) {
-      if (intento > 0) {
-        await this.esperar(PAUSA_BASE_MS * 2 ** (intento - 1));
+      const pausa = intento > 0 ? PAUSA_BASE_MS * 2 ** (intento - 1) : 0;
+      const tiempo = this.tiempoParaIntento(pausa);
+      if (tiempo === null) {
+        // Sin tiempo para otro intento: se entrega el último fallo (o, si ni el primero cabía, uno reintentable).
+        ultimo ??= new ErrorProveedorLlm('No quedó tiempo para llamar a Gemini.', null, null, true);
+        break;
+      }
+      if (pausa > 0) {
+        await this.esperar(pausa);
       }
       try {
         const respuesta = await this.fetchImpl(`${base}${ruta}`, {
@@ -286,7 +315,7 @@ export class ProveedorGemini implements ProveedorLlm {
             ...cabeceras,
           },
           body: JSON.stringify(cuerpo),
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: AbortSignal.timeout(tiempo),
         });
         if (respuesta.ok) {
           return (await respuesta.json()) as T;
@@ -327,7 +356,7 @@ export class ProveedorGemini implements ProveedorLlm {
 /** Construye el proveedor desde las variables de entorno de la Lambda. */
 export function crearProveedorLlm(
   entorno: NodeJS.ProcessEnv = process.env,
-  opciones: Pick<OpcionesGemini, 'timeoutMs' | 'reintentosMaximos'> = {},
+  opciones: Pick<OpcionesGemini, 'timeoutMs' | 'reintentosMaximos' | 'fechaLimiteMs'> = {},
 ): ProveedorLlm {
   return new ProveedorGemini({
     ...opciones,

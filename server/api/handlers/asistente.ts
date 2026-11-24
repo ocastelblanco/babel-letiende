@@ -6,18 +6,24 @@ import {
   ErrorPeticion,
   ErrorRespuestaInvalida,
   MAXIMO_CARACTERES_CUERPO,
+  MENSAJE_ERROR_MODELO,
   TEXTO_BLOQUEADO,
+  TEXTO_DATO_NO_CONFIRMADO,
   TEXTO_DEMORA,
   TEXTO_SIN_CONFIRMAR,
   TEXTO_SIN_RESULTADOS,
   afirmaDatosDeInventario,
   anunciaSinActuar,
   cargarPrompt,
+  datosDeFuentes,
   filtroDelIndice,
   libroParaModelo,
   motivoParaBuscar,
   pideDatosDeInventario,
   mensajesParaModelo,
+  mensajeSaturado,
+  momentoActualParaModelo,
+  quitarDatosNoVerificados,
   seleccionarCandidatos,
   textoDeConsulta,
   validarPeticion,
@@ -144,6 +150,8 @@ export interface RespuestaAsistente {
     tokensEmbeddings: number;
     /** Costo estimado de esta respuesta en micro-USD (1 USD = 1.000.000) a la tarifa de `control-asistente.ts`. */
     costoMicroUsd: number;
+    /** Frases quitadas del texto o de los motivos por afirmar un dato (precio, hora, teléfono…) que no estaba en las fuentes. */
+    datosNoVerificados: number;
   };
 }
 
@@ -343,6 +351,7 @@ export async function responder(
       tokensSalida,
       tokensEmbeddings: sesion.tokensEntradaEmbeddings,
     }),
+    datosNoVerificados: 0,
     ...extra,
   });
 
@@ -491,22 +500,49 @@ export async function responder(
     // Sigue prometiendo una búsqueda que ya no va a hacer: no se entrega así.
     return { texto: TEXTO_SIN_RESULTADOS, recomendaciones: [], sinResultados: true, meta: meta({ descartados: validada.descartados }) };
   }
-  return {
-    texto: validada.texto,
+  // Validador de fidelidad: todo precio, porcentaje, hora, teléfono o dirección debe venir de lo que el servidor
+  // le dio al modelo en este turno (de la persona solo cuentan los precios). El historial del asistente NO cuenta
+  // como fuente: lo reenvía el cliente y se puede manipular.
+  const momento = momentoActualParaModelo(ahora());
+  const conocidos = datosDeFuentes(
+    [
+      `${momento.hoy}, ${momento.hora}`,
+      JSON.stringify(politicasParaModelo(dependencias.politicas)),
+      JSON.stringify(librosIniciales),
+      ...rondasHechas.flatMap((ronda) => ronda.resultados.map((resultado) => resultado.contenido)),
+    ].join('\n'),
+    peticion.mensajes.filter((mensaje) => mensaje.rol === 'usuario').map((mensaje) => mensaje.texto).join('\n'),
+  );
+  const textoVerificado = quitarDatosNoVerificados(validada.texto, conocidos);
+  let datosNoVerificados = textoVerificado.frasesQuitadas;
+  const recomendaciones = validada.recomendaciones.map(({ bookId, motivo }) => {
+    const libro = sesion.vistos.get(bookId) as LibroDeInventario;
+    const motivoVerificado = quitarDatosNoVerificados(motivo, conocidos);
+    datosNoVerificados += motivoVerificado.frasesQuitadas;
     // Lista blanca explícita: nada de esparcir el ítem de la base de datos.
-    recomendaciones: validada.recomendaciones.map(({ bookId, motivo }) => {
-      const libro = sesion.vistos.get(bookId) as LibroDeInventario;
-      return {
-        bookId,
-        titulo: libro.titulo,
-        autor: libro.autor,
-        pvp: libro.pvp,
-        portadaUrl: libro.portadaUrl ?? null,
-        motivo,
-      };
-    }),
+    return {
+      bookId,
+      titulo: libro.titulo,
+      autor: libro.autor,
+      pvp: libro.pvp,
+      portadaUrl: libro.portadaUrl ?? null,
+      motivo: motivoVerificado.texto,
+    };
+  });
+  if (datosNoVerificados > 0) {
+    console.warn('asistente: se quitaron frases con datos no verificados', datosNoVerificados);
+  }
+  const texto =
+    textoVerificado.texto !== ''
+      ? textoVerificado.texto
+      : recomendaciones.length > 0
+        ? 'Estas son algunas opciones de la librería que pueden interesarte.'
+        : TEXTO_DATO_NO_CONFIRMADO;
+  return {
+    texto,
+    recomendaciones,
     sinResultados: validada.sinResultados,
-    meta: meta({ descartados: validada.descartados }),
+    meta: meta({ descartados: validada.descartados, datosNoVerificados }),
   };
 }
 
@@ -578,11 +614,19 @@ async function resolverUbicacion(ubicacionId: string): Promise<UbicacionFisica |
   return espacio ? { espacio: espacio.nombre, mueble: mueble.nombre, ubicacion: ubicacion.nombre } : null;
 }
 
-function dependenciasReales(): DependenciasAsistente {
+/** Tiempo total que la petición puede dedicar a Gemini, con margen para el control, el registro y la respuesta. */
+const PRESUPUESTO_DE_TIEMPO_MS = 25_000;
+
+function dependenciasReales(inicioMs: number): DependenciasAsistente {
   cargadorIndice ??= crearCargadorIndice(crearAlmacenS3(variable('BUCKET_INDICE')));
   return {
-    // Interactivo: intentos cortos y un solo reintento, para no pasar el límite de 30 s de API Gateway.
-    proveedor: crearProveedorLlm(process.env, { timeoutMs: 10_000, reintentosMaximos: 1 }),
+    // Interactivo: hasta 4 reintentos con espera creciente ante Gemini saturado, pero siempre dentro del reloj de la
+    // petición (API Gateway corta a los 30 s; la Lambda, a los 29 s): ningún intento empieza si no alcanza a terminar.
+    proveedor: crearProveedorLlm(process.env, {
+      timeoutMs: 12_000,
+      reintentosMaximos: 4,
+      fechaLimiteMs: inicioMs + PRESUPUESTO_DE_TIEMPO_MS,
+    }),
     cargarIndice: cargadorIndice,
     leerLibro: async (bookId) =>
       (await obtenerPorClave<LibroDeInventario>(variable('TABLA_LIBROS'), { bookId })) ?? null,
@@ -646,7 +690,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
       return respuestaJson(veredicto.motivo === 'tope-visitante' ? 429 : 503, { error: MENSAJES_DE_CONTROL[veredicto.motivo] });
     }
 
-    const respuesta = await responder(dependenciasReales(), peticion);
+    const respuesta = await responder(dependenciasReales(ahoraMs), peticion);
     try {
       await registrarGasto(almacenControl, veredicto.dia, respuesta.meta.costoMicroUsd, ahoraMs);
     } catch (error) {
@@ -665,9 +709,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
     }
     // Solo cifras: ni el texto de la persona ni el de la respuesta quedan en los registros (privacidad).
     console.log('asistente', JSON.stringify(respuesta.meta));
-    // El costo estimado es dato de operación (queda en el registro y en el gasto del día): no sale al cliente.
-    const { costoMicroUsd: _costo, ...metaPublica } = respuesta.meta;
-    return respuestaJson(200, { ...respuesta, registroId, meta: metaPublica });
+    // Lista blanca de la respuesta pública (revisión OWASP de la Fase 6, 24/11/2026): `meta` NO sale al cliente.
+    // Modelo, versión del prompt, herramientas, costo y guardas disparadas son datos de operación: le dirían a quien
+    // prueba inyecciones cuál funcionó. Quedan completos en el registro del turno y en el log de la Lambda.
+    const { texto, recomendaciones, sinResultados } = respuesta;
+    return respuestaJson(200, { texto, recomendaciones, sinResultados, registroId });
   } catch (error) {
     if (error instanceof TokenInvalidoError) {
       return respuestaJson(401, { error: error.message });
@@ -686,9 +732,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
         error.name,
         error instanceof ErrorProveedorLlm ? `${error.estadoHttp ?? 'sin-estado'} ${error.codigo ?? ''}`.trim() : error.message,
       );
+      // Saturado (429/5xx tras agotar los reintentos) y fallo propio se distinguen: el primero se arregla esperando.
       const saturado = error instanceof ErrorProveedorLlm && error.reintentable;
       return respuestaJson(saturado ? 503 : 502, {
-        error: 'No pude preparar una recomendación en este momento. Intenta de nuevo.',
+        error: saturado ? mensajeSaturado() : MENSAJE_ERROR_MODELO,
+        motivo: saturado ? 'saturado' : 'error-modelo',
       });
     }
     console.error('asistente: error inesperado', error instanceof Error ? error.name : 'desconocido');
