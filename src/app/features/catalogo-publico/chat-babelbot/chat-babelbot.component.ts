@@ -19,7 +19,7 @@ export const MAXIMO_CARACTERES_PREGUNTA = 1000;
  * (`registro-asistente.ts`: consulta enmascarada, sin IP ni respuesta, 90 días; Gemini de pago con `store: false`).
  */
 export const AVISO_BABELBOT =
-  'Hablas con BabelBot, una inteligencia artificial: puede equivocarse, así que confirma el precio y las existencias con la librería. ' +
+  'Hablas con BabelBot, una inteligencia artificial: puede equivocarse, así que confirma el precio y las existencias con la librería de Le Tiende. ' +
   'Tu pregunta se procesa con Gemini, de Google, y la guardamos 90 días para mejorar el servicio, sin tu nombre ni tu IP y con correos, ' +
   'teléfonos y documentos ocultos. No escribas datos personales.';
 
@@ -54,6 +54,8 @@ export class ChatBabelbotComponent implements OnInit {
   protected readonly maximoCaracteres = MAXIMO_CARACTERES_PREGUNTA;
   protected readonly disponible = signal(false);
   protected readonly abierto = signal(false);
+  /** El aviso siempre empieza expandido: cada vez que se abre el chat se vuelve a mostrar completo. */
+  protected readonly avisoExpandido = signal(true);
   protected readonly mensajes = signal<MensajeChat[]>([]);
   protected readonly cargando = signal(false);
   protected readonly texto = signal('');
@@ -69,8 +71,13 @@ export class ChatBabelbotComponent implements OnInit {
   }
 
   protected abrir(): void {
+    this.avisoExpandido.set(true);
     this.abierto.set(true);
     setTimeout(() => this.entrada()?.nativeElement.focus());
+  }
+
+  protected alternarAviso(): void {
+    this.avisoExpandido.update((expandido) => !expandido);
   }
 
   protected cerrar(): void {

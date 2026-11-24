@@ -38,7 +38,22 @@
         </div>
       </header>
 
-      <p class="border-b border-primary/10 bg-neutral px-4 py-2 text-xs text-primary/80" data-testid="aviso-babelbot">{{ aviso }}</p>
+      <section class="border-b border-primary/10 bg-neutral px-4 py-2 text-xs text-primary/80">
+        <button
+          type="button"
+          (click)="alternarAviso()"
+          [attr.aria-expanded]="avisoExpandido()"
+          aria-controls="aviso-babelbot"
+          class="flex w-full items-center justify-between gap-2 text-left font-semibold text-primary"
+          data-testid="alternar-aviso"
+        >
+          <span>Antes de empezar</span>
+          <span class="material-symbols-outlined text-base" aria-hidden="true">{{ avisoExpandido() ? 'expand_less' : 'expand_more' }}</span>
+        </button>
+        @if (avisoExpandido()) {
+          <p id="aviso-babelbot" class="mt-1" data-testid="aviso-babelbot">{{ aviso }}</p>
+        }
+      </section>
 
       <div #lista class="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" aria-live="polite">
         <p class="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm text-primary shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
