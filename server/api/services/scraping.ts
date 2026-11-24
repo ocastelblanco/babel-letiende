@@ -177,7 +177,7 @@ export async function esUrlSegura(url: string): Promise<boolean> {
  */
 async function fetchSeguro(
   url: string,
-  opciones?: { metodo?: string; timeoutMs?: number },
+  opciones?: { metodo?: string; timeoutMs?: number; accept?: string },
   intentosRestantes = MAX_REDIRECCIONES,
 ): Promise<Response | null> {
   if (!(await esUrlSegura(url))) {
@@ -190,6 +190,7 @@ async function fetchSeguro(
       method: opciones?.metodo ?? 'GET',
       redirect: 'manual',
       signal: AbortSignal.timeout(opciones?.timeoutMs ?? TIMEOUT_MS),
+      ...(opciones?.accept ? { headers: { accept: opciones.accept } } : {}),
     });
   } catch {
     return null;
@@ -220,6 +221,13 @@ async function fetchSeguro(
 const TIMEOUT_MS_PORTADA = 5000;
 
 /**
+ * `Accept` de un navegador moderno. Importa: el CDN de VTEX responde 404 si la petición pide `image/avif` o
+ * `image/webp` y la imagen vieja ya no existe en esos formatos, aunque con un Accept genérico (el de `fetch` por defecto)
+ * devuelva 200 y la imagen original. La portada se pinta en el navegador, así que se verifica como lo hace él.
+ */
+const ACCEPT_NAVEGADOR = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+
+/**
  * ¿La respuesta es una imagen? Un CDN que "pierde" un archivo a veces responde con un cuerpo de error (p. ej.
  * `application/json`); si trae `content-type`, debe ser `image/*` (o `application/octet-stream`, que algunos
  * servidores usan para imágenes). Sin `content-type` se da por buena: no hay forma de saber.
@@ -239,11 +247,11 @@ function respuestaEsImagen(respuesta: Response): boolean {
  * no-2xx, o 2xx que no sea una imagen) se traduce en `false`.
  */
 export async function portadaUrlResponde(portadaUrl: string): Promise<boolean> {
-  const respuestaHead = await fetchSeguro(portadaUrl, { metodo: 'HEAD', timeoutMs: TIMEOUT_MS_PORTADA });
+  const respuestaHead = await fetchSeguro(portadaUrl, { metodo: 'HEAD', timeoutMs: TIMEOUT_MS_PORTADA, accept: ACCEPT_NAVEGADOR });
   if (respuestaHead !== null && respuestaEsImagen(respuestaHead)) {
     return true;
   }
-  const respuestaGet = await fetchSeguro(portadaUrl, { metodo: 'GET', timeoutMs: TIMEOUT_MS_PORTADA });
+  const respuestaGet = await fetchSeguro(portadaUrl, { metodo: 'GET', timeoutMs: TIMEOUT_MS_PORTADA, accept: ACCEPT_NAVEGADOR });
   return respuestaGet !== null && respuestaEsImagen(respuestaGet);
 }
 

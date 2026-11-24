@@ -213,6 +213,8 @@ Las fechas se guardan siempre en ISO UTC. Al presentarlas en reportes se convier
 ### Portadas de VTEX (Lerner, Nacional, de la U): una URL puede morir sin avisar
 En noviembre de 2026 Lerner re-subió masivamente sus imágenes: las URLs guardadas con los ids viejos (`/arquivos/ids/2479231/…?v=…`) devuelven `404` con cuerpo `{"statusCode":404,…}` (`application/json`), mientras que la API de producto ya entrega la URL nueva. Ocurre por lotes, sin aviso, y no hay forma de saberlo sin pedir cada imagen. Por eso existe «Validar solo portadas» en `/admin/validar-libros` (rápido, sin PVP) y por eso `portadaUrlResponde` exige un `content-type` de imagen y las portadas de reemplazo también se verifican por HTTP. Si pasa de nuevo con otro sitio: correr ese botón.
 
+**Trampa del `Accept`:** el CDN de VTEX responde `404` si la petición pide `image/avif` o `image/webp` (lo que hace todo navegador) y `200` con el `Accept` genérico de `fetch`/`curl`. La primera versión del botón dio por buenas portadas que el navegador no podía ver. Por eso `portadaUrlResponde` verifica con el `Accept` de un navegador (`ACCEPT_NAVEGADOR`). Para diagnosticar a mano, probar siempre con `-H "Accept: image/avif,image/webp,*/*"`.
+
 ### Cold starts de Lambda en SSR
 El primer request tras inactividad a una función Lambda que sirve SSR de Angular puede tardar significativamente más (cold start incluye bootstrap de Node + Angular Universal). Evaluar `provisioned concurrency` solo si el costo lo justifica (rompe el objetivo de $0); por defecto, aceptar la latencia en frío y optimizar el bundle del servidor.
 

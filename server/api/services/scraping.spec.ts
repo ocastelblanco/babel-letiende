@@ -804,6 +804,14 @@ describe('portadaUrlResponde (verificación HTTP real de portadas, TODO.md — f
     await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(false);
   });
 
+  it('pide la imagen con el Accept de un navegador: VTEX da 404 a image/avif aunque con */* devuelva 200', async () => {
+    fetchMock.mockResolvedValue(respuesta({ tipo: 'image/jpeg' }));
+    await portadaUrlResponde(URL_PORTADA);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>)['accept']).toContain('image/avif');
+    expect((init.headers as Record<string, string>)['accept']).toContain('image/webp');
+  });
+
   it('si el HEAD dice que no es imagen pero el GET sí, la portada responde', async () => {
     fetchMock
       .mockResolvedValueOnce(respuesta({ tipo: 'application/json' }))
