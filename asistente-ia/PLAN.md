@@ -106,14 +106,14 @@ Partida en tres PRs: `T-0021` cliente de Gemini detrás de `ProveedorLlm` (verif
 - [x] Contrato verificado con la API real mediante `asistente-verificar-gemini.yml`: embeddings de 768 dimensiones ya normalizados, lote, `generateContent` con esquema JSON y `usageMetadata`.
 - [x] `ProveedorLlm` (`server/api/lib/proveedor-llm.ts`) y `ProveedorGemini` (`gemini.ts`): embeddings de documentos y de consultas, generación con salida JSON, reintentos acotados, errores sin clave. 31 pruebas.
 - [x] `T-0024` — Generación migrada a la Interactions API estable (`POST /v1/interactions`, sin estado, salida JSON con esquema) tras actualizarse las skills de Gemini; verificada con la clave real: variantes de versión y cabecera, conversación de varios turnos, truncado y niveles de pensamiento (detalle en la bitácora 02). 604 pruebas backend.
-- [ ] Clave de producción (prepago) como secreto del entorno `production`: se necesita solo antes de encender el asistente; la Fase 2 sale con el interruptor apagado.
+- [x] Clave de producción (prepago) como secreto del entorno `production` (verificada en la Lambda el 24/11/2026).
 
 **`T-0022` — Índice de embeddings (implementada, PR abierto 2026-11-17)** · bitácora [`03-indice-embeddings.md`](bitacora/03-indice-embeddings.md)
 
 - [x] Texto «título + autor + categorías + sinopsis» (lo que falte no entra; los libros sin sinopsis se indexan con lo que tengan y quedan marcados) convertido en vectores de 768 dimensiones con `gemini-embedding-2`.
 - [x] Índice en un solo archivo en un bucket S3 privado, vectores cuantizados a `int8` (≈ 2,3 MB para 3.000 libros), sin texto de sinopsis; formato propio validado al leer.
 - [x] Reconstrucción incremental por **huella del texto** (cambio respecto al plan, que decía fecha: editar un título no toca la fecha del conocimiento). Reanudable, con presupuesto de tiempo, sin perder libros si el proveedor falla, y con escritura condicional en S3.
-- [x] Lambda `indiceAsistenteReconstruir` programada cada 6 horas en `staging`; apagada en producción hasta que exista su clave.
+- [x] Lambda `indiceAsistenteReconstruir` programada cada 6 horas en `staging` y, desde el 24/11/2026, también en producción (bitácora 08 §10).
 - [x] Búsqueda por similitud con filtro previo (`buscarSimilares`), lista para `T-0023`.
 - [x] 31 pruebas nuevas (601 en total).
 - [x] Verificado en `staging` (2026-11-17): 25 de 25 libros indexados en 1,7 s con 6.096 tokens de entrada; la segunda corrida conservó los 25, no pidió ningún token ni escribió (94 ms); archivo de 22.676 bytes cifrado (AES256) en un bucket con acceso público bloqueado; regla de 6 horas activa.

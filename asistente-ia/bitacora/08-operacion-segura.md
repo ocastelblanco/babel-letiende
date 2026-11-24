@@ -127,7 +127,21 @@ El texto del modelo se pinta por interpolación, nunca como HTML (hay una prueba
 
 **Verificación:** 968 pruebas de backend y 564 de frontend en verde (11 nuevas del servicio y 11 del componente). Plantilla de Serverless: la ruta `GET` entra en el `DependsOn` de `HttpApiStage`.
 
-## 10. Fuentes
+## 10. Activación en producción para el personal (24/11/2026)
+
+BabelBot se enciende en producción con `ASISTENTE_ACTIVO=true` y `ASISTENTE_ACCESO=personal`: solo vendedores y administradores con sesión. Sirve para que los socios lo prueben y ayuden a decidir el nombre antes de abrirlo al público.
+
+Estado verificado en AWS antes del cambio: clave de Gemini del entorno presente, 2.520 sinopsis en `babel-libros-conocimiento-production`, tablas de control y de registros vacías y **bucket del índice vacío**. Por eso `indiceProgramado.production` pasa a `true` (cada 6 horas, incremental) y, tras el despliegue, se invoca una vez `indiceAsistenteReconstruir` para no esperar a la primera hora programada.
+
+**Hallazgo al preparar el cambio:** con acceso `personal`, el chat no habría aparecido ni para el personal. `GET /api/asistente` solo respondía `disponible: true` con acceso `publico`, y el cliente no enviaba la sesión. Ahora:
+
+- `estaDisponibleParaElPersonal`: con acceso `personal` y el asistente encendido, el `GET` verifica el token y el rol (`babel-usuarios`) y respeta el interruptor de emergencia. Cualquier fallo responde `false`.
+- `AsistenteService` envía `Authorization: Bearer` si hay sesión (en `GET` y en `POST`); sin sesión, o si leerla falla, va anónimo.
+- Un visitante sin sesión sigue viendo `disponible: false`: el botón no aparece.
+
+**Para abrirlo al público** (paso aparte): revisión del aviso de la Ley 1581 por quien responde por los datos de Le Tiende y `asistenteAcceso.production: 'publico'`.
+
+## 11. Fuentes
 
 - Precios de Gemini: página oficial citada arriba, leída el 21/11/2026.
 - `UpdateItem` con `ADD`, `if_not_exists` y `ConditionExpression`: documentación de DynamoDB; mismo patrón que `decrementarPorCantidadSiSuficiente` del repositorio.

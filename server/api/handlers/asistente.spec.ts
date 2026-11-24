@@ -38,6 +38,7 @@ import {
   IndiceNoDisponibleError,
   crearCargadorIndice,
   estaDisponibleParaElPublico,
+  estaDisponibleParaElPersonal,
   handler,
   responder,
   type DependenciasAsistente,
@@ -830,6 +831,45 @@ describe('estaDisponibleParaElPublico', () => {
   it('si la tabla de control falla responde false (nunca muestra un chat que no se puede verificar)', async () => {
     const rota = { leer: async () => { throw new Error('tabla caída'); } };
     expect(await estaDisponibleParaElPublico(rota, activoPublico)).toBe(false);
+  });
+});
+
+describe('estaDisponibleParaElPersonal (acceso personal: el chat solo se ofrece al personal con sesión)', () => {
+  const activoPersonal = { ASISTENTE_ACTIVO: 'true', ASISTENTE_ACCESO: 'personal' };
+  const almacen = (item: Record<string, unknown> | null) => ({ leer: async () => item });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['TABLA_USUARIOS'] = 'usuarios';
+    verificarTokenDesdeHeaderMock.mockResolvedValue({ email: 'vendedor@letiende.co', uid: 'u' });
+    obtenerPorClaveMock.mockResolvedValue({ email: 'vendedor@letiende.co', rol: 'vendedor' });
+  });
+
+  it('es true para un vendedor o administrador con sesión válida y el asistente encendido', async () => {
+    expect(await estaDisponibleParaElPersonal(almacen(null), 'Bearer t', activoPersonal)).toBe(true);
+    obtenerPorClaveMock.mockResolvedValue({ email: 'a@letiende.co', rol: 'administrador' });
+    expect(await estaDisponibleParaElPersonal(almacen({ activo: true }), 'Bearer t', activoPersonal)).toBe(true);
+  });
+
+  it('es false sin sesión, con token inválido, con correo sin rol, con el interruptor apagado o con el asistente apagado', async () => {
+    expect(await estaDisponibleParaElPersonal(almacen(null), undefined, activoPersonal)).toBe(false);
+    expect(verificarTokenDesdeHeaderMock).not.toHaveBeenCalled();
+
+    verificarTokenDesdeHeaderMock.mockRejectedValueOnce(new TokenInvalidoError('Token inválido.'));
+    expect(await estaDisponibleParaElPersonal(almacen(null), 'Bearer malo', activoPersonal)).toBe(false);
+
+    obtenerPorClaveMock.mockResolvedValueOnce(undefined);
+    expect(await estaDisponibleParaElPersonal(almacen(null), 'Bearer t', activoPersonal)).toBe(false);
+    obtenerPorClaveMock.mockResolvedValueOnce({ email: 'x', rol: 'visitante' });
+    expect(await estaDisponibleParaElPersonal(almacen(null), 'Bearer t', activoPersonal)).toBe(false);
+
+    expect(await estaDisponibleParaElPersonal(almacen({ activo: false }), 'Bearer t', activoPersonal)).toBe(false);
+    expect(await estaDisponibleParaElPersonal(almacen(null), 'Bearer t', { ...activoPersonal, ASISTENTE_ACTIVO: 'false' })).toBe(false);
+  });
+
+  it('con acceso público no consulta a Firebase (ahí ya decide estaDisponibleParaElPublico)', async () => {
+    expect(await estaDisponibleParaElPersonal(almacen(null), 'Bearer t', { ...activoPersonal, ASISTENTE_ACCESO: 'publico' })).toBe(false);
+    expect(verificarTokenDesdeHeaderMock).not.toHaveBeenCalled();
   });
 });
 
