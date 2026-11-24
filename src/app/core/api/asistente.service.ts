@@ -1,6 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
 
 /** Un libro que BabelBot recomienda: solo datos que ya muestra la ficha pública (lista blanca del backend). */
 export interface RecomendacionBabelbot {
@@ -47,16 +48,28 @@ const MENSAJE_GENERICO = 'No pude preparar una recomendación en este momento. I
 
 /**
  * Cliente de BabelBot (Fase 7, T-0070): `GET /api/asistente` (¿está disponible?), `POST /api/asistente` (preguntar)
- * y `POST /api/asistente/valoracion`. No lleva sesión: es el chat público del catálogo. Nunca lanza.
+ * y `POST /api/asistente/valoracion`. Es el chat del catálogo público: no exige sesión, pero si hay una (personal de
+ * Babel) la envía, porque con `ASISTENTE_ACCESO=personal` es lo que lo habilita. Nunca lanza.
  */
 @Injectable({ providedIn: 'root' })
 export class AsistenteService {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
+
+  /** Sesión del personal si la hay; sin sesión (o si falla leerla) la petición va anónima. */
+  private async opciones(): Promise<{ headers?: { Authorization: string } }> {
+    try {
+      const token = await this.auth.obtenerIdToken();
+      return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    } catch {
+      return {};
+    }
+  }
 
   /** `false` ante cualquier duda (error de red, 4xx, 5xx): un chat que no se puede verificar no se muestra. */
   async estaDisponible(): Promise<boolean> {
     try {
-      const respuesta = await firstValueFrom(this.http.get<{ disponible?: unknown }>('/api/asistente'));
+      const respuesta = await firstValueFrom(this.http.get<{ disponible?: unknown }>('/api/asistente', await this.opciones()));
       return respuesta?.disponible === true;
     } catch {
       return false;
@@ -75,7 +88,11 @@ export class AsistenteService {
   async preguntar(historial: MensajeHistorial[]): Promise<ResultadoPregunta> {
     try {
       const respuesta = await firstValueFrom(
-        this.http.post<RespuestaBabelbot>('/api/asistente', { mensajes: this.recortarHistorial(historial), filtros: {} }),
+        this.http.post<RespuestaBabelbot>(
+          '/api/asistente',
+          { mensajes: this.recortarHistorial(historial), filtros: {} },
+          await this.opciones(),
+        ),
       );
       return { exito: true, respuesta };
     } catch (error) {

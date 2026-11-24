@@ -1,18 +1,27 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { AuthService } from '../auth/auth.service';
 import { AsistenteService, MAXIMO_MENSAJES_POR_PETICION, type MensajeHistorial } from './asistente.service';
 
 describe('AsistenteService', () => {
   let servicio: AsistenteService;
   let httpMock: HttpTestingController;
+  const obtenerIdToken = vi.fn<() => Promise<string | null>>();
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    obtenerIdToken.mockReset();
+    obtenerIdToken.mockResolvedValue(null);
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: AuthService, useValue: { obtenerIdToken } }],
+    });
     servicio = TestBed.inject(AsistenteService);
     httpMock = TestBed.inject(HttpTestingController);
   });
   afterEach(() => httpMock.verify());
+
+  /** El servicio lee la sesión antes de pedir: la petición HTTP sale un instante después. */
+  const esperar = (peticion: Parameters<HttpTestingController['expectOne']>[0]) => vi.waitFor(() => httpMock.expectOne(peticion));
 
   const historial = (n: number): MensajeHistorial[] =>
     Array.from({ length: n }, (_, i) => ({ rol: i % 2 === 0 ? 'usuario' : 'asistente', texto: `m${i}` }));
@@ -20,18 +29,52 @@ describe('AsistenteService', () => {
   describe('estaDisponible', () => {
     it('es true solo si el servidor responde disponible: true', async () => {
       const p = servicio.estaDisponible();
-      httpMock.expectOne({ url: '/api/asistente', method: 'GET' }).flush({ disponible: true });
+      (await esperar({ url: '/api/asistente', method: 'GET' })).flush({ disponible: true });
       expect(await p).toBe(true);
     });
 
     it('es false si dice false, si la respuesta es rara o si falla', async () => {
       for (const cuerpo of [{ disponible: false }, { disponible: 'true' }, {}]) {
         const p = servicio.estaDisponible();
-        httpMock.expectOne('/api/asistente').flush(cuerpo);
+        (await esperar('/api/asistente')).flush(cuerpo);
         expect(await p).toBe(false);
       }
       const p = servicio.estaDisponible();
-      httpMock.expectOne('/api/asistente').flush('x', { status: 500, statusText: 'Error' });
+      (await esperar('/api/asistente')).flush('x', { status: 500, statusText: 'Error' });
+      expect(await p).toBe(false);
+    });
+  });
+
+  describe('sesión del personal', () => {
+    it('sin sesión las peticiones van anónimas (sin Authorization)', async () => {
+      const p = servicio.estaDisponible();
+      const req = await esperar('/api/asistente');
+      expect(req.request.headers.has('Authorization')).toBe(false);
+      req.flush({ disponible: false });
+      await p;
+    });
+
+    it('con sesión, la consulta de disponibilidad y la pregunta llevan el token', async () => {
+      obtenerIdToken.mockResolvedValue('tok123');
+      const disponible = servicio.estaDisponible();
+      const consulta = await esperar({ url: '/api/asistente', method: 'GET' });
+      expect(consulta.request.headers.get('Authorization')).toBe('Bearer tok123');
+      consulta.flush({ disponible: true });
+      expect(await disponible).toBe(true);
+
+      const respuesta = servicio.preguntar([{ rol: 'usuario', texto: 'hola' }]);
+      const pregunta = await esperar({ url: '/api/asistente', method: 'POST' });
+      expect(pregunta.request.headers.get('Authorization')).toBe('Bearer tok123');
+      pregunta.flush({ texto: 'Hola', recomendaciones: [], sinResultados: false, registroId: null });
+      expect((await respuesta).exito).toBe(true);
+    });
+
+    it('si leer la sesión falla, la petición sigue anónima', async () => {
+      obtenerIdToken.mockRejectedValue(new Error('firebase caído'));
+      const p = servicio.estaDisponible();
+      const req = await esperar('/api/asistente');
+      expect(req.request.headers.has('Authorization')).toBe(false);
+      req.flush({ disponible: false });
       expect(await p).toBe(false);
     });
   });
@@ -57,7 +100,7 @@ describe('AsistenteService', () => {
         { rol: 'usuario', texto: '¿cuánto cuesta?' },
       ];
       const p = servicio.preguntar(mensajes);
-      const peticion = httpMock.expectOne({ url: '/api/asistente', method: 'POST' });
+      const peticion = (await esperar({ url: '/api/asistente', method: 'POST' }));
       expect(peticion.request.headers.has('Authorization')).toBe(false);
       expect(peticion.request.body).toEqual({ mensajes, filtros: {} });
       peticion.flush({ texto: 'Cuesta $30.000.', recomendaciones: [], sinResultados: false, registroId: 'r-1' });
@@ -66,7 +109,7 @@ describe('AsistenteService', () => {
 
     it('no envía más de 9 mensajes', async () => {
       const p = servicio.preguntar(historial(11));
-      const peticion = httpMock.expectOne('/api/asistente');
+      const peticion = (await esperar('/api/asistente'));
       expect((peticion.request.body as { mensajes: unknown[] }).mensajes).toHaveLength(9);
       peticion.flush({ texto: 'x', recomendaciones: [], sinResultados: true, registroId: null });
       await p;
@@ -80,7 +123,7 @@ describe('AsistenteService', () => {
       ];
       for (const [estado, cuerpo, motivo] of casos) {
         const p = servicio.preguntar(historial(1));
-        httpMock.expectOne('/api/asistente').flush(cuerpo, { status: estado, statusText: 'x' });
+        (await esperar('/api/asistente')).flush(cuerpo, { status: estado, statusText: 'x' });
         const r = await p;
         expect(r).toMatchObject({ exito: false, motivo });
         expect((r as { mensaje: string }).mensaje).toBe((cuerpo as { error: string }).error);
@@ -89,10 +132,10 @@ describe('AsistenteService', () => {
 
     it('distingue el tope de mensajes del día (429 con error) del límite de tasa de API Gateway (429 con message)', async () => {
       let p = servicio.preguntar(historial(1));
-      httpMock.expectOne('/api/asistente').flush({ error: 'Llegaste al límite de mensajes de hoy.' }, { status: 429, statusText: 'x' });
+      (await esperar('/api/asistente')).flush({ error: 'Llegaste al límite de mensajes de hoy.' }, { status: 429, statusText: 'x' });
       expect(await p).toMatchObject({ exito: false, motivo: 'limite-visitante', mensaje: 'Llegaste al límite de mensajes de hoy.' });
       p = servicio.preguntar(historial(1));
-      httpMock.expectOne('/api/asistente').flush({ message: 'Too Many Requests' }, { status: 429, statusText: 'x' });
+      (await esperar('/api/asistente')).flush({ message: 'Too Many Requests' }, { status: 429, statusText: 'x' });
       const r = await p;
       expect(r).toMatchObject({ exito: false, motivo: 'limite-tasa' });
       // El texto en inglés de API Gateway nunca llega a la persona.
@@ -101,7 +144,7 @@ describe('AsistenteService', () => {
 
     it('un fallo de red da un mensaje propio y nunca lanza', async () => {
       const p = servicio.preguntar(historial(1));
-      httpMock.expectOne('/api/asistente').error(new ProgressEvent('error'));
+      (await esperar('/api/asistente')).error(new ProgressEvent('error'));
       expect(await p).toMatchObject({ exito: false, motivo: 'error' });
     });
   });

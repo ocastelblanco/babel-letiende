@@ -288,3 +288,4 @@ Backend,24/11/2026 09:57,24/11/2026 10:25,0:28:00,AI,Opus 5.5,Fase 6 parte 3 de 
 Backend,24/11/2026 11:36,24/11/2026 11:40,0:04:00,AI,Sonnet 5.5,Fase 7a de BabelBot (T-0070): ASISTENTE_ACCESO personal o publico y POST /api/asistente/valoracion con Lambda y rol propios,Claude Code,cli,high
 Frontend,24/11/2026 13:12,24/11/2026 13:18,0:06:00,AI,Sonnet 5.5,Fase 7b de BabelBot (T-0070): chat en el catalogo publico con aviso de IA tarjetas de libros valoracion y manejo de saturacion; GET de disponibilidad,Claude Code,cli,high
 Frontend,24/11/2026 17:10,24/11/2026 17:12,0:02:00,AI,Sonnet 5.5,Aviso de BabelBot colapsible (inicia expandido) y texto con la libreria de Le Tiende; indice de usos del nombre BabelBot,Claude Code,cli,medium
+Backend,24/11/2026 17:48,24/11/2026 17:54,0:06:00,AI,Sonnet 5.5,Activacion de BabelBot en produccion para el personal (T-0070): interruptor acceso personal e indice programado; el chat aparece al personal con sesion,Claude Code,cli,high

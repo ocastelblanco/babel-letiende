@@ -47,16 +47,16 @@ custom:
   # sin crear una dependencia circular en CloudFormation (ADR-012,
   # docs/plan-validar-libros-async.md §5).
   nombreFuncionValidarLibrosWorker: ${self:service}-${sls:stage}-validarLibrosWorker
-  # Reconstrucción programada del índice del asistente (T-0022). Solo donde hay clave de Gemini:
-  # en producción queda apagada hasta que exista el secreto de ese entorno y se encienda el asistente.
+  # Reconstrucción programada del índice del asistente (T-0022). Solo donde hay clave de Gemini.
+  # Producción la enciende desde el 24/11/2026 (clave y sinopsis ya cargadas; el bucket del índice arrancó vacío).
   indiceProgramado:
     staging: true
-    production: false
-  # Interruptor del endpoint del asistente (T-0023). Apagado en producción hasta las fases 6 y 7
-  # (topes de gasto y de tasa, clave de producción). Se pasa como texto: la Lambda compara con 'true'.
+    production: true
+  # Interruptor del endpoint del asistente (T-0023). Encendido en producción el 24/11/2026, solo para el personal
+  # (`asistenteAcceso: personal`) mientras los socios lo prueban. Se pasa como texto: la Lambda compara con 'true'.
   asistenteActivo:
     staging: 'true'
-    production: 'false'
+    production: 'true'
   # Quién puede usar el endpoint del asistente (Fase 7): `personal` (sesión de vendedor o administrador) o `publico`
   # (cualquier visitante del catálogo, sin sesión). Cualquier otro valor cae en `personal`. El paso a `publico` en
   # producción es una decisión aparte: exige el aviso de la Ley 1581 en el chat (revisión OWASP, LLM-04).

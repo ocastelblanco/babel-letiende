@@ -624,6 +624,16 @@ Rama `feature/babelbot-chat-catalogo`. Partida en 7a y 7b (`asistente-ia/PLAN.md
 - [x] **7a** — `ASISTENTE_ACCESO` (`personal`/`publico`) y `POST /api/asistente/valoracion` con Lambda y rol propios (bitácora 08 §8).
 - [x] **7b** — `ChatBabelbotComponent` (solo cliente), aviso «Hablas con una IA» y qué se registra (Ley 1581), tarjetas con datos de Babel, valoración, manejo amable del 429 de API Gateway y del 503 de saturación. Ver `asistente-ia/PLAN.md` Fase 7.
 
+## Tarea 17 — Activar BabelBot en producción para el personal (`T-0070`) — PR pendiente
+
+Rama `feature/babelbot-activar-produccion`. Bitácora 08 §10.
+
+- [x] `asistenteActivo.production: 'true'`, `asistenteAcceso.production: 'personal'` e `indiceProgramado.production: true` (clave y 2.520 sinopsis ya en producción; el bucket del índice estaba vacío).
+- [x] Corrección: con acceso `personal` el botón del chat no aparecía (el `GET` solo decía `true` con acceso `publico` y el cliente no enviaba la sesión). `estaDisponibleParaElPersonal` y `Authorization` en `AsistenteService`.
+- [ ] Tras el despliegue: invocar una vez `indiceAsistenteReconstruir` en producción y verificar el índice en S3.
+- [ ] Los socios prueban el asistente con su sesión y ayudan a decidir el nombre (índice de usos: `asistente-ia/fichas/indice-nombre-babelbot.md`).
+- [ ] Más adelante, aparte: revisión del aviso (Ley 1581) y `asistenteAcceso.production: 'publico'`.
+
 ## Hotfix — Ficha pública sin datos internos — COMPLETO (PR #153 fusionado; verificado en `staging` y en producción el 2026-11-17)
 
 `GET /api/libros/:bookId` devuelve solo la lista blanca `aLibroPublico`; `GET /api/libros/:bookId/completo` (personal) la reemplaza para Catalogar. Detalle al final de este documento y gotcha en `CLAUDE.md` §7.

@@ -1,4 +1,4 @@
-import type { APIGatewayProxyHandlerV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import type { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { crearAlmacenS3, type AlmacenIndice } from '../lib/almacen-indice';
 import {
   CANDIDATOS_DEL_INDICE,
@@ -665,15 +665,46 @@ export async function estaDisponibleParaElPublico(
   }
 }
 
-async function manejarEstado(): Promise<APIGatewayProxyResultV2> {
+/**
+ * Con acceso `personal` el chat solo se ofrece a quien llega con la sesión de un vendedor o administrador: es lo que
+ * permite que el personal pruebe el asistente en producción mientras no se abre al público. Cualquier fallo (sin
+ * token, token inválido, correo sin rol, tabla caída) responde `false`.
+ */
+export async function estaDisponibleParaElPersonal(
+  almacenControl: Pick<ReturnType<typeof crearAlmacenControl>, 'leer'>,
+  encabezadoAutorizacion: string | undefined,
+  entorno: Record<string, string | undefined> = process.env,
+): Promise<boolean> {
+  if (entorno['ASISTENTE_ACTIVO'] !== 'true' || entorno['ASISTENTE_ACCESO'] === 'publico' || !encabezadoAutorizacion) {
+    return false;
+  }
+  try {
+    const { email } = await verificarTokenDesdeHeader(encabezadoAutorizacion);
+    const usuario = await obtenerPorClave<Usuario>(variable('TABLA_USUARIOS'), { email });
+    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+      return false;
+    }
+    const interruptor = await almacenControl.leer('interruptor');
+    return interruptor?.['activo'] !== false;
+  } catch {
+    return false;
+  }
+}
+
+async function manejarEstado(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const tabla = process.env['TABLA_CONTROL'];
-  const disponible = tabla ? await estaDisponibleParaElPublico(crearAlmacenControl(tabla)) : false;
+  if (!tabla) {
+    return respuestaJson(200, { disponible: false });
+  }
+  const almacen = crearAlmacenControl(tabla);
+  const disponible =
+    (await estaDisponibleParaElPublico(almacen)) || (await estaDisponibleParaElPersonal(almacen, event.headers['authorization']));
   return respuestaJson(200, { disponible });
 }
 
 export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatewayProxyResultV2> => {
   if (event.requestContext?.http?.method === 'GET') {
-    return manejarEstado();
+    return manejarEstado(event);
   }
   try {
     // Interruptor: apagado, ni siquiera se consulta a Firebase ni a Gemini.
