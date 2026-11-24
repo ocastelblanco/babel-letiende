@@ -68,6 +68,34 @@ describe('ChatBabelbotComponent', () => {
     expect(AVISO_BABELBOT).toMatch(/90 días/);
   });
 
+  it('el aviso dice que la librería es la de Le Tiende', () => {
+    expect(AVISO_BABELBOT).toContain('con la librería de Le Tiende.');
+  });
+
+  it('el aviso empieza expandido, se colapsa y se expande con el botón, y vuelve a empezar expandido al reabrir', async () => {
+    await montar(true);
+    q<HTMLButtonElement>('button')?.click();
+    fixture.detectChanges();
+    expect(q('[data-testid="aviso-babelbot"]')).not.toBeNull();
+    expect(q('[data-testid="alternar-aviso"]')?.getAttribute('aria-expanded')).toBe('true');
+
+    q<HTMLButtonElement>('[data-testid="alternar-aviso"]')?.click();
+    fixture.detectChanges();
+    expect(q('[data-testid="aviso-babelbot"]')).toBeNull();
+    expect(q('[data-testid="alternar-aviso"]')?.getAttribute('aria-expanded')).toBe('false');
+
+    q<HTMLButtonElement>('[data-testid="alternar-aviso"]')?.click();
+    fixture.detectChanges();
+    expect(q('[data-testid="aviso-babelbot"]')).not.toBeNull();
+
+    q<HTMLButtonElement>('[data-testid="alternar-aviso"]')?.click();
+    q<HTMLButtonElement>('[aria-label="Cerrar BabelBot"]')?.click();
+    fixture.detectChanges();
+    q<HTMLButtonElement>('button')?.click();
+    fixture.detectChanges();
+    expect(q('[data-testid="aviso-babelbot"]')).not.toBeNull();
+  });
+
   it('pregunta, pinta la respuesta y la tarjeta del libro con datos de Babel (precio con formato, enlace a la ficha)', async () => {
     servicio.preguntar.mockResolvedValue(respuestaConLibro);
     await montar(true);
