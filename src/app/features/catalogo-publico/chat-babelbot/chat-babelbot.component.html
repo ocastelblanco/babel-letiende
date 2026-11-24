@@ -1,0 +1,157 @@
+@if (disponible()) {
+  @if (!abierto()) {
+    <button
+      type="button"
+      (click)="abrir()"
+      class="fixed bottom-6 left-6 z-40 flex h-12 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-neutral shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">chat</span>
+      <span>BabelBot</span>
+    </button>
+  } @else {
+    <div
+      role="dialog"
+      aria-label="BabelBot, asistente de recomendación de libros"
+      (keydown.escape)="cerrar()"
+      class="fixed inset-0 z-50 flex flex-col bg-surface sm:inset-auto sm:bottom-6 sm:left-6 sm:h-[36rem] sm:max-h-[calc(100vh-3rem)] sm:w-96 sm:rounded-2xl sm:shadow-[0_4px_16px_rgba(35,12,0,0.15)]"
+    >
+      <header class="flex items-center justify-between border-b border-primary/10 px-4 py-3">
+        <h2 class="text-base font-bold text-primary">BabelBot</h2>
+        <div class="flex items-center gap-2">
+          @if (mensajes().length > 0) {
+            <button
+              type="button"
+              (click)="nuevaConversacion()"
+              class="rounded-lg border border-primary/20 px-3 py-1 text-xs font-semibold text-primary transition-opacity hover:opacity-90"
+            >
+              Nueva conversación
+            </button>
+          }
+          <button
+            type="button"
+            (click)="cerrar()"
+            aria-label="Cerrar BabelBot"
+            class="flex h-8 w-8 items-center justify-center rounded-full text-primary transition-opacity hover:opacity-90"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+      </header>
+
+      <p class="border-b border-primary/10 bg-neutral px-4 py-2 text-xs text-primary/80" data-testid="aviso-babelbot">{{ aviso }}</p>
+
+      <div #lista class="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" aria-live="polite">
+        <p class="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm text-primary shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
+          Hola, soy BabelBot. Cuéntame qué te gustaría leer —un tema, un autor, un presupuesto— y te recomiendo libros que están en la librería.
+        </p>
+
+        @for (mensaje of mensajes(); track mensaje.id) {
+          @if (mensaje.rol === 'usuario') {
+            <p class="max-w-[85%] self-end whitespace-pre-line rounded-2xl bg-primary px-3 py-2 text-sm text-neutral">{{ mensaje.texto }}</p>
+          } @else {
+            <div class="flex max-w-[92%] flex-col gap-2">
+              <p class="whitespace-pre-line rounded-2xl bg-white px-3 py-2 text-sm text-primary shadow-[0_4px_16px_rgba(35,12,0,0.08)]">{{ mensaje.texto }}</p>
+
+              @for (libro of mensaje.recomendaciones; track libro.bookId) {
+                <a
+                  [routerLink]="['/libro', libro.bookId]"
+                  (click)="cerrar()"
+                  class="flex gap-3 rounded-2xl bg-white p-3 shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90"
+                >
+                  @if (libro.portadaUrl) {
+                    <img
+                      [src]="libro.portadaUrl"
+                      appSinPortadaFallback
+                      alt=""
+                      width="56"
+                      height="84"
+                      referrerpolicy="no-referrer"
+                      class="h-21 w-14 shrink-0 rounded-lg object-cover"
+                    />
+                  } @else {
+                    <span class="flex h-21 w-14 shrink-0 items-center justify-center rounded-lg bg-neutral text-center text-[10px] text-primary/60">Sin portada</span>
+                  }
+                  <span class="flex min-w-0 flex-col gap-0.5">
+                    <span class="text-sm font-semibold text-primary">{{ libro.titulo }}</span>
+                    <span class="text-xs text-primary/70">{{ libro.autor }}</span>
+                    <span class="text-sm font-semibold text-secondary">{{ libro.pvp | pvp }}</span>
+                    <span class="text-xs text-primary">{{ libro.motivo }}</span>
+                  </span>
+                </a>
+              }
+
+              @if (mensaje.registroId !== null) {
+                <div class="flex items-center gap-1">
+                  <button
+                    type="button"
+                    (click)="valorar(mensaje, 'positiva')"
+                    aria-label="Me sirvió esta respuesta"
+                    [attr.aria-pressed]="mensaje.valoracion === 'positiva'"
+                    class="flex h-8 w-8 items-center justify-center rounded-full border border-primary/20 text-primary transition-opacity hover:opacity-90"
+                    [class.bg-tertiary]="mensaje.valoracion === 'positiva'"
+                  >
+                    <span class="material-symbols-outlined text-base" aria-hidden="true">thumb_up</span>
+                  </button>
+                  <button
+                    type="button"
+                    (click)="valorar(mensaje, 'negativa')"
+                    aria-label="No me sirvió esta respuesta"
+                    [attr.aria-pressed]="mensaje.valoracion === 'negativa'"
+                    class="flex h-8 w-8 items-center justify-center rounded-full border border-primary/20 text-primary transition-opacity hover:opacity-90"
+                    [class.bg-secondary]="mensaje.valoracion === 'negativa'"
+                  >
+                    <span class="material-symbols-outlined text-base" aria-hidden="true">thumb_down</span>
+                  </button>
+                  @if (mensaje.errorValoracion) {
+                    <span class="text-xs text-danger">No pude guardar tu valoración.</span>
+                  } @else if (mensaje.valoracion !== null) {
+                    <span class="text-xs text-primary/60">Gracias por tu opinión.</span>
+                  }
+                </div>
+              }
+            </div>
+          }
+        }
+
+        @if (cargando()) {
+          <p class="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm text-primary/70 shadow-[0_4px_16px_rgba(35,12,0,0.08)]" data-testid="pensando">
+            BabelBot está buscando en los estantes…
+          </p>
+        }
+
+        @if (errorEnvio(); as error) {
+          <p
+            class="max-w-[92%] rounded-2xl border px-3 py-2 text-sm"
+            [class]="error.motivo === 'saturado' ? 'border-primary/20 text-primary' : 'border-danger/40 text-danger'"
+            role="alert"
+            data-testid="error-babelbot"
+          >
+            {{ error.mensaje }}
+          </p>
+        }
+      </div>
+
+      <form (submit)="$event.preventDefault(); enviar()" class="flex items-end gap-2 border-t border-primary/10 px-4 py-3">
+        <textarea
+          #entrada
+          rows="2"
+          [maxLength]="maximoCaracteres"
+          [value]="texto()"
+          (input)="alEscribir($event)"
+          (keydown.enter)="alPulsarEnter($event)"
+          placeholder="Escribe aquí lo que buscas…"
+          aria-label="Tu mensaje para BabelBot"
+          class="w-full resize-none rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
+        ></textarea>
+        <button
+          type="submit"
+          [disabled]="cargando() || texto().trim() === ''"
+          aria-label="Enviar"
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-neutral transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">send</span>
+        </button>
+      </form>
+    </div>
+  }
+}
