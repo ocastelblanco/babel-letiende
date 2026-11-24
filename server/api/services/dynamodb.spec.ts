@@ -20,6 +20,7 @@ const {
   decrementarPorCantidadSiSuficiente,
   sumarAtributo,
   crearSiNoExiste,
+  establecerAtributoSiExiste,
   removerAtributo,
   fusionarLibroDuplicado,
   trasladarLibroAUbicacion,
@@ -314,6 +315,25 @@ describe('mantenimiento de disponibleParaCatalogo', () => {
       expect(entrada['UpdateExpression']).toBe('REMOVE #atributo');
       expect(entrada['ExpressionAttributeNames']).toEqual({ '#atributo': 'disponibleParaCatalogo' });
       expect(entrada['Key']).toEqual({ bookId: 'libro-1' });
+    });
+  });
+
+  describe('establecerAtributoSiExiste', () => {
+    it('hace SET del atributo con ConditionExpression sobre la clave y devuelve true', async () => {
+      sendMock.mockResolvedValueOnce({});
+      await expect(establecerAtributoSiExiste('tabla-falsa', { registroId: 'r-1' }, 'valoracion', 'positiva')).resolves.toBe(true);
+      const entrada = (sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> }).input;
+      expect(entrada['UpdateExpression']).toBe('SET #atributo = :valor');
+      expect(entrada['ConditionExpression']).toBe('attribute_exists(registroId)');
+      expect(entrada['ExpressionAttributeValues']).toEqual({ ':valor': 'positiva' });
+      expect(entrada['Key']).toEqual({ registroId: 'r-1' });
+    });
+
+    it('devuelve false, sin lanzar, si el ítem no existe; otros errores sí se propagan', async () => {
+      sendMock.mockRejectedValueOnce(new ConditionalCheckFailedException({ message: 'no existe', $metadata: {} }));
+      await expect(establecerAtributoSiExiste('t', { registroId: 'r' }, 'valoracion', 'negativa')).resolves.toBe(false);
+      sendMock.mockRejectedValueOnce(new Error('red'));
+      await expect(establecerAtributoSiExiste('t', { registroId: 'r' }, 'valoracion', 'negativa')).rejects.toThrow('red');
     });
   });
 

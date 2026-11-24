@@ -651,10 +651,15 @@ export const handler: APIGatewayProxyHandlerV2 = async (event): Promise<APIGatew
       return respuestaJson(503, { error: 'El asistente no está disponible por ahora.' });
     }
 
-    const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
-    const usuario = await obtenerPorClave<Usuario>(variable('TABLA_USUARIOS'), { email });
-    if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
-      return respuestaJson(403, { error: 'Este correo no está autorizado para usar el asistente de Babel.' });
+    // Acceso (Fase 7): `personal` exige sesión de vendedor o administrador (como hasta ahora); `publico` atiende a
+    // cualquier visitante del catálogo, sin sesión, y entonces el control de gasto, el tope por visitante y el
+    // límite de tasa son las únicas barreras. Cualquier otro valor cae en `personal`, el más estricto.
+    if (process.env['ASISTENTE_ACCESO'] !== 'publico') {
+      const { email } = await verificarTokenDesdeHeader(event.headers['authorization']);
+      const usuario = await obtenerPorClave<Usuario>(variable('TABLA_USUARIOS'), { email });
+      if (!usuario || (usuario.rol !== 'vendedor' && usuario.rol !== 'administrador')) {
+        return respuestaJson(403, { error: 'Este correo no está autorizado para usar el asistente de Babel.' });
+      }
     }
 
     const crudo = event.body ?? '';

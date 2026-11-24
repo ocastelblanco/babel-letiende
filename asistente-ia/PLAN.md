@@ -198,7 +198,11 @@ Entra porque v5 no cumple los criterios de 4b (20/11/2026). Alcance decidido con
 
 ### Fase 7 — Chat en el catálogo público · `T-0070` · capacidad: asistente conversacional → **producción**
 
-- [ ] `ChatAsistenteComponent` standalone, solo en el cliente (sin SSR), con identidad visual de Babel (`docs/DESIGN.md`).
+Partida en dos PRs (decidido el 24/11/2026): **7a** backend (`ASISTENTE_ACCESO` y valoración) y **7b** el chat en el catálogo. El acceso público en producción es un paso aparte, después de 7b y con el aviso de la Ley 1581 ya visible.
+
+- [x] **7a — Acceso y valoración (backend, 24/11/2026; bitácora 08 §8).** `ASISTENTE_ACCESO` = `personal` (sesión de vendedor o administrador, como hasta ahora) o `publico` (sin sesión); cualquier otro valor cae en `personal`. `staging` queda en `publico`, `production` en `personal`. `POST /api/asistente/valoracion` con su propia Lambda y rol de mínimo privilegio; ata la valoración al visitante con el hash de IP del registro.
+
+- [ ] **7b —** `ChatAsistenteComponent` standalone, solo en el cliente (sin SSR), con identidad visual de Babel (`docs/DESIGN.md`).
 - [ ] Aviso visible: "Hablas con una IA" + qué se registra y para qué (Ley 1581 de 2012).
 - [ ] Tarjetas pintadas con datos de Babel (nunca con texto del modelo), enlace a la ficha `/libro/:bookId`, pulgar arriba o abajo.
 - [ ] Interpolación estándar de Angular; nada de `innerHTML` con texto del modelo.

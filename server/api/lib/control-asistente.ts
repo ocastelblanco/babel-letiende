@@ -106,6 +106,15 @@ async function salDelDia(almacen: AlmacenControl, dia: string, ahoraMs: number):
   return ganadora['sal'];
 }
 
+/**
+ * Sal de un día ya pasado o actual, SOLO lectura (nunca la crea). Sirve para comprobar que quien valora una respuesta
+ * es el mismo visitante que la pidió: el hash del registro se hizo con la sal de ese día. `null` si ya caducó (TTL).
+ */
+export async function leerSalDelDia(almacen: AlmacenControl, dia: string): Promise<string | null> {
+  const existente = await almacen.leer(`sal#${dia}`);
+  return typeof existente?.['sal'] === 'string' ? existente['sal'] : null;
+}
+
 export type VeredictoControl =
   | { permitido: true; dia: string; visitante: string }
   | { permitido: false; motivo: 'apagado' | 'tope-diario' | 'tope-visitante' };
