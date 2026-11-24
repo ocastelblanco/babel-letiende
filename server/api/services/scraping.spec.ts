@@ -783,13 +783,34 @@ describe('portadaUrlResponde (verificación HTTP real de portadas, TODO.md — f
     global.fetch = fetchOriginal;
   });
 
-  function respuesta(opciones: Partial<{ ok: boolean; status: number }> = {}) {
+  function respuesta(opciones: Partial<{ ok: boolean; status: number; tipo: string }> = {}) {
     return {
       ok: opciones.ok ?? true,
       status: opciones.status ?? 200,
-      headers: new Headers(),
+      headers: new Headers(opciones.tipo ? { 'content-type': opciones.tipo } : {}),
     } as unknown as Response;
   }
+
+  it('acepta image/* y application/octet-stream; un 200 con otro tipo (p. ej. JSON de error de un CDN) no es una portada', async () => {
+    fetchMock.mockResolvedValue(respuesta({ tipo: 'image/png' }));
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(true);
+    fetchMock.mockResolvedValue(respuesta({ tipo: 'image/jpeg; charset=binary' }));
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(true);
+    fetchMock.mockResolvedValue(respuesta({ tipo: 'application/octet-stream' }));
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(true);
+    fetchMock.mockResolvedValue(respuesta({ tipo: 'application/json; charset=utf-8' }));
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(false);
+    fetchMock.mockResolvedValue(respuesta({ tipo: 'text/html' }));
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(false);
+  });
+
+  it('si el HEAD dice que no es imagen pero el GET sí, la portada responde', async () => {
+    fetchMock
+      .mockResolvedValueOnce(respuesta({ tipo: 'application/json' }))
+      .mockResolvedValueOnce(respuesta({ tipo: 'image/gif' }));
+    await expect(portadaUrlResponde(URL_PORTADA)).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 
   it('devuelve true con un HEAD exitoso, sin llegar a intentar GET', async () => {
     fetchMock.mockResolvedValue(respuesta({ ok: true, status: 200 }));

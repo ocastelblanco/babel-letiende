@@ -220,21 +220,31 @@ async function fetchSeguro(
 const TIMEOUT_MS_PORTADA = 5000;
 
 /**
+ * ¿La respuesta es una imagen? Un CDN que "pierde" un archivo a veces responde con un cuerpo de error (p. ej.
+ * `application/json`); si trae `content-type`, debe ser `image/*` (o `application/octet-stream`, que algunos
+ * servidores usan para imágenes). Sin `content-type` se da por buena: no hay forma de saber.
+ */
+function respuestaEsImagen(respuesta: Response): boolean {
+  const tipo = respuesta.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+  return !tipo || tipo.startsWith('image/') || tipo === 'application/octet-stream';
+}
+
+/**
  * Verifica por HTTP real si `portadaUrl` todavía sirve la imagen —a
  * diferencia de `portadaEsInvalida`, que solo mira palabras clave en la URL
  * y nunca detecta un 404/500 real del proveedor. Intenta primero `HEAD`
  * (más barato) y solo si falla reintenta con `GET`, porque algunos
  * servidores rechazan `HEAD` pero sí sirven la imagen por `GET`. Nunca
  * lanza: cualquier fallo en ambos intentos (red, timeout, SSRF rechazado,
- * no-2xx) se traduce en `false`.
+ * no-2xx, o 2xx que no sea una imagen) se traduce en `false`.
  */
 export async function portadaUrlResponde(portadaUrl: string): Promise<boolean> {
   const respuestaHead = await fetchSeguro(portadaUrl, { metodo: 'HEAD', timeoutMs: TIMEOUT_MS_PORTADA });
-  if (respuestaHead !== null) {
+  if (respuestaHead !== null && respuestaEsImagen(respuestaHead)) {
     return true;
   }
   const respuestaGet = await fetchSeguro(portadaUrl, { metodo: 'GET', timeoutMs: TIMEOUT_MS_PORTADA });
-  return respuestaGet !== null;
+  return respuestaGet !== null && respuestaEsImagen(respuestaGet);
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,9 @@
     <p class="mb-6 text-sm text-primary/70">
       Revalida el PVP y la portada de todo el inventario catalogado contra los sitios de scraping configurados. El
       PVP se reemplaza solo si el más alto encontrado difiere del actual; una portada inválida se reemplaza si se
-      encuentra una válida, o queda señalada para revisión manual — nunca se borra la portada existente.
+      encuentra una válida, o queda señalada para revisión manual — nunca se borra la portada existente. «Validar
+      solo portadas» hace únicamente lo segundo, sin tocar los PVP: es mucho más rápido y sirve cuando un sitio
+      cambia las direcciones de sus imágenes.
     </p>
 
     @if (error()) {
@@ -76,10 +78,12 @@
         }
 
         <div class="grid grid-cols-2 gap-4">
-          <div class="rounded-xl border border-primary/10 px-3 py-2">
-            <p class="text-xs text-primary/60">PVP actualizados</p>
-            <p class="text-lg font-semibold text-primary">{{ resumen()?.pvpActualizados }}</p>
-          </div>
+          @if (!soloPortadas()) {
+            <div class="rounded-xl border border-primary/10 px-3 py-2">
+              <p class="text-xs text-primary/60">PVP actualizados</p>
+              <p class="text-lg font-semibold text-primary">{{ resumen()?.pvpActualizados }}</p>
+            </div>
+          }
           <div class="rounded-xl border border-primary/10 px-3 py-2">
             <p class="text-xs text-primary/60">Portadas corregidas</p>
             <p class="text-lg font-semibold text-primary">{{ resumen()?.portadasCorregidas }}</p>
@@ -90,15 +94,17 @@
           {{ resumen()?.estado === 'error' ? 'La validación terminó con un error' : 'Validación completada' }}
         </h2>
 
-        <div class="mb-4 grid grid-cols-3 gap-4">
+        <div class="mb-4 grid gap-4" [class.grid-cols-3]="!soloPortadas()" [class.grid-cols-2]="soloPortadas()">
           <div class="rounded-xl border border-primary/10 px-3 py-2">
             <p class="text-xs text-primary/60">Revisados</p>
             <p class="text-lg font-semibold text-primary">{{ resumen()?.librosRevisados }}</p>
           </div>
-          <div class="rounded-xl border border-primary/10 px-3 py-2">
-            <p class="text-xs text-primary/60">PVP actualizados</p>
-            <p class="text-lg font-semibold text-primary">{{ resumen()?.pvpActualizados }}</p>
-          </div>
+          @if (!soloPortadas()) {
+            <div class="rounded-xl border border-primary/10 px-3 py-2">
+              <p class="text-xs text-primary/60">PVP actualizados</p>
+              <p class="text-lg font-semibold text-primary">{{ resumen()?.pvpActualizados }}</p>
+            </div>
+          }
           <div class="rounded-xl border border-primary/10 px-3 py-2">
             <p class="text-xs text-primary/60">Portadas corregidas</p>
             <p class="text-lg font-semibold text-primary">{{ resumen()?.portadasCorregidas }}</p>
@@ -152,9 +158,19 @@
       }
     </div>
 
-    <div class="flex justify-center">
+    <div class="flex flex-wrap justify-center gap-3">
       <button
         type="button"
+        id="validar-portadas"
+        (click)="iniciar('portadas')"
+        [disabled]="iniciando() || enProgreso()"
+        class="rounded-2xl border border-primary bg-white px-6 py-3 text-sm font-semibold tracking-wider text-primary uppercase shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Validar solo portadas
+      </button>
+      <button
+        type="button"
+        id="validar-completo"
         (click)="iniciar()"
         [disabled]="iniciando() || enProgreso()"
         class="rounded-2xl bg-primary px-6 py-3 text-sm font-semibold tracking-wider text-neutral uppercase shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"

@@ -105,12 +105,23 @@ interface ValidacionLibros {
   portadasPendientes: PortadaPendiente[];
   erroresLibro: ErrorLibroValidacion[];
   muebleActualNombre: string | null;
+  /**
+   * `'portadas'`: corrida exclusiva de portadas (sin PVP, lotes más grandes, mucho más rápida). Ausente o
+   * `'completo'`: PVP + portada, como siempre. Las corridas guardadas antes de este campo no lo tienen.
+   */
+  modo?: ModoValidacion;
   /** `muebleIds` recibidos en el body de `POST /api/validaciones-libros` cuando la corrida se acotó a ciertos Muebles (parcelización por Mueble) — ausente si la corrida cubrió todo el inventario. */
   muebleIdsFiltro?: string[];
 }
 
+export type ModoValidacion = 'completo' | 'portadas';
+
 /** Tamaño de lote fijo por invocación del worker, independiente del tamaño del mueble que esté cruzando (`plan-validar-libros-async.md` §4.2). */
 const TAMANO_LOTE = 20;
+/** En modo `portadas` cada libro cuesta una petición HEAD (sin scrapear PVP en 1 a 6 sitios): el lote puede ser mayor. */
+const TAMANO_LOTE_PORTADAS = 50;
+
+const tamanoLoteDe = (modo: ModoValidacion | undefined): number => (modo === 'portadas' ? TAMANO_LOTE_PORTADAS : TAMANO_LOTE);
 
 /** Antigüedad máxima de `actualizadoEn` antes de considerar una corrida `en_progreso` como abandonada (`plan-validar-libros-async.md` §6). */
 const CORRIDA_ABANDONADA_MS = 10 * 60 * 1000;
@@ -316,6 +327,12 @@ function extraerMuebleIdsFiltro(cuerpo: unknown): string[] {
   return muebleIds.filter((valor): valor is string => typeof valor === 'string');
 }
 
+/** `modo` del body: solo `'portadas'` cambia el comportamiento; cualquier otra cosa es la corrida completa de siempre. */
+function extraerModo(cuerpo: unknown): ModoValidacion {
+  const modo = cuerpo && typeof cuerpo === 'object' ? (cuerpo as Record<string, unknown>)['modo'] : undefined;
+  return modo === 'portadas' ? 'portadas' : 'completo';
+}
+
 /**
  * `POST /api/validaciones-libros` — inicia una corrida asíncrona de
  * validación de PVP/portada sobre el inventario completo, o solo sobre los
@@ -349,6 +366,7 @@ export const handlerIniciar: APIGatewayProxyHandlerV2 = async (event): Promise<A
       return respuestaJson(400, { error: 'El cuerpo de la petición no es JSON válido.' });
     }
     const muebleIdsFiltro = extraerMuebleIdsFiltro(cuerpo);
+    const modo = extraerModo(cuerpo);
 
     const [libros, ubicaciones, muebles] = await Promise.all([
       escanearTodo<Libro>(nombreTablaLibros()),
@@ -386,6 +404,7 @@ export const handlerIniciar: APIGatewayProxyHandlerV2 = async (event): Promise<A
       portadasPendientes: [],
       erroresLibro: [],
       muebleActualNombre: hayLibros ? nombreMuebleDesdeIndice(0, limitesMueble) : null,
+      modo,
       ...(muebleIdsFiltro.length > 0 ? { muebleIdsFiltro } : {}),
     };
 
@@ -437,7 +456,13 @@ async function buscarPortadaValida(
     sitiosInfoPorPrioridad.map((sitio) => scrapearSitio(sitio, isbn)),
   );
   for (const resultado of resultados) {
-    if (resultado.portadaUrl && !portadaEsInvalida(resultado.portadaUrl, palabrasClaveInvalidasGlobales)) {
+    // La candidata también se verifica por HTTP: reemplazar una portada rota por otra rota (como pasó cuando
+    // Lerner re-subió sus imágenes) deja el problema igual y encima lo da por corregido.
+    if (
+      resultado.portadaUrl &&
+      !portadaEsInvalida(resultado.portadaUrl, palabrasClaveInvalidasGlobales) &&
+      (await portadaUrlResponde(resultado.portadaUrl))
+    ) {
       return resultado.portadaUrl;
     }
   }
@@ -457,6 +482,7 @@ async function procesarLibro(
   sitiosPvp: SitioScraping[],
   sitiosInfoPorPrioridad: SitioScraping[],
   palabrasClaveInvalidasGlobales: string[],
+  modo: ModoValidacion = 'completo',
 ): Promise<ResultadoProcesarLibro> {
   try {
     const libro = await obtenerPorClave<Libro>(nombreTablaLibros(), { bookId });
@@ -471,7 +497,7 @@ async function procesarLibro(
     let portadaCorregida = false;
     let portadaPendiente: PortadaPendiente | undefined;
 
-    if (libro.isbn !== null && sitiosPvp.length > 0) {
+    if (modo === 'completo' && libro.isbn !== null && sitiosPvp.length > 0) {
       const isbn = libro.isbn;
       const resultadosPvp = await Promise.all(sitiosPvp.map((sitio) => scrapearSitio(sitio, isbn)));
       const pvpsValidos = resultadosPvp
@@ -554,7 +580,9 @@ export const handlerWorker: Handler<{ validacionId: string }, void> = async (eve
     return;
   }
 
-  const loteBookIds = validacion.colaBookIds.slice(validacion.indiceActual, validacion.indiceActual + TAMANO_LOTE);
+  const modo = validacion.modo ?? 'completo';
+  const tamanoLote = tamanoLoteDe(modo);
+  const loteBookIds = validacion.colaBookIds.slice(validacion.indiceActual, validacion.indiceActual + tamanoLote);
 
   let sitios: SitioScraping[] = [];
   try {
@@ -575,10 +603,10 @@ export const handlerWorker: Handler<{ validacionId: string }, void> = async (eve
   const sitiosInfoPorPrioridad = sitios.filter((sitio) => sitio.info).sort((a, b) => a.prioridad - b.prioridad);
 
   const resultados = await Promise.all(
-    loteBookIds.map((bookId) => procesarLibro(bookId, sitiosPvp, sitiosInfoPorPrioridad, palabrasClaveInvalidasGlobales)),
+    loteBookIds.map((bookId) => procesarLibro(bookId, sitiosPvp, sitiosInfoPorPrioridad, palabrasClaveInvalidasGlobales, modo)),
   );
 
-  const nuevoIndice = Math.min(validacion.indiceActual + TAMANO_LOTE, validacion.totalLibros);
+  const nuevoIndice = Math.min(validacion.indiceActual + tamanoLote, validacion.totalLibros);
   const terminada = nuevoIndice >= validacion.totalLibros;
 
   const actualizada: ValidacionLibros = {

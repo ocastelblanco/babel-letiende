@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { LibrosService } from '../../core/api/libros.service';
 import { UbicacionFisicaService } from '../../core/api/ubicacion-fisica.service';
 import { ValidacionesLibrosService } from '../../core/api/validaciones-libros.service';
-import { ResumenValidacionLibros } from '../../core/models/validacion-libros.model';
+import { ModoValidacionLibros, ResumenValidacionLibros } from '../../core/models/validacion-libros.model';
 
 /** Cadencia de polling del progreso — mismo valor documentado en `docs/plan-validar-libros-async.md` §7. */
 const INTERVALO_POLLING_MS = 3000;
@@ -39,6 +39,9 @@ export class ValidarLibrosComponent implements OnInit, OnDestroy {
   protected readonly resumen = signal<ResumenValidacionLibros | null>(null);
   protected readonly iniciando = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  /** La corrida que se muestra es solo de portadas: no se enseñan los PVP, que no se tocan. */
+  protected readonly soloPortadas = computed(() => this.resumen()?.modo === 'portadas');
 
   protected readonly enProgreso = computed(() => this.resumen()?.estado === 'en_progreso');
   protected readonly terminada = computed(() => {
@@ -134,12 +137,12 @@ export class ValidarLibrosComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected async iniciar(): Promise<void> {
+  protected async iniciar(modo: ModoValidacionLibros = 'completo'): Promise<void> {
     this.error.set(null);
     this.resumen.set(null);
     this.iniciando.set(true);
     try {
-      const resultado = await this.validacionesLibrosService.iniciarValidacion(Array.from(this.mueblesSeleccionados()));
+      const resultado = await this.validacionesLibrosService.iniciarValidacion(Array.from(this.mueblesSeleccionados()), modo);
       if (resultado.iniciada) {
         this.iniciarPolling(resultado.validacionId);
       } else if (resultado.validacionIdEnCurso) {

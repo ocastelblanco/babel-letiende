@@ -169,6 +169,9 @@ Esto rompe el ciclo porque no depende del recurso `AWS::Lambda::Function` en sí
 - Al llegar a `completado`: resumen final + lista de `portadasPendientes` (título + link a `/catalogar` pestaña Editar de ese `bookId`, para que el administrador las revise manualmente) + lista de `erroresLibro` si los hubo.
 - Polling cada 3 segundos (`setInterval` + Signal, se limpia al destruir el componente o al llegar a un estado terminal) — mismo orden de magnitud que otras esperas de red del proyecto, sin necesidad de WebSockets para una pantalla de administración de uso ocasional.
 
+- **Botón «Validar solo portadas» (hotfix del 23/11/2026).** Junto al de «Iniciar validación», con la misma selección de muebles. Inicia una corrida con `modo: 'portadas'`: el worker no scrapea ningún PVP (solo revisa por HTTP cada portada y, si está rota, busca reemplazo en los sitios de información), procesa lotes de 50 en vez de 20 y la pantalla oculta los contadores de PVP. Las corridas guardadas sin `modo` equivalen a `'completo'`. Motivo: Lerner re-subió masivamente sus imágenes y las URLs con los ids viejos devuelven 404 en JSON; revalidar todo el PVP solo para eso era lento.
+- **Dos endurecimientos del chequeo de portadas (mismo hotfix).** `portadaUrlResponde` exige que un 2xx traiga `content-type` de imagen (`image/*` u `octet-stream`): un CDN que pierde un archivo puede contestar con un cuerpo de error. Y la portada de reemplazo también se verifica por HTTP antes de aceptarla, en orden de prioridad de los sitios; antes se aceptaba la primera no inválida por palabra clave aunque estuviera rota, y el libro quedaba «corregido» con otra URL muerta.
+
 ---
 
 ## 8. Plan de implementación
