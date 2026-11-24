@@ -892,6 +892,27 @@ describe('handler HTTP', () => {
     expect((await llamar(evento(buenaPeticion))).statusCode).toBe(403);
   });
 
+  it('con acceso público atiende sin sesión (no consulta a Firebase ni a babel-usuarios)', async () => {
+    process.env['ASISTENTE_ACCESO'] = 'publico';
+    try {
+      const resultado = await llamar(evento(buenaPeticion, { headers: {} }));
+      expect(resultado.statusCode).toBe(200);
+      expect(verificarTokenDesdeHeaderMock).not.toHaveBeenCalled();
+      expect(obtenerPorClaveMock.mock.calls.some(([tabla]) => tabla === 'usuarios')).toBe(false);
+    } finally {
+      delete process.env['ASISTENTE_ACCESO'];
+    }
+  });
+
+  it('cualquier valor de acceso que no sea «publico» exige sesión (falla cerrado)', async () => {
+    verificarTokenDesdeHeaderMock.mockRejectedValue(new TokenInvalidoError('Falta el token.'));
+    for (const valor of ['', 'personal', 'PUBLICO', 'true']) {
+      process.env['ASISTENTE_ACCESO'] = valor;
+      expect((await llamar(evento(buenaPeticion, { headers: {} }))).statusCode).toBe(401);
+    }
+    delete process.env['ASISTENTE_ACCESO'];
+  });
+
   it('nunca confía en un rol enviado en el cuerpo', async () => {
     obtenerPorClaveMock.mockResolvedValue(undefined);
     const resultado = await llamar(evento({ ...buenaPeticion, rol: 'administrador' }));

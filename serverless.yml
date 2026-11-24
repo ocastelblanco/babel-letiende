@@ -57,6 +57,12 @@ custom:
   asistenteActivo:
     staging: 'true'
     production: 'false'
+  # Quién puede usar el endpoint del asistente (Fase 7): `personal` (sesión de vendedor o administrador) o `publico`
+  # (cualquier visitante del catálogo, sin sesión). Cualquier otro valor cae en `personal`. El paso a `publico` en
+  # producción es una decisión aparte: exige el aviso de la Ley 1581 en el chat (revisión OWASP, LLM-04).
+  asistenteAcceso:
+    staging: 'publico'
+    production: 'personal'
   # Topes del asistente (T-0060): gasto diario en USD y mensajes por visitante y día. Se pasan como texto.
   # Gasto estimado con la tarifa de `server/api/lib/control-asistente.ts`; el valor por defecto de la Lambda
   # es el más estricto (1 USD, 30 mensajes) si esto falta o es inválido.
@@ -2484,6 +2490,7 @@ functions:
       TABLA_ESPACIOS: ${self:custom.nombresTablas.espacios}
       BUCKET_INDICE: ${self:custom.bucketIndice}
       ASISTENTE_ACTIVO: ${self:custom.asistenteActivo.${sls:stage}, 'false'}
+      ASISTENTE_ACCESO: ${self:custom.asistenteAcceso.${sls:stage}, 'personal'}
       TABLA_CONTROL: ${self:custom.nombresTablas.asistenteControl}
       TABLA_REGISTROS: ${self:custom.nombresTablas.asistenteRegistros}
       ASISTENTE_TOPE_DIARIO_USD: ${self:custom.asistenteTopeDiarioUsd.${sls:stage}, '1'}
@@ -2542,6 +2549,52 @@ functions:
     events:
       - httpApi:
           path: /api/asistente
+          method: post
+
+  asistenteValoracion:
+    handler: dist-server/api/handlers/asistente-valoracion.handler
+    role: !GetAtt AsistenteValoracionLambdaRole.Arn
+    description: >-
+      POST /api/asistente/valoracion — pulgar arriba o abajo a una respuesta de BabelBot (Fase 7, T-0070). Sin
+      sesión: comprueba que quien valora es el mismo visitante del registro (hash de IP con la sal del día).
+    timeout: 10
+    memorySize: 256
+    environment:
+      ASISTENTE_ACTIVO: ${self:custom.asistenteActivo.${sls:stage}, 'false'}
+      TABLA_CONTROL: ${self:custom.nombresTablas.asistenteControl}
+      TABLA_REGISTROS: ${self:custom.nombresTablas.asistenteRegistros}
+    package:
+      patterns:
+        - '!**'
+        - 'dist-server/api/handlers/asistente-valoracion.js'
+        - 'dist-server/api/lib/control-asistente.js'
+        - 'dist-server/api/services/dynamodb.js'
+        - 'node_modules/**'
+        - '!node_modules/@angular/**'
+        - '!node_modules/firebase/**'
+        - '!node_modules/@firebase/**'
+        - '!node_modules/@zxing/**'
+        - '!node_modules/rxjs/**'
+        - '!node_modules/typescript/**'
+        - '!node_modules/@types/**'
+        - '!node_modules/vite/**'
+        - '!node_modules/vitest/**'
+        - '!node_modules/tailwindcss/**'
+        - '!node_modules/@tailwindcss/**'
+        - '!node_modules/postcss/**'
+        - '!node_modules/prettier/**'
+        - '!node_modules/jsdom/**'
+        - '!node_modules/serverless/**'
+        - '!node_modules/@babel/**'
+        - '!node_modules/@esbuild/**'
+        - '!node_modules/zod/**'
+        - '!node_modules/@algolia/**'
+        - '!node_modules/algoliasearch/**'
+        - '!node_modules/@modelcontextprotocol/**'
+        - '!node_modules/serverless/**'
+    events:
+      - httpApi:
+          path: /api/asistente/valoracion
           method: post
 
 resources:
@@ -3812,6 +3865,37 @@ resources:
                   Resource:
                     - !GetAtt BucketIndiceAsistente.Arn
 
+    AsistenteValoracionLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: babel-asistente-valoracion-role-${sls:stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: babel-asistente-valoracion-role-dynamodb-${sls:stage}
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # Lee el registro y escribe solo su campo `valoracion`; de la tabla de control solo lee la sal del día.
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - !GetAtt TablaAsistenteRegistros.Arn
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - !GetAtt TablaAsistenteControl.Arn
+
     CargaConocimientoWorkerLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -4329,8 +4413,17 @@ resources:
     # a la Lambda y a Gemini. 2 peticiones por segundo sostenidas y ráfagas de 10 sobran para una librería; lo que
     # pasa del límite recibe 429 de API Gateway sin invocar nada.
     HttpApiStage:
+      # Sin esto, al agregar una ruta con límite propio, CloudFormation configura el stage antes de crear la ruta y
+      # el despliegue falla con «Unable to find Route by key» (24/11/2026, valoración); además el rollback queda en
+      # UPDATE_ROLLBACK_FAILED. Cada ruta nueva con `RouteSettings` debe agregarse aquí.
+      DependsOn:
+        - HttpApiRoutePostApiAsistente
+        - HttpApiRoutePostApiAsistenteValoracion
       Properties:
         RouteSettings:
           'POST /api/asistente':
             ThrottlingRateLimit: 2
             ThrottlingBurstLimit: 10
+          'POST /api/asistente/valoracion':
+            ThrottlingRateLimit: 5
+            ThrottlingBurstLimit: 20

@@ -97,7 +97,17 @@ Los dos fallos de acierto de la suite completa (A16 y R05) son de recuperación 
 
 **Verificación:** 957 pruebas de backend en verde (nuevas: reloj de reintentos, mensajes, fidelidad, lista blanca de la respuesta). `serverless package --stage staging` compila `RouteSettings` en `HttpApiStage`.
 
-## 8. Fuentes
+## 8. Fase 7a — acceso público y valoración (24/11/2026)
+
+**`ASISTENTE_ACCESO`.** Hasta ahora el endpoint exigía sesión de vendedor o administrador. Para el chat del catálogo hay que atender a visitantes sin sesión, así que una variable de entorno decide: `personal` (sesión y rol en `babel-usuarios`, el comportamiento anterior) o `publico` (sin sesión). Cualquier otro valor, incluido vacío o «PUBLICO», cae en `personal`: la falla es cerrada. En `staging` queda `publico`; en `production`, `personal`. Así se puede encender el asistente en producción primero para el personal, y abrirlo al público después con solo cambiar un valor.
+
+Sin sesión, las únicas barreras son el interruptor, el tope de gasto del día (3 USD en producción), el tope de 30 mensajes por visitante y día, los límites de entrada y el límite de tasa de la ruta. Por eso el paso a `publico` en producción exige antes el aviso de la Ley 1581 en el chat (hallazgo LLM-04 de la revisión OWASP).
+
+**Valoración** (`POST /api/asistente/valoracion`, `asistente-valoracion.ts`). Cuerpo `{ registroId, valoracion: 'positiva' | 'negativa' }`. Sin sesión, lo único que ata la valoración a quien preguntó es el hash del visitante: se rehace con la IP actual y la sal del día **del registro**, y debe coincidir con el guardado. Si no coincide, o si la sal ya caducó (3 días), responde el mismo 403 con el mismo mensaje. Solo escribe el campo `valoracion` de un registro que ya existe (`attribute_exists`), y la última valoración gana. Tiene su propia Lambda y su propio rol: `GetItem` y `UpdateItem` sobre los registros y `GetItem` sobre la tabla de control (solo para leer la sal); la Lambda del asistente sigue sin poder leer ni modificar registros. Límite de tasa propio: 5 por segundo, ráfaga de 20.
+
+**Verificación:** 966 pruebas de backend en verde (nuevas: acceso público y falla cerrada, valoración con IP ajena, sal caducada y cuerpo inválido, y la escritura condicional). `serverless package --stage staging` empaqueta la función nueva y su handler carga desde el zip.
+
+## 9. Fuentes
 
 - Precios de Gemini: página oficial citada arriba, leída el 21/11/2026.
 - `UpdateItem` con `ADD`, `if_not_exists` y `ConditionExpression`: documentación de DynamoDB; mismo patrón que `decrementarPorCantidadSiSuficiente` del repositorio.

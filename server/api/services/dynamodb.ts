@@ -364,6 +364,36 @@ export async function removerAtributo(
   );
 }
 
+/**
+ * Fija un atributo de un ítem que YA existe (`attribute_exists` sobre la clave): nunca crea ítems. Devuelve `false`,
+ * sin lanzar, si el ítem no existe.
+ */
+export async function establecerAtributoSiExiste(
+  nombreTabla: string,
+  clave: ClaveDynamoDB,
+  nombreAtributo: string,
+  valor: string | number | boolean,
+): Promise<boolean> {
+  try {
+    await documento.send(
+      new UpdateCommand({
+        TableName: nombreTabla,
+        Key: clave,
+        UpdateExpression: 'SET #atributo = :valor',
+        ConditionExpression: `attribute_exists(${Object.keys(clave)[0]})`,
+        ExpressionAttributeNames: { '#atributo': nombreAtributo },
+        ExpressionAttributeValues: { ':valor': valor },
+      }),
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 /** Lanzado por `fusionarLibroDuplicado` cuando el `bookId` no existe (`ConditionExpression`) — quien llama decide el código HTTP (típicamente `404`). */
 export class ItemNoExisteError extends Error {}
 
