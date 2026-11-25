@@ -11,6 +11,10 @@ describe('esEmbebido', () => {
     expect(esEmbebido('letiende.co')).toBe(true);
   });
 
+  it('devuelve true para www.letiende.co (alias real de producción del contenedor)', () => {
+    expect(esEmbebido('www.letiende.co')).toBe(true);
+  });
+
   it('devuelve true para staging.letiende.co', () => {
     expect(esEmbebido('staging.letiende.co')).toBe(true);
   });
