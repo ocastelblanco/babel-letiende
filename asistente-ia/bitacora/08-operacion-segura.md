@@ -109,9 +109,9 @@ Sin sesión, las únicas barreras son el interruptor, el tope de gasto del día 
 
 ## 9. Fase 7b — el chat en el catálogo (24/11/2026)
 
-**Disponibilidad** (`GET /api/asistente`). El build del frontend es el mismo en `staging` y en producción, así que el botón del chat no puede saber por sí solo si BabelBot está encendido para el público. Pregunta al servidor, que responde `{ disponible }` y solo dice `true` si el asistente está activo, el acceso es `publico` y el interruptor administrable de la tabla de control no lo apagó. Ante cualquier duda, incluida una tabla de control caída, responde `false` y el chat no aparece. No expone topes ni gasto. Ruta con su límite de tasa (10 por segundo, ráfaga 30).
+**Disponibilidad** (`GET /api/asistente`). El build del frontend es el mismo en `staging` y en producción, así que el botón del chat no puede saber por sí solo si Melquíades está encendido para el público. Pregunta al servidor, que responde `{ disponible }` y solo dice `true` si el asistente está activo, el acceso es `publico` y el interruptor administrable de la tabla de control no lo apagó. Ante cualquier duda, incluida una tabla de control caída, responde `false` y el chat no aparece. No expone topes ni gasto. Ruta con su límite de tasa (10 por segundo, ráfaga 30).
 
-**Componente** (`chat-babelbot/`). Un botón «BabelBot» abajo a la izquierda abre un panel (pantalla completa en el celular, tarjeta en escritorio). Solo se pinta en el navegador. Tiene:
+**Componente** (`chat-melquiades/`). Un botón con el logo de Melquíades (§11) abajo a la izquierda abre un panel (pantalla completa en el celular, tarjeta en escritorio). Solo se pinta en el navegador. Tiene:
 - el **aviso** de que se habla con una IA y de qué se guarda, siempre visible arriba del panel;
 - la conversación con tarjetas de libro (portada, título, autor, precio con formato, motivo y enlace a la ficha);
 - pulgar arriba y abajo en las respuestas que quedaron registradas;
@@ -129,7 +129,7 @@ El texto del modelo se pinta por interpolación, nunca como HTML (hay una prueba
 
 ## 10. Activación en producción para el personal (24/11/2026)
 
-BabelBot se enciende en producción con `ASISTENTE_ACTIVO=true` y `ASISTENTE_ACCESO=personal`: solo vendedores y administradores con sesión. Sirve para que los socios lo prueben y ayuden a decidir el nombre antes de abrirlo al público.
+El asistente se enciende en producción con `ASISTENTE_ACTIVO=true` y `ASISTENTE_ACCESO=personal`: solo vendedores y administradores con sesión. Sirve para que los socios lo prueben y ayuden a decidir el nombre antes de abrirlo al público.
 
 Estado verificado en AWS antes del cambio: clave de Gemini del entorno presente, 2.520 sinopsis en `babel-libros-conocimiento-production`, tablas de control y de registros vacías y **bucket del índice vacío**. Por eso `indiceProgramado.production` pasa a `true` (cada 6 horas, incremental) y, tras el despliegue, se invoca una vez `indiceAsistenteReconstruir` para no esperar a la primera hora programada.
 
@@ -141,7 +141,16 @@ Estado verificado en AWS antes del cambio: clave de Gemini del entorno presente,
 
 **Para abrirlo al público** (paso aparte): revisión del aviso de la Ley 1581 por quien responde por los datos de Le Tiende y `asistenteAcceso.production: 'publico'`.
 
-## 11. Fuentes
+## 11. El nombre: Melquíades (25/11/2026)
+
+«BabelBot» se descartó: el nombre ya existe (un traductor de chat para Discord) y el público no conoce «Babel», que para él es solo el catálogo de la librería. Oliver eligió **Melquíades**, el gitano sabio de *Cien años de soledad*. El cambio se hizo con el índice de usos (`asistente-ia/fichas/indice-nombre-babelbot.md`):
+
+- Texto visible e identificadores (`chat-melquiades/`, `ChatMelquiadesComponent`, `AVISO_MELQUIADES`); los registros históricos no se reescriben.
+- El botón flotante es el logo que diseñó Oliver (imagen y texto, 1756×365, crema y turquesa sobre el fondo `primary`), servido desde `public/logo-melquiades.svg`. Su `alt` («Melquíades») es el nombre accesible del botón.
+- El prompt no usa el nombre, así que no cambia de versión ni hay que re-correr la suite. El modelo no sabe que se llama Melquíades: si alguien se lo pregunta, no lo dirá. Enseñárselo sería un cambio de prompt con su corrida de evaluación.
+- El aviso de IA cambia solo en el nombre («Hablas con Melquíades, una inteligencia artificial…»). Va así a la revisión de la Ley 1581.
+
+## 12. Fuentes
 
 - Precios de Gemini: página oficial citada arriba, leída el 21/11/2026.
 - `UpdateItem` con `ADD`, `if_not_exists` y `ConditionExpression`: documentación de DynamoDB; mismo patrón que `decrementarPorCantidadSiSuficiente` del repositorio.

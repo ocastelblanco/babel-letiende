@@ -3,20 +3,20 @@
     <button
       type="button"
       (click)="abrir()"
-      class="fixed bottom-6 left-6 z-40 flex h-12 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-neutral shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+      class="fixed bottom-6 left-6 z-40 flex h-12 items-center rounded-full bg-primary px-4 shadow-[0_4px_16px_rgba(35,12,0,0.08)] transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
     >
-      <span class="material-symbols-outlined" aria-hidden="true">chat</span>
-      <span>BabelBot</span>
+      <!-- Logo de 1756×365 (imagen y texto); a 32 px de alto mide unos 154 px de ancho. El alt es el nombre accesible del botón. -->
+      <img src="/logo-melquiades.svg" alt="Melquíades" width="154" height="32" class="h-8 w-auto" data-testid="logo-melquiades" />
     </button>
   } @else {
     <div
       role="dialog"
-      aria-label="BabelBot, asistente de recomendación de libros"
+      aria-label="Melquíades, asistente de recomendación de libros"
       (keydown.escape)="cerrar()"
       class="fixed inset-0 z-50 flex flex-col bg-surface sm:inset-auto sm:bottom-6 sm:left-6 sm:h-[36rem] sm:max-h-[calc(100vh-3rem)] sm:w-96 sm:rounded-2xl sm:shadow-[0_4px_16px_rgba(35,12,0,0.15)]"
     >
       <header class="flex items-center justify-between border-b border-primary/10 px-4 py-3">
-        <h2 class="text-base font-bold text-primary">BabelBot</h2>
+        <h2 class="text-base font-bold text-primary">Melquíades</h2>
         <div class="flex items-center gap-2">
           @if (mensajes().length > 0) {
             <button
@@ -30,7 +30,7 @@
           <button
             type="button"
             (click)="cerrar()"
-            aria-label="Cerrar BabelBot"
+            aria-label="Cerrar Melquíades"
             class="flex h-8 w-8 items-center justify-center rounded-full text-primary transition-opacity hover:opacity-90"
           >
             <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -43,7 +43,7 @@
           type="button"
           (click)="alternarAviso()"
           [attr.aria-expanded]="avisoExpandido()"
-          aria-controls="aviso-babelbot"
+          aria-controls="aviso-melquiades"
           class="flex w-full items-center justify-between gap-2 text-left font-semibold text-primary"
           data-testid="alternar-aviso"
         >
@@ -51,13 +51,13 @@
           <span class="material-symbols-outlined text-base" aria-hidden="true">{{ avisoExpandido() ? 'expand_less' : 'expand_more' }}</span>
         </button>
         @if (avisoExpandido()) {
-          <p id="aviso-babelbot" class="mt-1" data-testid="aviso-babelbot">{{ aviso }}</p>
+          <p id="aviso-melquiades" class="mt-1" data-testid="aviso-melquiades">{{ aviso }}</p>
         }
       </section>
 
       <div #lista class="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" aria-live="polite">
         <p class="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm text-primary shadow-[0_4px_16px_rgba(35,12,0,0.08)]">
-          Hola, soy BabelBot. Cuéntame qué te gustaría leer —un tema, un autor, un presupuesto— y te recomiendo libros que están en la librería.
+          Hola, soy Melquíades. Cuéntame qué te gustaría leer —un tema, un autor, un presupuesto— y te recomiendo libros que están en la librería.
         </p>
 
         @for (mensaje of mensajes(); track mensaje.id) {
@@ -130,7 +130,7 @@
 
         @if (cargando()) {
           <p class="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm text-primary/70 shadow-[0_4px_16px_rgba(35,12,0,0.08)]" data-testid="pensando">
-            BabelBot está buscando en los estantes…
+            Melquíades está buscando en los estantes…
           </p>
         }
 
@@ -139,7 +139,7 @@
             class="max-w-[92%] rounded-2xl border px-3 py-2 text-sm"
             [class]="error.motivo === 'saturado' ? 'border-primary/20 text-primary' : 'border-danger/40 text-danger'"
             role="alert"
-            data-testid="error-babelbot"
+            data-testid="error-melquiades"
           >
             {{ error.mensaje }}
           </p>
@@ -155,7 +155,7 @@
           (input)="alEscribir($event)"
           (keydown.enter)="alPulsarEnter($event)"
           placeholder="Escribe aquí lo que buscas…"
-          aria-label="Tu mensaje para BabelBot"
+          aria-label="Tu mensaje para Melquíades"
           class="w-full resize-none rounded-xl border border-primary/20 bg-white px-3 py-2 text-sm text-primary"
         ></textarea>
         <button

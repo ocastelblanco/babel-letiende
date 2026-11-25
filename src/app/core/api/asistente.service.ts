@@ -3,8 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 
-/** Un libro que BabelBot recomienda: solo datos que ya muestra la ficha pública (lista blanca del backend). */
-export interface RecomendacionBabelbot {
+/** Un libro que Melquíades recomienda: solo datos que ya muestra la ficha pública (lista blanca del backend). */
+export interface RecomendacionMelquiades {
   bookId: string;
   titulo: string;
   autor: string;
@@ -14,9 +14,9 @@ export interface RecomendacionBabelbot {
 }
 
 /** Respuesta de `POST /api/asistente`. `registroId` es `null` si el backend no pudo guardar el registro (no se puede valorar). */
-export interface RespuestaBabelbot {
+export interface RespuestaMelquiades {
   texto: string;
-  recomendaciones: RecomendacionBabelbot[];
+  recomendaciones: RecomendacionMelquiades[];
   sinResultados: boolean;
   registroId: string | null;
 }
@@ -36,7 +36,7 @@ export interface MensajeHistorial {
 export type MotivoFallo = 'saturado' | 'limite-visitante' | 'limite-tasa' | 'no-disponible' | 'error';
 
 export type ResultadoPregunta =
-  | { exito: true; respuesta: RespuestaBabelbot }
+  | { exito: true; respuesta: RespuestaMelquiades }
   | { exito: false; motivo: MotivoFallo; mensaje: string };
 
 /** Máximo de mensajes que acepta el backend en una petición (`MAXIMO_TURNOS`). */
@@ -47,7 +47,7 @@ const MENSAJE_LIMITE_TASA = 'Estás enviando mensajes muy rápido. Espera unos s
 const MENSAJE_GENERICO = 'No pude preparar una recomendación en este momento. Inténtalo de nuevo.';
 
 /**
- * Cliente de BabelBot (Fase 7, T-0070): `GET /api/asistente` (¿está disponible?), `POST /api/asistente` (preguntar)
+ * Cliente de Melquíades (Fase 7, T-0070): `GET /api/asistente` (¿está disponible?), `POST /api/asistente` (preguntar)
  * y `POST /api/asistente/valoracion`. Es el chat del catálogo público: no exige sesión, pero si hay una (personal de
  * Babel) la envía, porque con `ASISTENTE_ACCESO=personal` es lo que lo habilita. Nunca lanza.
  */
@@ -88,7 +88,7 @@ export class AsistenteService {
   async preguntar(historial: MensajeHistorial[]): Promise<ResultadoPregunta> {
     try {
       const respuesta = await firstValueFrom(
-        this.http.post<RespuestaBabelbot>(
+        this.http.post<RespuestaMelquiades>(
           '/api/asistente',
           { mensajes: this.recortarHistorial(historial), filtros: {} },
           await this.opciones(),

@@ -1,7 +1,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AsistenteService, type ResultadoPregunta } from '../../../core/api/asistente.service';
-import { ChatBabelbotComponent, AVISO_BABELBOT } from './chat-babelbot.component';
+import { ChatMelquiadesComponent, AVISO_MELQUIADES } from './chat-melquiades.component';
 
 const respuestaConLibro: ResultadoPregunta = {
   exito: true,
@@ -13,8 +13,8 @@ const respuestaConLibro: ResultadoPregunta = {
   },
 };
 
-describe('ChatBabelbotComponent', () => {
-  let fixture: ComponentFixture<ChatBabelbotComponent>;
+describe('ChatMelquiadesComponent', () => {
+  let fixture: ComponentFixture<ChatMelquiadesComponent>;
   const servicio = {
     estaDisponible: vi.fn(),
     preguntar: vi.fn(),
@@ -26,7 +26,7 @@ describe('ChatBabelbotComponent', () => {
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: AsistenteService, useValue: servicio }],
     });
-    fixture = TestBed.createComponent(ChatBabelbotComponent);
+    fixture = TestBed.createComponent(ChatMelquiadesComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -52,48 +52,51 @@ describe('ChatBabelbotComponent', () => {
     servicio.valorar.mockResolvedValue(true);
   });
 
-  it('no muestra nada si el servidor dice que BabelBot no está disponible para el público', async () => {
+  it('no muestra nada si el servidor dice que Melquíades no está disponible para el público', async () => {
     await montar(false);
     expect(el().querySelector('button')).toBeNull();
   });
 
   it('muestra el botón si está disponible y, al abrirlo, el aviso de IA y qué se guarda', async () => {
     await montar(true);
-    expect(q('button')?.textContent).toContain('BabelBot');
+    // El botón es el logo: su nombre accesible sale del alt de la imagen.
+    const logo = q<HTMLImageElement>('button [data-testid="logo-melquiades"]');
+    expect(logo?.getAttribute('src')).toBe('/logo-melquiades.svg');
+    expect(logo?.getAttribute('alt')).toBe('Melquíades');
     q<HTMLButtonElement>('button')?.click();
     fixture.detectChanges();
     expect(q('[role="dialog"]')).not.toBeNull();
-    expect(q('[data-testid="aviso-babelbot"]')?.textContent?.trim()).toBe(AVISO_BABELBOT);
-    expect(AVISO_BABELBOT).toMatch(/inteligencia artificial/);
-    expect(AVISO_BABELBOT).toMatch(/90 días/);
+    expect(q('[data-testid="aviso-melquiades"]')?.textContent?.trim()).toBe(AVISO_MELQUIADES);
+    expect(AVISO_MELQUIADES).toMatch(/inteligencia artificial/);
+    expect(AVISO_MELQUIADES).toMatch(/90 días/);
   });
 
   it('el aviso dice que la librería es la de Le Tiende', () => {
-    expect(AVISO_BABELBOT).toContain('con la librería de Le Tiende.');
+    expect(AVISO_MELQUIADES).toContain('con la librería de Le Tiende.');
   });
 
   it('el aviso empieza expandido, se colapsa y se expande con el botón, y vuelve a empezar expandido al reabrir', async () => {
     await montar(true);
     q<HTMLButtonElement>('button')?.click();
     fixture.detectChanges();
-    expect(q('[data-testid="aviso-babelbot"]')).not.toBeNull();
+    expect(q('[data-testid="aviso-melquiades"]')).not.toBeNull();
     expect(q('[data-testid="alternar-aviso"]')?.getAttribute('aria-expanded')).toBe('true');
 
     q<HTMLButtonElement>('[data-testid="alternar-aviso"]')?.click();
     fixture.detectChanges();
-    expect(q('[data-testid="aviso-babelbot"]')).toBeNull();
+    expect(q('[data-testid="aviso-melquiades"]')).toBeNull();
     expect(q('[data-testid="alternar-aviso"]')?.getAttribute('aria-expanded')).toBe('false');
 
     q<HTMLButtonElement>('[data-testid="alternar-aviso"]')?.click();
     fixture.detectChanges();
-    expect(q('[data-testid="aviso-babelbot"]')).not.toBeNull();
+    expect(q('[data-testid="aviso-melquiades"]')).not.toBeNull();
 
     q<HTMLButtonElement>('[data-testid="alternar-aviso"]')?.click();
-    q<HTMLButtonElement>('[aria-label="Cerrar BabelBot"]')?.click();
+    q<HTMLButtonElement>('[aria-label="Cerrar Melquíades"]')?.click();
     fixture.detectChanges();
     q<HTMLButtonElement>('button')?.click();
     fixture.detectChanges();
-    expect(q('[data-testid="aviso-babelbot"]')).not.toBeNull();
+    expect(q('[data-testid="aviso-melquiades"]')).not.toBeNull();
   });
 
   it('pregunta, pinta la respuesta y la tarjeta del libro con datos de Babel (precio con formato, enlace a la ficha)', async () => {
@@ -147,7 +150,7 @@ describe('ChatBabelbotComponent', () => {
     });
     await montar(true);
     await abrirYPreguntar('una novela');
-    expect(q('[data-testid="error-babelbot"]')?.textContent).toContain('Paciencia y barajar');
+    expect(q('[data-testid="error-melquiades"]')?.textContent).toContain('Paciencia y barajar');
     expect((q('textarea') as HTMLTextAreaElement).value).toBe('una novela');
     // Reenviar tras el fallo no deja dos mensajes seguidos de la persona.
     servicio.preguntar.mockResolvedValue(respuestaConLibro);
@@ -223,7 +226,7 @@ describe('ChatBabelbotComponent', () => {
     await montar(true);
     q<HTMLButtonElement>('button')?.click();
     fixture.detectChanges();
-    q<HTMLButtonElement>('button[aria-label="Cerrar BabelBot"]')?.click();
+    q<HTMLButtonElement>('button[aria-label="Cerrar Melquíades"]')?.click();
     fixture.detectChanges();
     expect(q('[role="dialog"]')).toBeNull();
     q<HTMLButtonElement>('button')?.click();

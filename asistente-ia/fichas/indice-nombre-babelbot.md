@@ -2,6 +2,22 @@
 
 Creado el 24/11/2026. Oliver duda del nombre: «BabelBot» ya existe (un traductor de chat para Discord) y el público no conoce «Babel»: para él es solo el catálogo de la librería de Le Tiende. Este índice lista todos los puntos donde aparece el nombre, para poder cambiarlo de una vez cuando se defina el nombre nuevo o se decida dejar el actual.
 
+## Decisión (25/11/2026): Melquíades
+
+Oliver eligió **Melquíades**, el gitano sabio de *Cien años de soledad*. Se aplicó con este índice en la rama `feature/melquiades-nombre` (Tarea 18 de `docs/TODO.md`, bitácora 08 §11):
+
+| Antes | Ahora |
+|---|---|
+| Texto visible «BabelBot» (§1) | «Melquíades» (con tilde) |
+| Botón con ícono `chat` y la palabra «BabelBot» | Logo `public/logo-melquiades.svg` (1756×365), `alt="Melquíades"` |
+| `chat-babelbot/`, `app-chat-babelbot`, `ChatBabelbotComponent`, `AVISO_BABELBOT` | `chat-melquiades/`, `app-chat-melquiades`, `ChatMelquiadesComponent`, `AVISO_MELQUIADES` |
+| `RecomendacionBabelbot`, `RespuestaBabelbot` | `RecomendacionMelquiades`, `RespuestaMelquiades` |
+| `data-testid` e id `aviso-babelbot`, `error-babelbot` | `aviso-melquiades`, `error-melquiades` |
+
+Los identificadores van sin tilde. Las tablas §1 a §4 de abajo describen el estado **anterior** y se conservan como registro de lo que se cambió; los registros históricos (§5) siguen sin reescribirse. Este archivo conserva su nombre para no romper las referencias que ya lo citan.
+
+## Índice original (24/11/2026)
+
 Búsqueda: `grep -rniE "babel[ _-]?bot"` sobre todo el repositorio (sin `node_modules`, `.git`, `dist*`, `.angular`). Para repetirla antes de renombrar:
 
 ```bash

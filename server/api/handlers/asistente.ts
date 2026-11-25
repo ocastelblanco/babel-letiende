@@ -645,7 +645,7 @@ const MENSAJES_DE_CONTROL = {
 } as const;
 
 /**
- * `GET /api/asistente` — ¿está BabelBot disponible para el público? Lo consulta el catálogo para decidir si muestra
+ * `GET /api/asistente` — ¿está Melquíades disponible para el público? Lo consulta el catálogo para decidir si muestra
  * el botón del chat. El build del frontend es el mismo en `staging` y en producción, así que no puede saberlo por
  * sí mismo. Solo dice «sí» si el asistente está activo, el acceso es público y el interruptor administrable no lo
  * apagó; ante cualquier duda o fallo de la tabla de control, «no». No expone nada más (ni topes ni gasto).
