@@ -4,7 +4,7 @@ import type { RegistroAsistente } from '../lib/registro-asistente';
 import { establecerAtributoSiExiste, obtenerPorClave } from '../services/dynamodb';
 
 /**
- * `POST /api/asistente/valoracion` — pulgar arriba o abajo a una respuesta de BabelBot (Fase 7, T-0070).
+ * `POST /api/asistente/valoracion` — pulgar arriba o abajo a una respuesta de Melquíades (Fase 7, T-0070).
  *
  * Cuerpo: `{ registroId, valoracion: 'positiva' | 'negativa' }`. El `registroId` lo devuelve `POST /api/asistente`.
  * Es un UUID opaco, pero no basta como prueba de que la persona pidió esa respuesta: se comprueba que quien valora

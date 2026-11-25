@@ -202,7 +202,7 @@ Partida en dos PRs (decidido el 24/11/2026): **7a** backend (`ASISTENTE_ACCESO` 
 
 - [x] **7a — Acceso y valoración (backend, 24/11/2026; bitácora 08 §8).** `ASISTENTE_ACCESO` = `personal` (sesión de vendedor o administrador, como hasta ahora) o `publico` (sin sesión); cualquier otro valor cae en `personal`. `staging` queda en `publico`, `production` en `personal`. `POST /api/asistente/valoracion` con su propia Lambda y rol de mínimo privilegio; ata la valoración al visitante con el hash de IP del registro.
 
-- [x] **7b — Chat en el catálogo (24/11/2026; bitácora 08 §10).** `ChatBabelbotComponent` standalone, solo en el cliente (sin SSR), con identidad visual de Babel (`docs/DESIGN.md`); aparece solo si `GET /api/asistente` dice que BabelBot está disponible para el público.
+- [x] **7b — Chat en el catálogo (24/11/2026; bitácora 08 §10).** `ChatMelquiadesComponent` standalone, solo en el cliente (sin SSR), con identidad visual de Babel (`docs/DESIGN.md`); aparece solo si `GET /api/asistente` dice que Melquíades está disponible para el público.
 - [x] Aviso visible: "Hablas con una IA" + qué se registra y para qué (Ley 1581 de 2012). **Borrador pendiente de revisión de quien responde por los datos de Le Tiende** antes de abrir el chat al público en producción.
 - [x] Tarjetas pintadas con datos de Babel (nunca con texto del modelo), enlace a la ficha `/libro/:bookId`, pulgar arriba o abajo.
 - [x] Interpolación estándar de Angular; nada de `innerHTML` con texto del modelo (con prueba).
@@ -210,7 +210,7 @@ Partida en dos PRs (decidido el 24/11/2026): **7a** backend (`ASISTENTE_ACCESO` 
 
 ### Fase 8 — Tablero y análisis · `T-0080` · capacidad: métricas de desempeño y consumo
 
-- [ ] **Decidido el 24/11/2026:** la sección «Datos del asistente» se renombra «BabelBot», conserva el flujo de carga de sinopsis y suma el panel para los administradores (los stakeholders). Tres fuentes, sin mezclarlas: construcción (ledger `metrics/events`), operación (resumen diario de `babel-asistente-registros`, para no escanearla en cada visita) y calidad (resúmenes de la suite).
+- [ ] **Decidido el 24/11/2026:** la sección «Datos del asistente» se renombra «Melquíades», conserva el flujo de carga de sinopsis y suma el panel para los administradores (los stakeholders). Tres fuentes, sin mezclarlas: construcción (ledger `metrics/events`), operación (resumen diario de `babel-asistente-registros`, para no escanearla en cada visita) y calidad (resúmenes de la suite).
 - [ ] Panel: conversaciones, % de valoraciones positivas, tasa de rechazo, libros inventados por cada 100 respuestas, costo por conversación, latencia p50/p95, tokens; interruptor.
 - [ ] Cola de revisión manual: el usuario marca 20 respuestas reales (bien, mal recomendado, inventado).
 - [ ] Análisis de una página con hallazgos y **una mejora aplicada y medida**.

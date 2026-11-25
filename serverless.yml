@@ -2550,7 +2550,7 @@ functions:
       - httpApi:
           path: /api/asistente
           method: post
-      # ¿Está BabelBot disponible para el público? Lo consulta el catálogo para mostrar el botón del chat.
+      # ¿Está Melquíades disponible para el público? Lo consulta el catálogo para mostrar el botón del chat.
       - httpApi:
           path: /api/asistente
           method: get
@@ -2559,7 +2559,7 @@ functions:
     handler: dist-server/api/handlers/asistente-valoracion.handler
     role: !GetAtt AsistenteValoracionLambdaRole.Arn
     description: >-
-      POST /api/asistente/valoracion — pulgar arriba o abajo a una respuesta de BabelBot (Fase 7, T-0070). Sin
+      POST /api/asistente/valoracion — pulgar arriba o abajo a una respuesta de Melquíades (Fase 7, T-0070). Sin
       sesión: comprueba que quien valora es el mismo visitante del registro (hash de IP con la sal del día).
     timeout: 10
     memorySize: 256

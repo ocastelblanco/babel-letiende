@@ -8,7 +8,7 @@ import { PvpPipe } from '../../shared/pipes/pvp.pipe';
 import { SinPortadaFallbackDirective } from '../../shared/directivas/sin-portada-fallback.directive';
 import { ScrollInfinitoDirective } from '../../shared/directivas/scroll-infinito.directive';
 import { EscanerCodigoBarrasComponent } from '../../shared/escaner-codigo-barras/escaner-codigo-barras.component';
-import { ChatBabelbotComponent } from './chat-babelbot/chat-babelbot.component';
+import { ChatMelquiadesComponent } from './chat-melquiades/chat-melquiades.component';
 
 /** Cantidad de libros renderizados al inicio y agregados en cada tanda (`docs/plan-rendimiento-catalogo.md`, renderizado incremental con `IntersectionObserver`). */
 const TAMANO_TANDA_RENDERIZADO = 60;
@@ -120,7 +120,7 @@ function normalizarTexto(valor: string): string {
  */
 @Component({
   selector: 'app-catalogo-publico',
-  imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective, ScrollInfinitoDirective, EscanerCodigoBarrasComponent, ChatBabelbotComponent],
+  imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective, ScrollInfinitoDirective, EscanerCodigoBarrasComponent, ChatMelquiadesComponent],
   templateUrl: './catalogo-publico.component.html',
 })
 export class CatalogoPublicoComponent implements OnInit, OnDestroy {

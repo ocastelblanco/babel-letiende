@@ -5,7 +5,7 @@ import {
   AsistenteService,
   type MensajeHistorial,
   type MotivoFallo,
-  type RecomendacionBabelbot,
+  type RecomendacionMelquiades,
 } from '../../../core/api/asistente.service';
 import { SinPortadaFallbackDirective } from '../../../shared/directivas/sin-portada-fallback.directive';
 import { PvpPipe } from '../../../shared/pipes/pvp.pipe';
@@ -18,8 +18,8 @@ export const MAXIMO_CARACTERES_PREGUNTA = 1000;
  * OWASP). BORRADOR para revisión de quien responde por los datos de Le Tiende: describe lo que el backend hace hoy
  * (`registro-asistente.ts`: consulta enmascarada, sin IP ni respuesta, 90 días; Gemini de pago con `store: false`).
  */
-export const AVISO_BABELBOT =
-  'Hablas con BabelBot, una inteligencia artificial: puede equivocarse, así que confirma el precio y las existencias con la librería de Le Tiende. ' +
+export const AVISO_MELQUIADES =
+  'Hablas con Melquíades, una inteligencia artificial: puede equivocarse, así que confirma el precio y las existencias con la librería de Le Tiende. ' +
   'Tu pregunta se procesa con Gemini, de Google, y la guardamos 90 días para mejorar el servicio, sin tu nombre ni tu IP y con correos, ' +
   'teléfonos y documentos ocultos. No escribas datos personales.';
 
@@ -27,7 +27,7 @@ export interface MensajeChat {
   id: number;
   rol: 'usuario' | 'asistente';
   texto: string;
-  recomendaciones: RecomendacionBabelbot[];
+  recomendaciones: RecomendacionMelquiades[];
   /** Solo en respuestas del asistente que quedaron registradas en el backend. */
   registroId: string | null;
   valoracion: 'positiva' | 'negativa' | null;
@@ -35,22 +35,22 @@ export interface MensajeChat {
 }
 
 /**
- * Chat de BabelBot en el catálogo público (Fase 7b, T-0070). Solo en el navegador (el SSR no lo pinta) y solo si el
+ * Chat de Melquíades en el catálogo público (Fase 7b, T-0070). Solo en el navegador (el SSR no lo pinta) y solo si el
  * servidor dice que está disponible para el público (`GET /api/asistente`): el build es el mismo en `staging` y en
  * producción. Las tarjetas se pintan con datos de Babel (lista blanca del backend); el texto del modelo va siempre
  * por interpolación, nunca como HTML.
  */
 @Component({
-  selector: 'app-chat-babelbot',
+  selector: 'app-chat-melquiades',
   imports: [PvpPipe, RouterLink, SinPortadaFallbackDirective],
-  templateUrl: './chat-babelbot.component.html',
+  templateUrl: './chat-melquiades.component.html',
 })
-export class ChatBabelbotComponent implements OnInit {
+export class ChatMelquiadesComponent implements OnInit {
   private readonly asistente = inject(AsistenteService);
   private readonly esNavegador = isPlatformBrowser(inject(PLATFORM_ID));
   private siguienteId = 1;
 
-  protected readonly aviso = AVISO_BABELBOT;
+  protected readonly aviso = AVISO_MELQUIADES;
   protected readonly maximoCaracteres = MAXIMO_CARACTERES_PREGUNTA;
   protected readonly disponible = signal(false);
   protected readonly abierto = signal(false);
