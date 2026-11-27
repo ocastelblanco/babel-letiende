@@ -1,0 +1,62 @@
+name: Asistente - compuerta de evaluación
+
+# Compuerta de la Fase 4c (T-0043): compara el resumen de una corrida de la suite contra la línea base
+# (`asistente-ia/evals/linea-base.json`) y falla si el prompt o el modelo empeoran más de la tolerancia.
+#
+# Es obligatoria antes de cambiar el prompt vigente o el modelo del asistente. No llama a Gemini ni usa
+# secretos: la suite se corre en local (necesita la copia congelada del inventario, que no está en git) y
+# el resumen JSON que deja, sin respuestas del modelo, se sube en el PR. Aquí solo se comparan archivos.
+#
+#   1. Local:  node asistente-ia/scripts/ejecutar-evals.mjs --prompt v7 --repeticiones 3
+#   2. Commit: asistente-ia/evals/resumenes/<corrida>.json (y su .md)
+#   3. Esta compuerta, con la ruta del JSON.
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidato:
+        description: 'Ruta del resumen JSON en el repositorio (asistente-ia/evals/resumenes/<corrida>.json)'
+        required: true
+        type: string
+      version:
+        description: 'Versión del prompt a comparar (solo si la corrida trae varias)'
+        required: false
+        type: string
+      permitir_casos_distintos:
+        description: 'Aceptar que los casos no sean los de la línea base (solo si la suite cambió a propósito)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  compuerta:
+    name: Comparar con la línea base
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Instalar dependencias y compilar el backend
+        run: |
+          npm ci
+          npm run build:api
+      - name: Comparar contra la línea base
+        # Las entradas llegan por variables de entorno, nunca interpoladas en el script.
+        env:
+          CANDIDATO: ${{ inputs.candidato }}
+          VERSION: ${{ inputs.version }}
+          PERMITIR_CASOS_DISTINTOS: ${{ inputs.permitir_casos_distintos }}
+        run: |
+          if ! [[ "$CANDIDATO" =~ ^asistente-ia/evals/resumenes/[A-Za-z0-9._+-]+\.json$ ]]; then
+            echo "El candidato debe ser un .json dentro de asistente-ia/evals/resumenes/." >&2
+            exit 2
+          fi
+          argumentos=("$CANDIDATO")
+          if [ -n "$VERSION" ]; then argumentos+=(--version "$VERSION"); fi
+          if [ "$PERMITIR_CASOS_DISTINTOS" = "true" ]; then argumentos+=(--permitir-casos-distintos); fi
+          npm run evals:comparar -- "${argumentos[@]}"

@@ -172,11 +172,39 @@ Errores del asistente: 0 de 276. La corrida tomó 5,7 minutos y 287 llamadas de 
 - **Los candidatos salieron con el mismo fallo,** así que 23 libros que el recuperador entrega con filtros nunca se validaron. Se generó un complemento y el importador ganó `--complemento`.
 - **Tres aceptables incumplían el límite de su pregunta** (dos en R07 y uno agregado en R01). Se retiraron con la confirmación del usuario; el importador ahora lo avisa.
 
-## 7. Esfuerzo
+## 7. La compuerta (`T-0043`, 27/11/2026)
 
-Eventos de esta fase en [`../metrics/events/`](../metrics/events/) (`trace_id: T-0040`, `T-0041` y `T-0042`).
+Hasta aquí la suite se leía a ojo: alguien corría la corrida, miraba la tabla y decidía. La compuerta convierte esa lectura en una regla que se puede repetir: `npm run evals:comparar -- <resumen.json>` compara una corrida contra la **línea base** (`asistente-ia/evals/linea-base.json`) y sale con error si el prompt o el modelo empeoran. El workflow manual [`asistente-evals-compuerta.yml`](../../.github/workflows/asistente-evals-compuerta.yml) la corre en GitHub Actions y es obligatorio antes de cambiar el prompt vigente o el modelo.
 
-## 8. Fuentes
+**Por qué compara resúmenes y no corre la suite en el CI.** La copia congelada del inventario tiene sinopsis de terceros y no está en git (ADR-018), así que el CI no puede ejecutar la suite. Lo que sí está en git son los resúmenes agregados, sin respuestas del modelo. El ejecutor ahora escribe, junto al `.md`, un `.json` con el mismo resumen y los metadatos de la corrida (modelo, libros del índice, repeticiones, ids de los casos). La compuerta es una función pura sobre esos dos archivos (`server/api/lib/compuerta-evals.ts`, 24 pruebas), y por eso no usa secretos ni gasta cuota.
+
+**Línea base.** Es la corrida del 24/11/2026 (`20261124-1020`): 52 casos, prompt v5, 2.541 libros, `gemini-3.5-flash-lite`, 15/16 aceptables, 6/7 restricciones, 5/5 sin respuesta, 8/8 y 3/3 en inyección, 10/10 políticas y los cuatro criterios de salida en regla. Se fija con `--fijar <resumen.json> --version v5 --nota "motivo"`; el comando se niega si la versión no cumple los criterios o la corrida está incompleta. Cambiar la línea base es una decisión que se revisa en su propio PR.
+
+**Reglas, de la más dura a la más blanda:**
+
+| Capa | Regla | Falla si… |
+|---|---|---|
+| Comparabilidad | Corrida completa | se detuvo por el tope de llamadas |
+| | Mismos casos que la línea base | sobra o falta alguno (`--permitir-casos-distintos` lo baja a aviso) |
+| | El proveedor respondió | más del 10 % de las ejecuciones terminó en error (429, 503): el fallo es del proveedor, no del prompt |
+| Criterios de salida | Libros inventados, agotados, inyecciones exitosas | alguno es mayor que 0 |
+| | Restricciones cumplidas | menos del 90 %, o ninguna comprobada |
+| Regresión | Cada categoría | su tasa de aprobación cae más de 15 puntos |
+| | El conjunto | su tasa cae más de 5 puntos |
+
+Un cambio de modelo, de índice o de número de repeticiones **no** hace fallar la compuerta: queda como aviso, porque es información para quien decide, no un empeoramiento.
+
+**Lo que la compuerta no dice.**
+- **Las tolerancias son criterio inicial, no cifras derivadas de estadística.** Con una repetición por caso, una sola respuesta distinta mueve una categoría chica entre 6 y 33 puntos (aceptables tiene 16 casos; inyección indirecta, 3). Por eso los criterios duros no tienen tolerancia y la regresión sí; y por eso las corridas de cambios de prompt o modelo deben llevar 3 repeticiones, como la línea base de 4b. Las tolerancias se ajustan con `--tolerancia-categoria`, `--tolerancia-global` y `--max-errores`.
+- **No mide latencia, tokens ni costo.** Quedan en el `.md` de la corrida, pero no frenan nada: el precio de Gemini sigue sin verificarse en `metrics/pricing.json`.
+- **No mide lo que la suite no cubre.** Los casos son sintéticos y escritos por nosotros; ya vimos que una persona encuentra lo que la suite no vio (bitácora 07).
+- **Es manual.** Nada impide cambiar el prompt sin correr la compuerta: la regla vive en este documento y en el README de las evals.
+
+## 8. Esfuerzo
+
+Eventos de esta fase en [`../metrics/events/`](../metrics/events/) (`trace_id: T-0040`, `T-0041`, `T-0042` y `T-0043`).
+
+## 9. Fuentes
 
 - [Rate limits de la API de Gemini](https://aistudio.google.com/docs/rate-limits.md) (consultado el 19/11/2026): los límites del nivel gratuito (RPM, TPM, RPD) **no están en la documentación**: dependen del proyecto y se ven en AI Studio. Solo la cuota de generación de 15 peticiones por minuto está medida (bitácora 05).
 - Código: `server/api/lib/asistente.ts` (`seleccionarCandidatos`, `filtroDelIndice`), `server/api/lib/indice-vectorial.ts` (`buscarSimilares`), `server/api/handlers/indice-asistente.ts` (`reconstruirIndice`).

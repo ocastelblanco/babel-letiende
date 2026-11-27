@@ -86,7 +86,7 @@ if (antiguas.length > 0 && !args.banderas.has('permitir-versiones-antiguas')) {
 }
 
 // --- Resumen agregado (sin respuestas, va a git) ---------------------------------------------------
-function escribirResumen(todas, { titulo, encabezado, rutaResumen }) {
+function escribirResumen(todas, { titulo, encabezado, rutaResumen, meta }) {
   const resumenes = resumirCorrida(todas.map(({ casoId, categoria, version, repeticion, error, puntaje }) => ({ casoId, categoria, version, repeticion, error, puntaje })));
   const pct = (n) => (n === null ? '—' : `${Math.round(n * 100)} %`);
   const salida = [`# ${titulo}`, '', ...encabezado, ''];
@@ -101,7 +101,23 @@ function escribirResumen(todas, { titulo, encabezado, rutaResumen }) {
   }
   mkdirSync(CARPETA_RESUMENES, { recursive: true });
   writeFileSync(rutaResumen, `${salida.join('\n')}\n`);
-  console.log(`\n${salida.join('\n')}\nResumen escrito en ${rutaResumen}`);
+  // El mismo resumen en JSON, para la compuerta (`comparar-evals.mjs`): agregado, sin respuestas del modelo.
+  const rutaJson = rutaResumen.replace(/\.md$/, '.json');
+  const guardado = {
+    formato: 1,
+    meta: {
+      sello: rutaResumen.split('/').pop().slice(0, 13),
+      modelo: meta.modelo ?? todas.find((l) => l.meta?.modelo)?.meta.modelo ?? 'desconocido',
+      librosEnIndice: meta.librosEnIndice,
+      repeticiones: meta.repeticiones,
+      casosIds: [...new Set(todas.map((l) => l.casoId))].sort(),
+      ejecucionesEsperadas: meta.ejecucionesEsperadas,
+      incompleta: meta.incompleta,
+    },
+    resumenes,
+  };
+  writeFileSync(rutaJson, `${JSON.stringify(guardado, null, 2)}\n`);
+  console.log(`\n${salida.join('\n')}\nResumen escrito en ${rutaResumen} y ${rutaJson}`);
 }
 
 // --- Repuntuar una corrida guardada (sin API) ------------------------------------------------------
@@ -132,6 +148,7 @@ if (args.repuntuar) {
     titulo: `Corrida ${nombre}, repuntuada con los casos del ${new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10)}`,
     encabezado: [`Respuestas guardadas: ${todas.length}. Sin llamadas a la API: solo cambian los casos y el puntuador.${omitidos.size > 0 ? ` Casos que ya no existen (omitidos): ${[...omitidos].join(', ')}.` : ''}`],
     rutaResumen: join(CARPETA_RESUMENES, `${nombre}-repuntuada.md`),
+    meta: { librosEnIndice: inventario.libros.size, repeticiones: Math.max(0, ...todas.map((l) => l.repeticion)) + 1, ejecucionesEsperadas: todas.length, incompleta: false },
   });
   process.exit(0);
 }
@@ -291,4 +308,5 @@ escribirResumen(todas, {
   titulo: `Corrida de evaluación ${sello}`,
   encabezado: [`Versiones: ${args.versiones.join(', ')} · repeticiones: ${args.repeticiones} · casos: ${casos.length} · ejecuciones guardadas: ${todas.length}/${ejecuciones}${detenidoPorTope ? ' (INCOMPLETA: tope de llamadas)' : ''}.`, `Índice: ${indice.entradas.length} libros (copia congelada de producción). Modelo: ${base.modeloTexto}.`],
   rutaResumen: join(CARPETA_RESUMENES, `${archivo.split('/').pop().replace(/\.jsonl$/, '')}.md`),
+  meta: { modelo: base.modeloTexto, librosEnIndice: indice.entradas.length, repeticiones: args.repeticiones, ejecucionesEsperadas: ejecuciones, incompleta: detenidoPorTope },
 });
