@@ -10,6 +10,7 @@
     "test:api": "vitest run",
     "serve:ssr:babel-letiende": "node dist/babel-letiende/server/server.mjs",
     "build:api": "tsc -p server/tsconfig.json",
+    "evals:comparar": "node asistente-ia/scripts/comparar-evals.mjs",
     "build:infra": "npm run build && npm run build:api",
     "package:staging": "npm run build:infra && npx serverless package --stage staging",
     "deploy:staging": "npm run build:infra && npx serverless deploy --stage staging",

@@ -624,7 +624,7 @@ Rama `feature/babelbot-chat-catalogo`. Partida en 7a y 7b (`asistente-ia/PLAN.md
 - [x] **7a** — `ASISTENTE_ACCESO` (`personal`/`publico`) y `POST /api/asistente/valoracion` con Lambda y rol propios (bitácora 08 §8).
 - [x] **7b** — `ChatMelquiadesComponent` (solo cliente), aviso «Hablas con una IA» y qué se registra (Ley 1581), tarjetas con datos de Babel, valoración, manejo amable del 429 de API Gateway y del 503 de saturación. Ver `asistente-ia/PLAN.md` Fase 7.
 
-## Tarea 17 — Activar Melquíades en producción para el personal (`T-0070`) — PR pendiente
+## Tarea 17 — Activar Melquíades en producción para el personal (`T-0070`) — FUSIONADA (PR #179, 24/11/2026)
 
 Rama `feature/babelbot-activar-produccion`. Bitácora 08 §10.
 
@@ -634,7 +634,7 @@ Rama `feature/babelbot-activar-produccion`. Bitácora 08 §10.
 - [x] Los socios prueban el asistente con su sesión y ayudan a decidir el nombre (índice de usos: `asistente-ia/fichas/indice-nombre-babelbot.md`). Decidido el 25/11: **Melquíades** (Tarea 18).
 - [ ] Más adelante, aparte: revisión del aviso (Ley 1581) y `asistenteAcceso.production: 'publico'`.
 
-## Tarea 18 — El asistente se llama Melquíades (`T-0070`) — PR pendiente
+## Tarea 18 — El asistente se llama Melquíades (`T-0070`) — FUSIONADA (PR #181, 27/11/2026)
 
 Rama `feature/melquiades-nombre`. Hecho con el índice `asistente-ia/fichas/indice-nombre-babelbot.md` (sección «Decisión»).
 
@@ -643,6 +643,20 @@ Rama `feature/melquiades-nombre`. Hecho con el índice `asistente-ia/fichas/indi
 - [x] Identificadores con `git mv`: `chat-melquiades/`, `ChatMelquiadesComponent`, `AVISO_MELQUIADES`, `RecomendacionMelquiades`, `RespuestaMelquiades` y los `data-testid`.
 - [x] Comentarios del backend, `serverless.yml` y documentación viva. Los registros históricos (CSV, ledger, git) no se reescriben.
 - [ ] Verificar en `staging` el botón con el logo (celular y escritorio) y el chat.
+
+## Tarea 19 — Fase 4c, parte 1: compuerta de la suite (`T-0043`) — PR pendiente
+
+Rama `feature/evals-compuerta`. Bitácora 06 §7.
+
+- [x] `server/api/lib/compuerta-evals.ts` (función pura, 24 pruebas): comparabilidad, criterios de salida sin tolerancia y regresión por categoría y del conjunto.
+- [x] `ejecutar-evals.mjs` escribe además el resumen en JSON (agregado, sin respuestas); `comparar-evals.mjs` y `npm run evals:comparar` (salida 0 pasa, 1 falla, 2 uso inválido).
+- [x] `asistente-ia/evals/linea-base.json`: v5, corrida del 24/11 (52 casos, cumple). Se fija con `--fijar` y una nota.
+- [x] Workflow manual `asistente-evals-compuerta.yml`: compara dos archivos en git, sin secretos ni cuota.
+- [ ] Tras el despliegue: correr el workflow con `asistente-ia/evals/resumenes/20261124-1020-v5.json` (la línea base contra sí misma debe pasar).
+
+## Tarea 20 — Fase 4c, parte 2: políticas como herramienta o como contexto (`T-0043`) — pendiente
+
+`consultar_politicas` detrás de una opción del encabezado del prompt, unas 15 preguntas de políticas con repeticiones, contra v3 (herramienta) y v4 (contexto). Detalle en `asistente-ia/PLAN.md`, Fase 4, `T-0043`. Usa cuota de Gemini: va después de la compuerta y con la clave de pago.
 
 ## Hotfix — Ficha pública sin datos internos — COMPLETO (PR #153 fusionado; verificado en `staging` y en producción el 2026-11-17)
 
